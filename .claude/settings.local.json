@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://localhost:3000/module-class/mc_6a1fdf5735643d3a1d911d35?role=student&studentId=STU0009&studentName=Mozammil\")"
+    ]
+  }
+}

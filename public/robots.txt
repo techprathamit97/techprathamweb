@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Block Admin & API
+Disallow: /admin/
+Disallow: /api/
+Disallow: /editor/
+
+# Sitemap
+Sitemap: https://www.techpratham.com/sitemap.xml
+
+

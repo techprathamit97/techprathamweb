@@ -1,0 +1,341 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="966" height="309" viewBox="0 0 966 309">
+  <defs>
+    <style>
+      .cls-1, .cls-7, .cls-9 {
+        fill: #39f;
+      }
+
+      .cls-1, .cls-5, .cls-7, .cls-9 {
+        stroke: #39f;
+      }
+
+      .cls-1, .cls-12, .cls-15, .cls-16, .cls-19, .cls-2, .cls-20, .cls-23, .cls-25, .cls-3, .cls-4, .cls-5, .cls-8, .cls-9 {
+        stroke-width: 1px;
+      }
+
+      .cls-1, .cls-12, .cls-13, .cls-14, .cls-16, .cls-17, .cls-18, .cls-20, .cls-21, .cls-22, .cls-24, .cls-25, .cls-26, .cls-6, .cls-7 {
+        fill-rule: evenodd;
+      }
+
+      .cls-13, .cls-17, .cls-2, .cls-21, .cls-24, .cls-26, .cls-3, .cls-4, .cls-5, .cls-6, .cls-8 {
+        fill: #fff;
+      }
+
+      .cls-12, .cls-14, .cls-15, .cls-2 {
+        stroke: #c33;
+      }
+
+      .cls-16, .cls-18, .cls-19, .cls-3 {
+        stroke: #393;
+      }
+
+      .cls-20, .cls-22, .cls-23, .cls-4 {
+        stroke: #f90;
+      }
+
+      .cls-13, .cls-17, .cls-21, .cls-24, .cls-26, .cls-6 {
+        stroke: #ccc;
+        stroke-width: 3.15px;
+      }
+
+      .cls-6 {
+        filter: url(#filter);
+      }
+
+      .cls-14, .cls-18, .cls-22, .cls-7 {
+        stroke-width: 6.99px;
+      }
+
+      .cls-8 {
+        stroke: #fff;
+      }
+
+      .cls-10 {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .cls-10, .cls-11 {
+        text-anchor: middle;
+        font-family: Poppins;
+      }
+
+      .cls-11 {
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .cls-12, .cls-14, .cls-15 {
+        fill: #c33;
+      }
+
+      .cls-13 {
+        filter: url(#filter-2);
+      }
+
+      .cls-16, .cls-18, .cls-19 {
+        fill: #393;
+      }
+
+      .cls-17 {
+        filter: url(#filter-3);
+      }
+
+      .cls-20, .cls-22, .cls-23 {
+        fill: #f90;
+      }
+
+      .cls-21 {
+        filter: url(#filter-4);
+      }
+
+      .cls-24 {
+        filter: url(#filter-5);
+      }
+
+      .cls-25 {
+        fill: #f33;
+        stroke: #f33;
+      }
+
+      .cls-26 {
+        filter: url(#filter-6);
+      }
+    </style>
+    <filter id="filter" x="17" y="73" width="124" height="142" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="3"/>
+      <feFlood result="flood" flood-color="#333"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <filter id="filter-2" x="184" y="83" width="124" height="142" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="3"/>
+      <feFlood result="flood"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <filter id="filter-3" x="345" y="73" width="114" height="132" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" dy="-1" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="2"/>
+      <feFlood result="flood"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <filter id="filter-4" x="512" y="83" width="114" height="132" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" dy="-1" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="2"/>
+      <feFlood result="flood"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <filter id="filter-5" x="664" y="82" width="114" height="132" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" dy="-1" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="2"/>
+      <feFlood result="flood"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <filter id="filter-6" x="831" y="92" width="114" height="132" filterUnits="userSpaceOnUse">
+      <feOffset result="offset" dy="-1" in="SourceAlpha"/>
+      <feGaussianBlur result="blur" stdDeviation="2"/>
+      <feFlood result="flood"/>
+      <feComposite result="composite" operator="in" in2="blur"/>
+      <feBlend result="blend" in="SourceGraphic"/>
+    </filter>
+    <image id="image" width="119" height="121" xlink:href="data:img/png;base64,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"/>
+    <image id="image-2" width="119" height="121" xlink:href="data:img/png;base64,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"/>
+  </defs>
+  <image id="Background" width="966" height="309" xlink:href="data:img/png;base64,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"/>
+  <path class="cls-1" d="M137.786,149.812h31.428v11.375H137.786V149.812Z"/>
+  <circle class="cls-2" cx="247" cy="218" r="29"/>
+  <circle id="Ellipse_5_copy_3" data-name="Ellipse 5 copy 3" class="cls-2" cx="889" cy="220" r="29"/>
+  <circle id="Ellipse_5_copy_4" data-name="Ellipse 5 copy 4" class="cls-3" cx="395" cy="72" r="29"/>
+  <circle id="Ellipse_5_copy_5" data-name="Ellipse 5 copy 5" class="cls-4" cx="570" cy="214" r="29"/>
+  <circle id="Ellipse_5_copy" data-name="Ellipse 5 copy" class="cls-5" cx="73" cy="76" r="29"/>
+  <circle id="Ellipse_5_copy_2" data-name="Ellipse 5 copy 2" class="cls-5" cx="714" cy="81" r="29"/>
+  <path id="Triangle_1" data-name="Triangle 1" class="cls-1" d="M179.005,155.005l-10,11v-22Z"/>
+  <use id="Rectangle_1_copy_6" data-name="Rectangle 1 copy 6" x="20" y="91" xlink:href="#image"/>
+  <g style="fill: #fff; filter: url(#filter)">
+    <path id="Rectangle_1_copy_7" data-name="Rectangle 1 copy 7" class="cls-6" d="M41.711,84.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H41.711a13,13,0,0,1-13-13V97.62A13,13,0,0,1,41.711,84.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_7" style="stroke: #ccc; filter: none; fill: none"/>
+  <path class="cls-7" d="M72.5,57.253A16.833,16.833,0,1,1,55.667,74.087,16.833,16.833,0,0,1,72.5,57.253Z"/>
+  <circle class="cls-8" cx="73" cy="57" r="1"/>
+  <circle id="Ellipse_3_copy" data-name="Ellipse 3 copy" class="cls-8" cx="79" cy="58" r="1"/>
+  <circle id="Ellipse_3_copy_2" data-name="Ellipse 3 copy 2" class="cls-8" cx="85" cy="62" r="1"/>
+  <circle id="Ellipse_3_copy_3" data-name="Ellipse 3 copy 3" class="cls-8" cx="89" cy="67" r="1"/>
+  <circle id="Ellipse_3_copy_4" data-name="Ellipse 3 copy 4" class="cls-8" cx="90" cy="73" r="1"/>
+  <circle id="Ellipse_3_copy_5" data-name="Ellipse 3 copy 5" class="cls-8" cx="89" cy="79" r="1"/>
+  <circle id="Ellipse_3_copy_6" data-name="Ellipse 3 copy 6" class="cls-8" cx="86" cy="85" r="1"/>
+  <circle id="Ellipse_3_copy_7" data-name="Ellipse 3 copy 7" class="cls-8" cx="81" cy="89" r="1"/>
+  <circle id="Ellipse_3_copy_8" data-name="Ellipse 3 copy 8" class="cls-8" cx="73" cy="91" r="1"/>
+  <circle id="Ellipse_3_copy_9" data-name="Ellipse 3 copy 9" class="cls-8" cx="66" cy="90" r="1"/>
+  <circle id="Ellipse_3_copy_10" data-name="Ellipse 3 copy 10" class="cls-8" cx="61" cy="86" r="1"/>
+  <circle id="Ellipse_3_copy_11" data-name="Ellipse 3 copy 11" class="cls-8" cx="57" cy="81" r="1"/>
+  <circle id="Ellipse_3_copy_12" data-name="Ellipse 3 copy 12" class="cls-8" cx="56" cy="75" r="1"/>
+  <circle id="Ellipse_3_copy_13" data-name="Ellipse 3 copy 13" class="cls-8" cx="57" cy="68" r="1"/>
+  <circle id="Ellipse_3_copy_14" data-name="Ellipse 3 copy 14" class="cls-8" cx="60" cy="63" r="1"/>
+  <circle id="Ellipse_3_copy_15" data-name="Ellipse 3 copy 15" class="cls-8" cx="66" cy="58" r="1"/>
+  <image x="56" y="61" width="32" height="31" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAfCAYAAACGVs+MAAAC+0lEQVRIibWXSWsUURSFv5jEWYLGDIoRYxaKIgYVHBBRRERwIaig+CtcuNd/ILoU3CrisHAAB1CigiKJWSgRZ40mTjHGiCYx6SNPTkOlU91d1aEPFFXNq7r3vHvPvfc1kkq5ZknaKemqpAFJVyS1Spqa1lYpzuslHZbULWlIUsb3p5J2mVxZCWyQ9EbSmMbjr6Q2RyKxvSmkxwygCSZ8WwWsA+amsVgKgQqgMs/aR+BPOQnUA2sLrM8DlgCzykVgyLt8H7M2CtwHuoGxchH4aSeXgJGcta/AOeCpiZaFQMAX4CLwIOLoF3ANaPdzYlT8r8VkqHRuFwCLnetWYCnwDLgLvAZ+AJ+TijEpgSCuZcBKYDXQAFwHzgPNwDCw3+RCmjqAR8CHmFSNR4JmUSPpgKRbkvrdekLT6ZK0W9IqScfdkrPolXRC0hpJ1ZPthBslnZE0mNP9RiX1SLot6Y9bcnQtvH9MUm0h+1VFQj/f4Q+hfOjcTwOmu/PVAJudgm9Axs/DLtU+oM6/Y8VZTAMngX3AcxO4bEebgIVuvUEbT4AbropOa2WrRRocnwLOxjkoFoGARl9bgCN2EtT+2Mo/CuwA9thhXY7djoLWi+T/kKTOnKmXcY5HnPufvo/ETMiAdou4pGn4xCGN5i87jKqthTm+V8c0trfABeB2Pgf5NBAMHgT22vkAsN49ICnagE/uGSFlp4F7ud/mi8BMCymIbJt3fSeF85fAK1dQsLHCk3QC8hH4FWmn9S69vhQEMq6WMbfvEMGeuBfzVcGIS27IkQj53Z6CQGjJLY5El6vlWRoC+IN+13zQwvIUBIIwF3k03/SU/B33YrFGVO2dtLoLNtpwrc+FYaezne9BoNf3cGh54avLv2ORZhxnd9ZsXbR4FDf5kPLdp6GQ73eeikWRlkBchBq888THsCgmS2DSmOIaL4l85CoZVSaRyTGQLywVkXuuY0W+SxzWQCBN7oLhrPPc6AU7URKJCRRD1EnWQXAWopYlk++fUmFAxT+AaRQWmzql6QAAAABJRU5ErkJggg=="/>
+  <path class="cls-1" d="M76,210h3v56H76V210Z"/>
+  <circle class="cls-9" cx="77.938" cy="269.688" r="7.688"/>
+  <text id="PHASE_1" data-name="PHASE 1" class="cls-10" x="79.052" y="114.754"><tspan x="79.052">PHASE 1</tspan></text>
+  <text id="Live_Class" data-name="Live Class" class="cls-11" x="79.052" y="140.754"><tspan x="79.052">Live Class</tspan></text>
+  <text id="With_Study" data-name="With Study" class="cls-11" x="80.052" y="159.754"><tspan x="80.052">With Study</tspan></text>
+  <text id="Material" class="cls-11" x="79.052" y="178.754"><tspan x="79.052">Material</tspan></text>
+  <path id="Rectangle_2_copy" data-name="Rectangle 2 copy" class="cls-12" d="M295.786,149.812h31.428v11.375H295.786V149.812Z"/>
+  <path id="Triangle_1_copy" data-name="Triangle 1 copy" class="cls-12" d="M335.005,155.005l-10,11v-22Z"/>
+  <use id="Rectangle_1_copy_8" data-name="Rectangle 1 copy 8" x="186" y="87" xlink:href="#image-2"/>
+  <g style="fill: #fff; filter: url(#filter-2)">
+    <path id="Rectangle_1_copy_9" data-name="Rectangle 1 copy 9" class="cls-13" d="M208.711,94.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H208.711a13,13,0,0,1-13-13V107.62A13,13,0,0,1,208.711,94.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_9" style="stroke: #ccc; filter: none; fill: none"/>
+  <path id="Ellipse_1_copy" data-name="Ellipse 1 copy" class="cls-14" d="M246.5,198.253a16.834,16.834,0,1,1-16.833,16.833A16.833,16.833,0,0,1,246.5,198.253Z"/>
+  <circle id="Ellipse_3_copy_16" data-name="Ellipse 3 copy 16" class="cls-8" cx="247" cy="198" r="1"/>
+  <circle id="Ellipse_3_copy_17" data-name="Ellipse 3 copy 17" class="cls-8" cx="253" cy="199" r="1"/>
+  <circle id="Ellipse_3_copy_18" data-name="Ellipse 3 copy 18" class="cls-8" cx="259" cy="203" r="1"/>
+  <circle id="Ellipse_3_copy_19" data-name="Ellipse 3 copy 19" class="cls-8" cx="263" cy="208" r="1"/>
+  <circle id="Ellipse_3_copy_20" data-name="Ellipse 3 copy 20" class="cls-8" cx="264" cy="214" r="1"/>
+  <circle id="Ellipse_3_copy_21" data-name="Ellipse 3 copy 21" class="cls-8" cx="263" cy="220" r="1"/>
+  <circle id="Ellipse_3_copy_22" data-name="Ellipse 3 copy 22" class="cls-8" cx="260" cy="226" r="1"/>
+  <circle id="Ellipse_3_copy_23" data-name="Ellipse 3 copy 23" class="cls-8" cx="255" cy="230" r="1"/>
+  <circle id="Ellipse_3_copy_24" data-name="Ellipse 3 copy 24" class="cls-8" cx="247" cy="232" r="1"/>
+  <circle id="Ellipse_3_copy_25" data-name="Ellipse 3 copy 25" class="cls-8" cx="240" cy="231" r="1"/>
+  <circle id="Ellipse_3_copy_26" data-name="Ellipse 3 copy 26" class="cls-8" cx="235" cy="227" r="1"/>
+  <circle id="Ellipse_3_copy_27" data-name="Ellipse 3 copy 27" class="cls-8" cx="231" cy="222" r="1"/>
+  <circle id="Ellipse_3_copy_28" data-name="Ellipse 3 copy 28" class="cls-8" cx="230" cy="216" r="1"/>
+  <circle id="Ellipse_3_copy_29" data-name="Ellipse 3 copy 29" class="cls-8" cx="231" cy="209" r="1"/>
+  <circle id="Ellipse_3_copy_30" data-name="Ellipse 3 copy 30" class="cls-8" cx="234" cy="204" r="1"/>
+  <circle id="Ellipse_3_copy_31" data-name="Ellipse 3 copy 31" class="cls-8" cx="240" cy="199" r="1"/>
+  <path id="Rectangle_3_copy" data-name="Rectangle 3 copy" class="cls-12" d="M247,33h3V89h-3V33Z"/>
+  <circle id="Ellipse_4_copy" data-name="Ellipse 4 copy" class="cls-15" cx="248.938" cy="32.688" r="7.688"/>
+  <text id="PHASE_2" data-name="PHASE 2" class="cls-10" x="246.052" y="114.754"><tspan x="246.052">PHASE 2</tspan></text>
+  <text id="Daily" class="cls-11" x="246.052" y="137.753"><tspan x="246.052">Daily</tspan></text>
+  <text id="Test" class="cls-11" x="247.052" y="182.754"><tspan x="247.052">Test</tspan></text>
+  <text id="Assignment" class="cls-11" x="247.052" y="152.754"><tspan x="247.052">Assignment</tspan></text>
+  <text id="Assesment" class="cls-11" x="246.052" y="167.754"><tspan x="246.052">Assesment</tspan></text>
+  <path id="Rectangle_2_copy_2" data-name="Rectangle 2 copy 2" class="cls-16" d="M460.786,145.812h31.428v11.375H460.786V145.812Z"/>
+  <path id="Triangle_1_copy_2" data-name="Triangle 1 copy 2" class="cls-16" d="M502.005,151.005l-10,11v-22Z"/>
+  <image id="Rectangle_1_copy_10" data-name="Rectangle 1 copy 10" x="343" y="87" width="119" height="121" xlink:href="data:img/png;base64,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"/>
+  <g style="fill: #fff; filter: url(#filter-3)">
+    <path id="Rectangle_1_copy_11" data-name="Rectangle 1 copy 11" class="cls-17" d="M364.711,80.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H364.711a13,13,0,0,1-13-13V93.62A13,13,0,0,1,364.711,80.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_11" style="stroke: #ccc; filter: none; fill: none"/>
+  <path id="Ellipse_1_copy_2" data-name="Ellipse 1 copy 2" class="cls-18" d="M395.5,53.253a16.833,16.833,0,1,1-16.833,16.833A16.833,16.833,0,0,1,395.5,53.253Z"/>
+  <circle id="Ellipse_3_copy_32" data-name="Ellipse 3 copy 32" class="cls-8" cx="396" cy="53" r="1"/>
+  <circle id="Ellipse_3_copy_33" data-name="Ellipse 3 copy 33" class="cls-8" cx="402" cy="54" r="1"/>
+  <circle id="Ellipse_3_copy_34" data-name="Ellipse 3 copy 34" class="cls-8" cx="408" cy="58" r="1"/>
+  <circle id="Ellipse_3_copy_35" data-name="Ellipse 3 copy 35" class="cls-8" cx="412" cy="63" r="1"/>
+  <circle id="Ellipse_3_copy_36" data-name="Ellipse 3 copy 36" class="cls-8" cx="413" cy="69" r="1"/>
+  <circle id="Ellipse_3_copy_37" data-name="Ellipse 3 copy 37" class="cls-8" cx="412" cy="75" r="1"/>
+  <circle id="Ellipse_3_copy_38" data-name="Ellipse 3 copy 38" class="cls-8" cx="409" cy="81" r="1"/>
+  <circle id="Ellipse_3_copy_39" data-name="Ellipse 3 copy 39" class="cls-8" cx="404" cy="85" r="1"/>
+  <circle id="Ellipse_3_copy_40" data-name="Ellipse 3 copy 40" class="cls-8" cx="396" cy="87" r="1"/>
+  <circle id="Ellipse_3_copy_41" data-name="Ellipse 3 copy 41" class="cls-8" cx="389" cy="86" r="1"/>
+  <circle id="Ellipse_3_copy_42" data-name="Ellipse 3 copy 42" class="cls-8" cx="384" cy="82" r="1"/>
+  <circle id="Ellipse_3_copy_43" data-name="Ellipse 3 copy 43" class="cls-8" cx="380" cy="77" r="1"/>
+  <circle id="Ellipse_3_copy_44" data-name="Ellipse 3 copy 44" class="cls-8" cx="379" cy="71" r="1"/>
+  <circle id="Ellipse_3_copy_45" data-name="Ellipse 3 copy 45" class="cls-8" cx="380" cy="64" r="1"/>
+  <circle id="Ellipse_3_copy_46" data-name="Ellipse 3 copy 46" class="cls-8" cx="383" cy="59" r="1"/>
+  <circle id="Ellipse_3_copy_47" data-name="Ellipse 3 copy 47" class="cls-8" cx="389" cy="54" r="1"/>
+  <path id="Rectangle_3_copy_2" data-name="Rectangle 3 copy 2" class="cls-16" d="M399,206h3v56h-3V206Z"/>
+  <circle id="Ellipse_4_copy_2" data-name="Ellipse 4 copy 2" class="cls-19" cx="400.938" cy="265.688" r="7.688"/>
+  <text id="PHASE_3" data-name="PHASE 3" class="cls-10" x="402.052" y="112.753"><tspan x="402.052">PHASE 3</tspan></text>
+  <text id="Real" class="cls-11" x="382.052" y="148.754"><tspan x="382.052">Real</tspan></text>
+  <text id="Project" class="cls-11" x="403.052" y="165.753"><tspan x="403.052">Project</tspan></text>
+  <text id="World" class="cls-11" x="422.052" y="148.754"><tspan x="422.052">World</tspan></text>
+  <path id="Rectangle_2_copy_3" data-name="Rectangle 2 copy 3" class="cls-20" d="M618.786,145.812h31.428v11.375H618.786V145.812Z"/>
+  <path id="Triangle_1_copy_3" data-name="Triangle 1 copy 3" class="cls-20" d="M658.005,151.005l-10,11v-22Z"/>
+  <image id="Rectangle_1_copy_12" data-name="Rectangle 1 copy 12" x="509" y="83" width="119" height="121" xlink:href="data:img/png;base64,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"/>
+  <g style="fill: #fff; filter: url(#filter-4)">
+    <path id="Rectangle_1_copy_13" data-name="Rectangle 1 copy 13" class="cls-21" d="M531.711,90.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H531.711a13,13,0,0,1-13-13V103.62A13,13,0,0,1,531.711,90.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_13" style="stroke: #ccc; filter: none; fill: none"/>
+  <path id="Ellipse_1_copy_3" data-name="Ellipse 1 copy 3" class="cls-22" d="M569.5,194.253a16.834,16.834,0,1,1-16.833,16.833A16.833,16.833,0,0,1,569.5,194.253Z"/>
+  <circle id="Ellipse_3_copy_48" data-name="Ellipse 3 copy 48" class="cls-8" cx="570" cy="194" r="1"/>
+  <circle id="Ellipse_3_copy_49" data-name="Ellipse 3 copy 49" class="cls-8" cx="576" cy="195" r="1"/>
+  <circle id="Ellipse_3_copy_50" data-name="Ellipse 3 copy 50" class="cls-8" cx="582" cy="199" r="1"/>
+  <circle id="Ellipse_3_copy_51" data-name="Ellipse 3 copy 51" class="cls-8" cx="586" cy="204" r="1"/>
+  <circle id="Ellipse_3_copy_52" data-name="Ellipse 3 copy 52" class="cls-8" cx="587" cy="210" r="1"/>
+  <circle id="Ellipse_3_copy_53" data-name="Ellipse 3 copy 53" class="cls-8" cx="586" cy="216" r="1"/>
+  <circle id="Ellipse_3_copy_54" data-name="Ellipse 3 copy 54" class="cls-8" cx="583" cy="222" r="1"/>
+  <circle id="Ellipse_3_copy_55" data-name="Ellipse 3 copy 55" class="cls-8" cx="578" cy="226" r="1"/>
+  <circle id="Ellipse_3_copy_56" data-name="Ellipse 3 copy 56" class="cls-8" cx="570" cy="228" r="1"/>
+  <circle id="Ellipse_3_copy_57" data-name="Ellipse 3 copy 57" class="cls-8" cx="563" cy="227" r="1"/>
+  <circle id="Ellipse_3_copy_58" data-name="Ellipse 3 copy 58" class="cls-8" cx="558" cy="223" r="1"/>
+  <circle id="Ellipse_3_copy_59" data-name="Ellipse 3 copy 59" class="cls-8" cx="554" cy="218" r="1"/>
+  <circle id="Ellipse_3_copy_60" data-name="Ellipse 3 copy 60" class="cls-8" cx="553" cy="212" r="1"/>
+  <circle id="Ellipse_3_copy_61" data-name="Ellipse 3 copy 61" class="cls-8" cx="554" cy="205" r="1"/>
+  <circle id="Ellipse_3_copy_62" data-name="Ellipse 3 copy 62" class="cls-8" cx="557" cy="200" r="1"/>
+  <circle id="Ellipse_3_copy_63" data-name="Ellipse 3 copy 63" class="cls-8" cx="563" cy="195" r="1"/>
+  <image x="556" y="197" width="26" height="26" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAACk0lEQVRIibWWO2gVURCGv018JDEmoKKF+I6RKIIRQfABEuIDEQQRIRCsjGClhYWClYhYCBZWWtoKgo2FWmmlEm00YKdiYyEkJvEVzS9znU0mJ3f33ggOHHb3nLPn3/nnn5nNJDXw/03z5gghH2aZj7qsXqBJv84H+gFj4Q4w4fO1WTHqSgY+miUdkfRK0zYk6YSk9rCv6KysLEZGURuwGzgNHAUeA0PuwWagB3gC3AIeAp8L6FQZkNG1B7gPLAEu+/wOvz4HFgIXgU/AYeBlAY2lQPhB9uVdwDbgbIirxecKsAhY7Gu//sUjgghWAW+B5mTdqLoAbHDPKPKollry9a4qIDilG4P6CuVeb7K+8Tik9h54AXQDK0KOzbYa8q5I06V7StKXIO9hSf2+fkxSp9/PWd4klcBsF3DQ7x8Az+pkqC4x7AQGgBZgJAA3eJ6NAreBwTKgMupsbbukD6pt7yR1l1SHrGjB5lslDdYBkpvtbSkAK4yRUXYD6AQeeeLmMctmUPL3+QfQC7z2vErPrIpuc32SRiX1hoJZa+xzVfZV8SpLkc2TNcBVLy3518fe0xySN0v2tHpZWh2qypRyIkgTcB1YC3xLDjHr8CJ7z/eQUPkVWA9cAxZEsNQjawfHq8Qsj8cmYD9wyOtbzLEI2Aecmfn2dFy2erbnNi7pQOA7cyWel3ROUlOoBLanR9JYeH9E0hZfy2IrXw60h+dG4Heg1WzMqU09xVtEY5hv86pvdXKqt5jbT4GbwEmn9LsLo8P5zoKc5Xsmw951/iETvn7Xz6xQGvMo/+qV/hNi4xKwF/hZAJQ/myeWQ9aTxp2Jj0EHVWtdlOUyYGkq1UQAOehw0kqi9CtAZf9mxf2lGHj2HOgPsbGMpt26uQ0AAAAASUVORK5CYII="/>
+  <path id="Rectangle_3_copy_3" data-name="Rectangle 3 copy 3" class="cls-20" d="M570,29h3V85h-3V29Z"/>
+  <circle id="Ellipse_4_copy_3" data-name="Ellipse 4 copy 3" class="cls-23" cx="571.938" cy="28.688" r="7.688"/>
+  <text id="PHASE_4" data-name="PHASE 4" class="cls-10" x="569.052" y="113.754"><tspan x="569.052">PHASE 4</tspan></text>
+  <text id="Interview" class="cls-11" x="569.052" y="134.754"><tspan x="569.052">Interview</tspan></text>
+  <text id="Prepration" class="cls-11" x="569.052" y="149.753"><tspan x="569.052">Prepration</tspan></text>
+  <text id="Resume" class="cls-11" x="569.052" y="164.754"><tspan x="569.052">Resume</tspan></text>
+  <text id="Building" class="cls-11" x="569.052" y="181.753"><tspan x="569.052">Building</tspan></text>
+  <path id="Rectangle_2_copy_4" data-name="Rectangle 2 copy 4" class="cls-1" d="M779.786,154.812h31.428v11.375H779.786V154.812Z"/>
+  <path id="Triangle_1_copy_4" data-name="Triangle 1 copy 4" class="cls-1" d="M821.005,160.005l-10,11v-22Z"/>
+  <use id="Rectangle_1_copy_14" data-name="Rectangle 1 copy 14" x="662" y="96" xlink:href="#image"/>
+  <g style="fill: #fff; filter: url(#filter-5)">
+    <path id="Rectangle_1_copy_15" data-name="Rectangle 1 copy 15" class="cls-24" d="M683.711,89.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H683.711a13,13,0,0,1-13-13V102.62A13,13,0,0,1,683.711,89.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_15" style="stroke: #ccc; filter: none; fill: none"/>
+  <path id="Ellipse_1_copy_4" data-name="Ellipse 1 copy 4" class="cls-7" d="M714.5,62.253a16.833,16.833,0,1,1-16.833,16.833A16.833,16.833,0,0,1,714.5,62.253Z"/>
+  <circle id="Ellipse_3_copy_64" data-name="Ellipse 3 copy 64" class="cls-8" cx="715" cy="62" r="1"/>
+  <circle id="Ellipse_3_copy_65" data-name="Ellipse 3 copy 65" class="cls-8" cx="721" cy="63" r="1"/>
+  <circle id="Ellipse_3_copy_66" data-name="Ellipse 3 copy 66" class="cls-8" cx="727" cy="67" r="1"/>
+  <circle id="Ellipse_3_copy_67" data-name="Ellipse 3 copy 67" class="cls-8" cx="731" cy="72" r="1"/>
+  <circle id="Ellipse_3_copy_68" data-name="Ellipse 3 copy 68" class="cls-8" cx="732" cy="78" r="1"/>
+  <circle id="Ellipse_3_copy_69" data-name="Ellipse 3 copy 69" class="cls-8" cx="731" cy="84" r="1"/>
+  <circle id="Ellipse_3_copy_70" data-name="Ellipse 3 copy 70" class="cls-8" cx="728" cy="90" r="1"/>
+  <circle id="Ellipse_3_copy_71" data-name="Ellipse 3 copy 71" class="cls-8" cx="723" cy="94" r="1"/>
+  <circle id="Ellipse_3_copy_72" data-name="Ellipse 3 copy 72" class="cls-8" cx="715" cy="96" r="1"/>
+  <circle id="Ellipse_3_copy_73" data-name="Ellipse 3 copy 73" class="cls-8" cx="708" cy="95" r="1"/>
+  <circle id="Ellipse_3_copy_74" data-name="Ellipse 3 copy 74" class="cls-8" cx="703" cy="91" r="1"/>
+  <circle id="Ellipse_3_copy_75" data-name="Ellipse 3 copy 75" class="cls-8" cx="699" cy="86" r="1"/>
+  <circle id="Ellipse_3_copy_76" data-name="Ellipse 3 copy 76" class="cls-8" cx="698" cy="80" r="1"/>
+  <circle id="Ellipse_3_copy_77" data-name="Ellipse 3 copy 77" class="cls-8" cx="699" cy="73" r="1"/>
+  <circle id="Ellipse_3_copy_78" data-name="Ellipse 3 copy 78" class="cls-8" cx="702" cy="68" r="1"/>
+  <circle id="Ellipse_3_copy_79" data-name="Ellipse 3 copy 79" class="cls-8" cx="708" cy="63" r="1"/>
+  <image x="704" y="67" width="22" height="23" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAABYAAAAXCAYAAAAP6L+eAAACkElEQVQ4jZWVy4uPYRTHP7/395thKBplIxFREsZCaGYzSSkbys5loVx3ZEUWo0gu5Q+YbO0o5bIwMReUskDTNHJbuCXFArnM/H5Hx3yfOp6elFNP7/ue8zzfc/s+562ZGUAvcAGYDTT5f6kDH4C9wKh/O3AnMADcAq4AVYD9BbjndqCWuavJ5tICDgCLgU1/zpnZajMbN7P5Hn22usyst6AvrW4zG/NA3VbJ809guryniDcDQ8Ad4Kj2VVqeeiN8o/MTKYsqpBNTdFmvmrv0SN8qlCRJFW3JW61w4BrwWe9XBVrPAiid+wuYELk/O9Xhr8ALYBuwXIyxwvoncPLskZ0H9gCXgePq9CVgpkATI2L6FsvayAzJwUNggZoxD7gLjADftKcZzlcl7jcywJTFIDAOzBGH+4BJYKP2tMv+MmC1RbxGocbufQewFfgufT3QbAZwHfgIrJTzITl5A0yLwLEBHvlN4Kn0rcDhL8ADoBs4q28vz35gGNinhtcbASzSZq14PJml+lhZHAGOqWSoD+eAw8ChCJzLI0U4GbKZ0CzpV7SDgVXvFK3Pmw3A7RIrTNH2CCzpXgFd2j9cIIGX5D6wLgHnBHfd6UzXoWZ2FPoRS9hM1EupWBZ5YkBd+g5F+1a6NWFvUyWrpB+dskyNzSdmtlSjsKHVpuXvVRiT281sxMxWBJ2PyjNm1m9mPuOrUvNa2ZWNF8h0tREL3gM/gIXAMuBkOleFw80MoFYA3aXGrQIuihkDuhxzNVeWOFZDnffhkmqcHHjkudwTn932WpfFxZ1t0a9pJ3DC6+Ggzk93cCNrZs4Yd+r73Jb+In6FxwTqM+W5gyf+HQROAbvD76UEHGmWxIGf6TYuAmYBn34DR5MysbhUZugAAAAASUVORK5CYII="/>
+  <path id="Rectangle_3_copy_4" data-name="Rectangle 3 copy 4" class="cls-1" d="M718,215h3v56h-3V215Z"/>
+  <circle id="Ellipse_4_copy_4" data-name="Ellipse 4 copy 4" class="cls-9" cx="719.938" cy="274.688" r="7.688"/>
+  <text id="PHASE_5" data-name="PHASE 5" class="cls-10" x="721.052" y="115.754"><tspan x="721.052">PHASE 5</tspan></text>
+  <text id="Mock" class="cls-11" x="721.052" y="149.753"><tspan x="721.052">Mock</tspan></text>
+  <text id="Interviews" class="cls-11" x="722.052" y="165.753"><tspan x="722.052">Interviews</tspan></text>
+  <path id="Triangle_1_copy_5" data-name="Triangle 1 copy 5" class="cls-25" d="M977.005,160.005l-10,11v-22Z"/>
+  <use id="Rectangle_1_copy_16" data-name="Rectangle 1 copy 16" x="828" y="92" xlink:href="#image-2"/>
+  <g style="fill: #fff; filter: url(#filter-6)">
+    <path id="Rectangle_1_copy_17" data-name="Rectangle 1 copy 17" class="cls-26" d="M850.711,99.62h73.578a13,13,0,0,1,13,13v91.76a13,13,0,0,1-13,13H850.711a13,13,0,0,1-13-13V112.62A13,13,0,0,1,850.711,99.62Z" style="stroke: inherit; filter: none; fill: inherit"/>
+  </g>
+  <use xlink:href="#Rectangle_1_copy_17" style="stroke: #ccc; filter: none; fill: none"/>
+  <path id="Ellipse_1_copy_5" data-name="Ellipse 1 copy 5" class="cls-14" d="M888.5,203.253a16.834,16.834,0,1,1-16.833,16.833A16.833,16.833,0,0,1,888.5,203.253Z"/>
+  <circle id="Ellipse_3_copy_80" data-name="Ellipse 3 copy 80" class="cls-8" cx="889" cy="203" r="1"/>
+  <circle id="Ellipse_3_copy_81" data-name="Ellipse 3 copy 81" class="cls-8" cx="895" cy="204" r="1"/>
+  <circle id="Ellipse_3_copy_82" data-name="Ellipse 3 copy 82" class="cls-8" cx="901" cy="208" r="1"/>
+  <circle id="Ellipse_3_copy_83" data-name="Ellipse 3 copy 83" class="cls-8" cx="905" cy="213" r="1"/>
+  <circle id="Ellipse_3_copy_84" data-name="Ellipse 3 copy 84" class="cls-8" cx="906" cy="219" r="1"/>
+  <circle id="Ellipse_3_copy_85" data-name="Ellipse 3 copy 85" class="cls-8" cx="905" cy="225" r="1"/>
+  <circle id="Ellipse_3_copy_86" data-name="Ellipse 3 copy 86" class="cls-8" cx="902" cy="231" r="1"/>
+  <circle id="Ellipse_3_copy_87" data-name="Ellipse 3 copy 87" class="cls-8" cx="897" cy="235" r="1"/>
+  <circle id="Ellipse_3_copy_88" data-name="Ellipse 3 copy 88" class="cls-8" cx="889" cy="237" r="1"/>
+  <circle id="Ellipse_3_copy_89" data-name="Ellipse 3 copy 89" class="cls-8" cx="882" cy="236" r="1"/>
+  <circle id="Ellipse_3_copy_90" data-name="Ellipse 3 copy 90" class="cls-8" cx="877" cy="232" r="1"/>
+  <circle id="Ellipse_3_copy_91" data-name="Ellipse 3 copy 91" class="cls-8" cx="873" cy="227" r="1"/>
+  <circle id="Ellipse_3_copy_92" data-name="Ellipse 3 copy 92" class="cls-8" cx="872" cy="221" r="1"/>
+  <circle id="Ellipse_3_copy_93" data-name="Ellipse 3 copy 93" class="cls-8" cx="873" cy="214" r="1"/>
+  <circle id="Ellipse_3_copy_94" data-name="Ellipse 3 copy 94" class="cls-8" cx="876" cy="209" r="1"/>
+  <circle id="Ellipse_3_copy_95" data-name="Ellipse 3 copy 95" class="cls-8" cx="882" cy="204" r="1"/>
+  <image x="879" y="207" width="20" height="25" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAZCAYAAAAxFw7TAAADOElEQVQ4jX2Va2jWZRjGf3v3VpOZaw4niaYS1tBNxEDbPOCIUETty5KKTqLzQ4v8oEHkl0BZpYggKh4Jqg+SJzwShdhWsfwgW5kHdrCmuUNp8+w6XnFv1wv/vdhuePbf8z7Pc9/Xdd33/TxIGmwUSXpbUpukDkmbJI0d7ExO/Mmyh4BSYBowBxgLfApcBV4GHgC+8WgEriePZzt8GngDmAR0AM3AD0C714cDT3l9JNAN7PEY4DAHyAd2A7nAQSOtBIYAf3hPrKWABuAisAiYaOSteDFjY4AppncCeMKIrphag5GG4xKj3+l5ub8DKFcB1UY5G5gBrAEOZGkczj4E/gL2W4KwVUmHQXcjcBN4FHgE2AIcz3KWa9TjgDeBIidnLvA8cC1lrSKbs4Af7eyUncVanp2lnLStwFDgEPAv0Ov1YDcs5Sg1wD5n9jbQ5k3zgFf9f5TPJiANtABdwB2j3gC8GMjTRhA0vwMedJ39aScjgHeAJ42u1fp1mjYOUB/owk/KukUWXzGFf4BCbz4CbANeAH4FPgCavKfAmY2Set3s2tKu9EjALmC89SlxxG7/Ht/v7SxjUVbF1vYlYH2UVbJs3veGW8AEoA5Yl92XtvlOwjXgJ2Am8FxIlc50DHDU+tR6U9TlXZdFp2kWuzOWGW00wGLgq4zu6UTUdrfZKGCve3W5C/cScM+SxPws8LHnk13gAUpJh3kuh+V2Gln/DShzS+ZYjsPAOfd5lRP5S/bl8LBvjKD3N1DhyOHwI2BHRAeeBVaadouD9lrzmr6AkoZIWiKpWVK55wW+SF+TVCepQdIXks5IeldSqaRCSfmSKny2Os6m3SlB8zPggrWKccOIy6x12vXZ6BbN2HngEyP8MmroGS9sB3oSG+PwAnfJBo8IuNAUM9ZjSXr6Ssfvxc+S1kraLWmp34cKU61NvBmVpr3C89GS3pO0XlKTpK60Wyq8P26xS5y1UiPYnEBz0k/CdCdtKvCWf78c12BkOTQK6r/76lrt+op2+9bFnrS46kKv6OUAEjd6dNRjfTLd5ymsUb/VSxr1P89lZDosJBmZXEsWdsZOA5/7GzfI/exr4JgzHEz6DfgPZjbFOJnNTTMAAAAASUVORK5CYII="/>
+  <path id="Rectangle_3_copy_5" data-name="Rectangle 3 copy 5" class="cls-12" d="M889,38h3V94h-3V38Z"/>
+  <circle id="Ellipse_4_copy_5" data-name="Ellipse 4 copy 5" class="cls-15" cx="890.938" cy="37.688" r="7.688"/>
+  <text id="PHASE_6" data-name="PHASE 6" class="cls-10" x="888.052" y="115.754"><tspan x="888.052">PHASE 6</tspan></text>
+  <text id="Placement" class="cls-11" x="890.052" y="150.754"><tspan x="890.052">Placement</tspan></text>
+  <image x="218" y="202" width="55" height="41" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAADcAAAApCAYAAACRB7GtAAACpUlEQVRoge2Zy48MQRzHP81MMJOwljWIcBUh3i4sB3HwODhyR+LkIBKJxIWbg/9gb8KBSDhxIk4ekbAOyEi4eGzE23js7JZU8l06k55ts/Xrlpb+Jp2eVP266vetX/0eVRM558gBNeAssFtTXQeOAJ+znDoPcp7YNWBLR/sdYAfwKauJp2U1cAwHgc0J7RuBw1lOnDW5CFimdy99JsjDcu1J+n5mOXHW5LxDnwO+JfR9B85LJhNYkmsAx4BBoD/W/gDYCTwWEf88BfYCt2NycxV0DlgpZBkt1wL3gVHgLfAEuAcMq70lmY/AG2AMWAes1ns5sEBWnm2hkCW5lSKSBE/sOTAkIj5SLgbqCbIfZMVgVKyYpUQ9n+tWANu1RXOBlc9N11jtlOjYTgkgTlvWY0aoUhaW80pcUhC5LJ/ZD1R7HMcTvyAr3wXeK+i0pqyZ97nAZ8D9wbhzrumcO+WScUUySTjjnBvu6F8aopvFtnwHnASeKSm3ugSKNNRl9R+y3GngZYhiltFyPXBUgWVfF5mrwJ5Jgs9FpYpDwHioQpbkVgEPU2TSyCFyfRYKWVYoVqtkttqW5KzGMtPJklxLxXBIpe9LshdWCllWKNuAWyqf6qoPG/KfmtoqMX/zi/FVJ/HXwBf5W0Ol3KNQhSzJrdG1ASLok/AroKliekDkvXXmqL+q34uAeVoQT36hBTnLaLlVJ+tZUrCpsmxM+cs/I+qbL7maZEZFqE/b+obyZhCsL4h2AceBmR3l14RvVxUNJ+rPeC5rK4GfAG5aKGO5LVHyHgwcY4MVOWvLLQE2BXwfyS9HLJTJ61L2nyCP26+SXBYoyRUVJbmioiRXVJTkioqSXFFRSbhmy7qSjv5yjqn+nfx7bOvzXE+TG8l1hSf3f555IPoFIchPYDX+cyAAAAAASUVORK5CYII="/>
+  <image x="379" y="58" width="26" height="33" xlink:href="data:img/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAhCAYAAADH97ugAAACcUlEQVRIie2WzUtUYRTGf+NMo02lmZUYgWkYfdMXQeImqL+iVbqpRQv/Al24iYIWtQzctOgPiGgnRG0qatEHSBEThTrYl/ahM2O+cuC5cInre++Md1z5wCzuve+c5z7nPOecm3HOUQOyQAfQCxwGLgIfgBvAvC9MLgGHnTkAHAeOAUeBvcB2kb4F3gG/AKf7z4D3wGZgwYL4FBlBHzAoEgu+R4HCqAJTItkEvAHuAn+AS7oe9ynKA6eBK8BWz7k54KMIW4AJoAu4DJwEFu25j6gJaFZKfESvpLqkLFiqhkSCyPc1eQJYKirAP8+ZAMtStKBrq89TxfgOPE9ihjhkFDAMIxkH2oHbptqnKCnKMsEAcEemOQ/0A8PALuBeGor+qpaDMsCi6tMGXANuWlukQVSRCc7q+ipQAB4B3cAh5Ky1IqjRT6WxIPKS+s7uJZoMccjJdTaKetR/NhkmVbdcWkStqtMIcEup2i+DbNN8/JGWIuu1L8AnTYoBOa9VRKU0auRUpwC/gd2a7ujZ5zSI/sc3kU0DY6rfXCOIdgKdpgJ4KAe2N4KoWc5zmn9m+5Y4omyCXrM3/hq6tmW3RSQVrZB8nOuyco4Ptn1HVZdZjaBlLb6yiLwjaElNOCEH7QjZNYweLUdL1WvgiQjmpchqdcZHZIcfAzOaYyeAI8BBLcK80lQEHqhpJ3X/lNxX1W4qx6XO6aApu6/c9+obwn4XgJfAdQW2lJ1TuoqK8cK+G2r93EKpK+jXoa1aDC2/gixeVS/ZKu+qh6guNKKPIrFBVDdyIotyhFvlUyoOmYjnbl0VBW+8mqpaEfmfQFGU3PQArACfD5x5yK8qkwAAAABJRU5ErkJggg=="/>
+</svg>
