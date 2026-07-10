@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
           attendeePW,
           moderatorPW,
           record: true,
+          recordVideo: true,
         });
       } catch (createError: any) {
         console.error('Failed to create meeting:', createError.message);

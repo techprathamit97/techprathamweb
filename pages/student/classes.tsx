@@ -197,27 +197,49 @@ const StudentClasses = () => {
   };
 
   const handleJoinClass = async (cls: LiveClass) => {
-    // BigBlueButton: Get join URL and redirect
     try {
-      const res = await fetch('/api/bbb/join', {
+      console.log('=== STUDENT JOINING CLASS ===');
+      console.log('Class:', cls);
+      
+      // Get student info
+      const studentData = localStorage.getItem('student');
+      if (!studentData) {
+        alert('Please log in first');
+        return;
+      }
+      
+      const student = JSON.parse(studentData);
+      const studentName = student.name || student.studentName || 'Student';
+      
+      console.log('Student name:', studentName);
+      
+      const response = await fetch('/api/join-class', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          meetingId: cls._id,
-          userName: (student as any)?.name || 'Student',
-          password: cls.attendeePassword || 'student',
-          role: 'attendee'
+          classId: cls._id,
+          userName: studentName,
+          userType: 'student'
         })
       });
-      const data = await res.json();
-      if (data.success && data.data.joinUrl) {
-        window.location.href = data.data.joinUrl;
+
+      const data = await response.json();
+      console.log('Join response:', data);
+
+      if (data.success && data.joinUrl) {
+        console.log('Opening BBB join URL:', data.joinUrl);
+        
+        // Open BigBlueButton in new window
+        window.open(data.joinUrl, '_blank', 'width=1200,height=800');
+        
+        // Show success message
+        alert(`Joining ${data.className}\n\nThe BigBlueButton window should open automatically. If it doesn't, please enable pop-ups and try again.`);
       } else {
-        toast.error(data.error || 'Cannot join class right now');
+        throw new Error(data.error || 'Failed to join class');
       }
-    } catch (err) {
-      console.error('Join error:', err);
-      toast.error('Failed to join class');
+    } catch (error: any) {
+      console.error('Join error:', error);
+      alert(`Failed to join class: ${error.message}\n\nPlease try again or contact your instructor.`);
     }
   };
 

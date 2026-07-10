@@ -179,6 +179,7 @@ export async function createMeeting(
     welcome?: string;
     duration?: number;
     record?: boolean;
+    recordVideo?: boolean;
     autoStartRecording?: boolean;
     allowStartStopRecording?: boolean;
     moderatorOnlyMessage?: string;
@@ -210,6 +211,7 @@ export async function createMeeting(
   if (options.moderatorPW) params.moderatorPW = options.moderatorPW;
   if (options.duration) params.duration = options.duration.toString();
   if (options.record) params.record = 'true';
+  if (options.recordVideo) params.recordVideo = 'true';
   if (options.autoStartRecording) params.autoStartRecording = 'true';
   if (options.allowStartStopRecording) params.allowStartStopRecording = 'true';
   if (options.moderatorOnlyMessage) params.moderatorOnlyMessage = options.moderatorOnlyMessage;

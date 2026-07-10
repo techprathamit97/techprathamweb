@@ -23,15 +23,17 @@ const TrainerSidebar = () => {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/trainer/dashboard' },
     { icon: User, label: 'Profile', href: '/trainer/profile' },
+    { icon: VideoIcon, label: 'Create & Join Class', href: '/trainer/join-class' },
+    { icon: Video, label: 'Class Recording', href: '/trainer/recordings' },
     { icon: BookOpen, label: 'Course Modules', href: '/trainer/course-modules' },
     { icon: Users, label: 'Student Details', href: '/trainer/students' },
     { icon: ClipboardList, label: 'Assignments', href: '/trainer/assignments' },
     { icon: FileQuestion, label: 'Quiz Assign', href: '/trainer/quiz-assign' },
-    { icon: Video, label: 'Video Recording', href: '/trainer/recordings' },
+    // { icon: Video, label: 'Video Recording', href: '/trainer/recordings' },
     { icon: Mail, label: 'Send Email', href: '/trainer/send-email' },
-    { icon: LinkIcon, label: 'Add Meeting Link', href: '/trainer/meeting-link' },
+    // { icon: LinkIcon, label: 'Add Meeting Link', href: '/trainer/meeting-link' },
     { icon: Clock, label: 'Change Class Timing', href: '/trainer/class-timing' },
-    { icon: VideoIcon, label: 'Join Class', href: '/trainer/join-class' },
+    // { icon: VideoIcon, label: 'Join Class', href: '/trainer/join-class' },
     { icon: DollarSign, label: 'Salary Details', href: '/trainer/salary' },
   ];
 
