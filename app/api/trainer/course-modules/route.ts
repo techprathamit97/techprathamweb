@@ -78,17 +78,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Get all module classes for these batches
-    const batchIds = batches.map(b => b._id);
+    const batchIds = batches.map((b: any) => b._id);
     const allClasses = await ModuleClass.find({
       batchId: { $in: batchIds },
       status: { $ne: 'cancelled' }
     }).sort({ scheduledDate: -1, scheduledTime: -1 }).lean();
 
     // Separate completed classes (with recordings) and scheduled classes
-    const completedModules = [];
-    const scheduledClasses = [];
+    const completedModules: any[] = [];
+    const scheduledClasses: any[] = [];
 
-    allClasses.forEach(cls => {
+    allClasses.forEach((cls: any) => {
       // Generate BBB join URLs if meeting exists but URLs are missing
       const bbbUrls = getBBBJoinUrls(cls);
 

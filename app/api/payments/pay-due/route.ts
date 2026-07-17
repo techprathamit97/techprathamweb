@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     // Get latest payment details
     const latestPayment = payments[0];
     const totalFees = latestPayment.totalFees;
-    const totalPaid = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const totalPaid = payments.reduce((sum: number, p: any) => sum + p.paidAmount, 0);
     const dueAmount = totalFees - totalPaid;
 
     if (dueAmount <= 0) {
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get installment details
-    const installmentDetails = payments.map(p => ({
+    const installmentDetails = payments.map((p: any) => ({
       installmentNumber: p.installmentNumber,
       invoiceNumber: p.invoiceNumber,
       paidAmount: p.paidAmount,

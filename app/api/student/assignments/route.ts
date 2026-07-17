@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
       studentIds: student._id
     }).lean();
 
-    const batchIds = batches.map(b => b._id);
+    const batchIds = batches.map((b: any) => b._id);
 
     if (batchIds.length === 0) {
       return NextResponse.json({
@@ -67,12 +67,12 @@ export async function GET(req: NextRequest) {
 
     // Create a map of assignment submissions
     const submissionMap = new Map();
-    submissions.forEach(sub => {
+    submissions.forEach((sub: any) => {
       submissionMap.set(sub.refId.toString(), sub);
     });
 
     // Format assignments
-    const formattedAssignments = assignments.map(assignment => {
+    const formattedAssignments = assignments.map((assignment: any) => {
       const submission = submissionMap.get(assignment._id.toString());
       const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date();
 
@@ -104,9 +104,9 @@ export async function GET(req: NextRequest) {
 
     // Calculate stats
     const totalAssignments = formattedAssignments.length;
-    const pendingAssignments = formattedAssignments.filter(a => a.status === 'available').length;
-    const submittedAssignments = formattedAssignments.filter(a => a.status === 'submitted').length;
-    const gradedAssignments = formattedAssignments.filter(a => a.status === 'graded').length;
+    const pendingAssignments = formattedAssignments.filter((a: any) => a.status === 'available').length;
+    const submittedAssignments = formattedAssignments.filter((a: any) => a.status === 'submitted').length;
+    const gradedAssignments = formattedAssignments.filter((a: any) => a.status === 'graded').length;
 
     return NextResponse.json({
       success: true,

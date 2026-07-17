@@ -1,128 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { User, Lock, LogIn, GraduationCap } from 'lucide-react';
-import { toast } from 'sonner';
-import Link from 'next/link';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 
-const StudentLogin = () => {
-  const [credentials, setCredentials] = useState({
-    studentId: '',
-    password: ''
-  });
-  const [isLoading, setIsLoading] = useState(false);
+const StudentLoginDeprecated = () => {
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!credentials.studentId || !credentials.password) {
-      toast.error('Please enter both Email/Student ID and password');
-      return;
-    }
+  useEffect(() => {
+    // Auto-redirect after 5 seconds
+    const timer = setTimeout(() => {
+      router.push('/login');
+    }, 5000);
 
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/student-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        // Store student data in localStorage
-        localStorage.setItem('student', JSON.stringify(data.student));
-        toast.success('Login successful!');
-        router.push('/student/dashboard');
-      } else {
-        throw new Error(data.error || 'Login failed');
-      }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      toast.error(error.message || 'Login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    return () => clearTimeout(timer);
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-full">
-              <GraduationCap className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Student Portal</h1>
-          <p className="text-gray-400">Sign in to access your dashboard</p>
-        </div>
-
-        {/* Login Form */}
-        <Card className="bg-gray-800 border-gray-700">
+        <Card className="bg-orange-50 border-orange-200">
           <CardHeader>
-            <CardTitle className="text-white text-center flex items-center justify-center gap-2">
-              <LogIn className="h-5 w-5" />
-              Student Login
+            <CardTitle className="text-orange-800 text-center flex items-center justify-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Login Moved
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label className="text-white">Email or Student ID</Label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="text"
-                    value={credentials.studentId}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, studentId: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white pl-10"
-                    placeholder="Enter your Email or Student ID"
-                    required
-                  />
-                </div>
-                <p className="text-gray-400 text-xs mt-1">You can use either your email address or Student ID (e.g., STU0001)</p>
-              </div>
-
-              <div>
-                <Label className="text-white">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                  <Input
-                    type="password"
-                    value={credentials.password}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white pl-10"
-                    placeholder="Enter your password"
-                    required
-                  />
-                </div>
-              </div>
-
-              <Button 
-                type="submit" 
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-gray-400 text-sm">
-                Don't have an account? Contact your administrator
+          <CardContent className="text-center space-y-4">
+            <div className="bg-orange-100 p-4 rounded-lg">
+              <p className="text-orange-800 font-medium mb-2">
+                Student login has been moved to the unified login page
               </p>
-              <div className="mt-4 pt-4 border-t border-gray-700">
-                <Link href="/trainer/login" className="text-blue-400 hover:text-blue-300 text-sm">
-                  Are you a trainer? Login here
-                </Link>
-              </div>
+              <p className="text-orange-700 text-sm">
+                You can now use the same login page for students, trainers, and administrators
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Button 
+                onClick={() => router.push('/login')}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+              >
+                Go to Unified Login <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              
+              <p className="text-gray-600 text-sm">
+                Redirecting automatically in 5 seconds...
+              </p>
+            </div>
+
+            <div className="mt-6 p-3 bg-blue-50 rounded-lg text-left">
+              <p className="text-blue-800 font-medium text-sm mb-1">What's new:</p>
+              <ul className="text-blue-700 text-xs space-y-1">
+                <li>• Single login page for all users</li>
+                <li>• Use your Student ID or email</li>
+                <li>• Same password as before</li>
+                <li>• Automatic role detection</li>
+              </ul>
             </div>
           </CardContent>
         </Card>
@@ -131,4 +65,4 @@ const StudentLogin = () => {
   );
 };
 
-export default StudentLogin;
+export default StudentLoginDeprecated;

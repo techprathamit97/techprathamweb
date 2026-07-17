@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     
     // Get assignments for trainer's batches
     const assignments = await Assignment.find({
-      batchId: { $in: batches.map(b => b._id) }
+      batchId: { $in: batches.map((b: any) => b._id) }
     })
     .populate('batchId')
     .populate('trainerId')
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
     // Get all submissions for these assignments
     const Submission = require('@/models/Submission');
-    const assignmentIds = assignments.map(a => a._id);
+    const assignmentIds = assignments.map((a: any) => a._id);
     const submissions = await Submission.find({
       refId: { $in: assignmentIds },
       type: 'assignment'
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
     // Create a map of submissions by assignment ID
     const submissionsByAssignment = new Map();
-    submissions.forEach(sub => {
+    submissions.forEach((sub: any) => {
       const assignmentId = sub.refId.toString();
       if (!submissionsByAssignment.has(assignmentId)) {
         submissionsByAssignment.set(assignmentId, []);
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         name: trainer.name,
         email: trainer.email
       },
-      assignments: assignments.map(assignment => {
+      assignments: assignments.map((assignment: any) => {
         const assignmentSubmissions = submissionsByAssignment.get(assignment._id.toString()) || [];
         return {
           _id: assignment._id,
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
           createdAt: assignment.createdAt
         };
       }),
-      batches: batches.map(batch => ({
+      batches: batches.map((batch: any) => ({
         _id: batch._id,
         batchName: batch.batchName,
         courseTitle: batch.courseId?.title || 'N/A',
@@ -102,11 +102,11 @@ export async function GET(req: NextRequest) {
       })),
       stats: {
         totalAssignments: assignments.length,
-        activeAssignments: assignments.filter(a => new Date(a.dueDate) > new Date()).length,
-        expiredAssignments: assignments.filter(a => new Date(a.dueDate) <= new Date()).length,
-        totalSubmissions: assignments.reduce((sum, a) => sum + (a.submissions?.length || 0), 0),
-        pendingSubmissions: assignments.reduce((sum, a) => {
-          const batchStudents = batches.find(b => b._id.toString() === a.batchId.toString())?.studentIds?.length || 0;
+        activeAssignments: assignments.filter((a: any) => new Date(a.dueDate) > new Date()).length,
+        expiredAssignments: assignments.filter((a: any) => new Date(a.dueDate) <= new Date()).length,
+        totalSubmissions: assignments.reduce((sum: number, a: any) => sum + (a.submissions?.length || 0), 0),
+        pendingSubmissions: assignments.reduce((sum: number, a: any) => {
+          const batchStudents = batches.find((b: any) => b._id.toString() === a.batchId.toString())?.studentIds?.length || 0;
           return sum + (batchStudents - (a.submissions?.length || 0));
         }, 0)
       }

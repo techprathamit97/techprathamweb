@@ -41,7 +41,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const recordings: any[] = [];
 
     // Parse recordings from XML
-    const recordingMatches = recordingsXML.match(/<recording>(.*?)<\/recording>/gs);
+    const recordingMatches = recordingsXML.match(/<recording>([\s\S]*?)<\/recording>/g);
     
     if (recordingMatches) {
       for (const recordingMatch of recordingMatches) {
@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const size = sizeMatch?.[1];
 
           // Get playback URLs
-          const playbackMatches = recordingMatch.match(/<playback>(.*?)<\/playback>/s);
+          const playbackMatches = recordingMatch.match(/<playback>([\s\S]*?)<\/playback>/);
           let videoUrl = null;
           let previewUrl = null;
 
@@ -84,9 +84,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             videoUrl = urlCDATA?.[1] || urlRegular?.[1];
 
             // Look for preview images
-            const previewMatches = playbackMatches[1].match(/<preview>(.*?)<\/preview>/s);
+            const previewMatches = playbackMatches[1].match(/<preview>([\s\S]*?)<\/preview>/);
             if (previewMatches) {
-              const previewImageMatch = previewMatches[1].match(/<images>(.*?)<\/images>/s);
+              const previewImageMatch = previewMatches[1].match(/<images>([\s\S]*?)<\/images>/);
               if (previewImageMatch) {
                 const imageMatch = previewImageMatch[1].match(/<image[^>]*>(.*?)<\/image>/);
                 previewUrl = imageMatch?.[1];

@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     .lean();
 
     // Format batch data with trainer info
-    const formattedBatches = batches.map(batch => ({
+    const formattedBatches = batches.map((batch: any) => ({
       _id: batch._id,
       batchId: batch._id.toString(),
       batchName: batch.batchName,
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     const uniqueTrainers = new Map();
     const uniqueCourses = new Map();
 
-    formattedBatches.forEach(batch => {
+    formattedBatches.forEach((batch: any) => {
       if (batch.trainer) {
         uniqueTrainers.set(batch.trainer._id.toString(), batch.trainer);
       }

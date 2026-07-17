@@ -1,0 +1,138 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+
+export default function JoinPageClient() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const joinMeeting = async () => {
+      const params = searchParams ?? new URLSearchParams();
+      const meetingID = params.get('meetingID');
+      const password = params.get('password');
+      const fullName = params.get('fullName');
+      const role = params.get('role') || 'attendee';
+
+      if (!meetingID || !password || !fullName) {
+        setStatus('error');
+        setError('Missing required parameters: meetingID, password, fullName');
+        return;
+      }
+
+      try {
+        setStatus('connecting');
+
+        const response = await fetch('/api/bbb/join', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meetingId: meetingID,
+            userName: fullName,
+            password,
+            role,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.data?.joinUrl) {
+          setStatus('redirecting');
+          window.location.href = data.data.joinUrl;
+        } else {
+          throw new Error(data.error || 'Failed to get join URL');
+        }
+      } catch (err: any) {
+        setStatus('error');
+        setError(err.message || 'Failed to join meeting');
+      }
+    };
+
+    joinMeeting();
+  }, [searchParams]);
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: 'system-ui, sans-serif',
+      backgroundColor: '#f5f5f5',
+    }}>
+      {status === 'loading' && (
+        <>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e0e0e0',
+            borderTop: '4px solid #2563eb',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }} />
+          <p style={{ marginTop: '20px', color: '#666' }}>Preparing your session...</p>
+        </>
+      )}
+
+      {status === 'connecting' && (
+        <>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e0e0e0',
+            borderTop: '4px solid #2563eb',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }} />
+          <p style={{ marginTop: '20px', color: '#666' }}>Connecting to meeting...</p>
+        </>
+      )}
+
+      {status === 'redirecting' && (
+        <>
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '4px solid #e0e0e0',
+            borderTop: '4px solid #22c55e',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+          }} />
+          <p style={{ marginTop: '20px', color: '#666' }}>Redirecting to BigBlueButton...</p>
+        </>
+      )}
+
+      {status === 'error' && (
+        <>
+          <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
+          <h2 style={{ color: '#dc2626', marginBottom: '10px' }}>Unable to Join</h2>
+          <p style={{ color: '#666', marginBottom: '20px' }}>{error}</p>
+          <button
+            onClick={() => router.back()}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#2563eb',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+            }}
+          >
+            Go Back
+          </button>
+        </>
+      )}
+
+      <style jsx global>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}

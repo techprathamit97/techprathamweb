@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
 const Trainer = require('@/models/Trainer');
 const Batch = require('@/models/Batch');
+const Course = require('@/models/Course');
 const Student = require('@/models/Student');
 
 export async function GET(req: NextRequest) {
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
     .lean();
     
     // Calculate stats
-    const totalStudents = batches.reduce((sum, batch) => sum + (batch.studentIds?.length || 0), 0);
+    const totalStudents = batches.reduce((sum: number, batch: any) => sum + (batch.studentIds?.length || 0), 0);
     const completedStudents = 0; // You can implement completion logic later
     const totalRevenue = totalStudents * 50000; // Example calculation
     const collectedRevenue = totalRevenue * 0.8; // 80% collected
@@ -64,9 +65,9 @@ export async function GET(req: NextRequest) {
       },
       stats: {
         totalBatches: batches.length,
-        activeBatches: batches.filter(b => b.status === 'active').length,
-        upcomingBatches: batches.filter(b => b.status === 'upcoming').length,
-        completedBatches: batches.filter(b => b.status === 'completed').length,
+        activeBatches: batches.filter((b: any) => b.status === 'active').length,
+        upcomingBatches: batches.filter((b: any) => b.status === 'upcoming').length,
+        completedBatches: batches.filter((b: any) => b.status === 'completed').length,
         totalStudents: totalStudents,
         completedStudents: completedStudents,
         inProgressStudents: totalStudents - completedStudents,
@@ -81,8 +82,8 @@ export async function GET(req: NextRequest) {
       },
       performance: {
         courseCategories: ['Web Development', 'Programming'],
-        courseTitles: batches.map(b => b.courseId?.title || 'N/A'),
-        batchPerformance: batches.map(batch => ({
+        courseTitles: batches.map((b: any) => b.courseId?.title || 'N/A'),
+        batchPerformance: batches.map((batch: any) => ({
           batchId: batch._id.toString(),
           course_title: batch.courseId?.title || 'N/A',
           status: batch.status || 'active',

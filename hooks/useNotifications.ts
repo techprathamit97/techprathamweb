@@ -17,7 +17,7 @@ interface Notification {
 
 interface UseNotificationsOptions {
   userId: string;
-  userType: 'student' | 'trainer';
+  userType: 'student' | 'trainer' | 'admin';
   enabled?: boolean;
 }
 

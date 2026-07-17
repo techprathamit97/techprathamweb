@@ -1,6 +1,6 @@
 import { connectMongo } from '@/utils/mongodb';
-import { Category } from '@/models/category';
-import course from '@/models/course';
+import Category from '@/models/category';
+import course from '@/models/Course';
 
 export interface NavbarCourse {
   id: string;

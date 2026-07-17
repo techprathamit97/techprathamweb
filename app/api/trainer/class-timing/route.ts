@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
         name: trainer.name,
         email: trainer.email
       },
-      batches: batches.map(batch => ({
+      batches: batches.map((batch: any) => ({
         _id: batch._id,
         batchName: batch.batchName,
         courseTitle: batch.courseId?.title || 'N/A',

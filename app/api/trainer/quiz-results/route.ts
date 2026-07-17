@@ -42,13 +42,49 @@ export async function GET(req: Request) {
       .populate('refId')
       .lean();
 
+    type QuizWithDetails = {
+      _id: string | { toString(): string };
+      title: string;
+      batchId: any;
+      totalMarks?: number;
+      passingMarks?: number;
+      questions?: Array<any>;
+      createdAt?: Date;
+    };
+
+    type SubmissionWithDetails = {
+      _id: string | { toString(): string };
+      studentId?: any;
+      refId?: any;
+      score?: number;
+      submittedAt?: Date;
+    };
+
+    const normalizedQuizzes: QuizWithDetails[] = (quizzes || []).map((quiz: any) => ({
+      _id: quiz?._id,
+      title: quiz?.title || 'Untitled Quiz',
+      batchId: quiz?.batchId,
+      totalMarks: quiz?.totalMarks,
+      passingMarks: quiz?.passingMarks,
+      questions: quiz?.questions || [],
+      createdAt: quiz?.createdAt
+    }));
+
+    const normalizedSubmissions: SubmissionWithDetails[] = (submissions || []).map((submission: any) => ({
+      _id: submission?._id,
+      studentId: submission?.studentId,
+      refId: submission?.refId,
+      score: submission?.score,
+      submittedAt: submission?.submittedAt
+    }));
+
     // Format results
-    const results = quizzes.map(quiz => {
-      const quizSubmissions = submissions.filter(s =>
-        s.refId && s.refId._id && s.refId._id.toString() === quiz._id.toString()
+    const results = normalizedQuizzes.map((quiz: QuizWithDetails) => {
+      const quizSubmissions = normalizedSubmissions.filter((s: SubmissionWithDetails) =>
+        s.refId && s.refId._id && s.refId._id.toString() === (quiz._id as any).toString()
       );
 
-      const students = quizSubmissions.map(sub => {
+      const students = quizSubmissions.map((sub: SubmissionWithDetails) => {
         const student = sub.studentId as any;
         return {
           _id: sub._id,

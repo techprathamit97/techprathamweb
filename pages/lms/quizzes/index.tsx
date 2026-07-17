@@ -102,10 +102,6 @@ const QuizManagement = () => {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [quizToDelete, setQuizToDelete] = useState<Quiz | null>(null);
-
-  useEffect(() => {
-    setCurrentTab("quizzes");
-  }, [setCurrentTab]);
   
   const [newQuiz, setNewQuiz] = useState({
     title: '',
@@ -203,7 +199,7 @@ const QuizManagement = () => {
         quizType: newQuiz.quizType,
         eachQuestionMarks: newQuiz.eachQuestionMarks,
         negativeMarking: newQuiz.negativeMarking,
-        createdBy: user?.email || 'admin'
+        createdBy: 'admin'
       };
 
       // Add type-specific fields

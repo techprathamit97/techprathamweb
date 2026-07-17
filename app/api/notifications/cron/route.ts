@@ -115,7 +115,7 @@ async function sendAssignmentDeadlineReminders(now: Date) {
   return count;
 }
 
-// Send quiz deadline reminders
+
 async function sendQuizDeadlineReminders(now: Date) {
   const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
   const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);

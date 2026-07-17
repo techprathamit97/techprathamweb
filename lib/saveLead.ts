@@ -19,7 +19,24 @@
 // }
 
 import { connectMongo } from "@/utils/mongodb";
-import { Lead } from "@/models/Lead";
+
+const mongoose = require('mongoose');
+
+const leadSchema = new mongoose.Schema({
+  fullName: String,
+  email: String,
+  phone: String,
+  course: String,
+  message: String,
+  formType: String,
+  status: { type: String, default: 'unreached' },
+  ipAddress: String,
+  metadata: { type: Object, default: {} },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+}, { timestamps: true });
+
+const Lead = mongoose.models.Lead || mongoose.model('Lead', leadSchema);
 
 // Save a single lead to the database
 export async function saveLead(data: any) {
@@ -31,14 +48,12 @@ export async function saveLead(data: any) {
     phone: data.phone,
     course: data.course,
     message: data.message,
-
     formType: data.formType,
     status: data.status || 'unreached',
     ipAddress: data.ipAddress,
-
     metadata: {
-      ...data.metadata,
-      country: data.country, // Store country in metadata
+      ...(data.metadata || {}),
+      country: data.country,
     },
   });
 }

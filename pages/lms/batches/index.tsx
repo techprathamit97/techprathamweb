@@ -124,7 +124,9 @@ const BatchesManagement = () => {
   const [selectedCertificate, setSelectedCertificate] = useState<any>(null);
   const [editCertificateData, setEditCertificateData] = useState({
     startDate: '',
-    endDate: ''
+    endDate: '',
+    grade: 'A',
+    score: 85
   });
 
   // Bulk actions state
@@ -1130,14 +1132,14 @@ const BatchesManagement = () => {
                     {/* Trainer Info */}
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={batch.trainer.profile} />
+                        <AvatarImage src={batch.trainer?.profile || ''} />
                         <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
-                          {batch.trainer.name.charAt(0).toUpperCase()}
+                          {(batch.trainer?.name || 'T').charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="text-white font-medium">{batch.trainer.name}</p>
-                        <p className="text-gray-400 text-sm">{batch.trainer.experience}</p>
+                        <p className="text-white font-medium">{batch.trainer?.name || 'Trainer not assigned'}</p>
+                        <p className="text-gray-400 text-sm">{batch.trainer?.experience || 'No details'}</p>
                       </div>
                     </div>
 

@@ -725,7 +725,9 @@ const CoursesManagement = () => {
                   variant="outline"
                   onClick={() => {
                     setIsEditDialogOpen(false);
-                    openModuleDialog(editingCourse);
+                    if (editingCourse) {
+                      openModuleDialog(editingCourse);
+                    }
                   }}
                   className="border-blue-500 text-blue-400 hover:bg-blue-500/10"
                 >

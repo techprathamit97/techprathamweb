@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     .lean();
     
     // Format batch data for dashboard
-    const formattedBatches = batches.map(batch => ({
+    const formattedBatches = batches.map((batch: any) => ({
       _id: batch._id,
       batchId: batch._id.toString(),
       batchName: batch.batchName,
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     }));
     
     // Get all students from the batches
-    const allStudents = batches.reduce((acc: any[], batch) => {
+    const allStudents = batches.reduce((acc: any[], batch: any) => {
       const batchStudents = (batch.studentIds || []).map((student: any) => ({
         studentId: student.studentId,
         name: student.name,
@@ -85,9 +85,9 @@ export async function GET(req: NextRequest) {
       students: allStudents,
       stats: {
         totalBatches: formattedBatches.length,
-        activeBatches: formattedBatches.filter(b => b.status === 'active').length,
+        activeBatches: formattedBatches.filter((b: any) => b.status === 'active').length,
         totalStudents: allStudents.length,
-        completedStudents: allStudents.filter(s => s.courseCompletion).length
+        completedStudents: allStudents.filter((s: any) => s.courseCompletion).length
       }
     };
     

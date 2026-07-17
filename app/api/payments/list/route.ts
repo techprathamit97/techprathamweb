@@ -33,11 +33,11 @@ export async function GET(req: NextRequest) {
 
     // Get summary stats
     const allPayments = await Payment.find({ isDeleted: false });
-    const totalRevenue = allPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const totalRevenue = allPayments.reduce((sum: number, p: any) => sum + p.paidAmount, 0);
     const totalPending = allPayments
-      .filter(p => p.paymentStatus === 'partial' || p.paymentStatus === 'pending')
-      .reduce((sum, p) => sum + p.dueAmount, 0);
-    const completedPayments = allPayments.filter(p => p.paymentStatus === 'completed').length;
+      .filter((p: any) => p.paymentStatus === 'partial' || p.paymentStatus === 'pending')
+      .reduce((sum: number, p: any) => sum + p.dueAmount, 0);
+    const completedPayments = allPayments.filter((p: any) => p.paymentStatus === 'completed').length;
 
     return NextResponse.json({
       success: true,

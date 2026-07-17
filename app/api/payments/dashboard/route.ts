@@ -15,16 +15,16 @@ export async function GET(req: NextRequest) {
     const allPayments = await Payment.find({ isDeleted: false }).sort({ paymentDate: -1 });
 
     // Calculate totals
-    const totalRevenue = allPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const totalRevenue = allPayments.reduce((sum: number, p: any) => sum + p.paidAmount, 0);
     const totalPending = allPayments
-      .filter(p => p.paymentStatus !== 'completed')
-      .reduce((sum, p) => sum + p.dueAmount, 0);
-    const totalExpected = allPayments.reduce((sum, p) => sum + p.totalFees, 0);
+      .filter((p: any) => p.paymentStatus !== 'completed')
+      .reduce((sum: number, p: any) => sum + p.dueAmount, 0);
+    const totalExpected = allPayments.reduce((sum: number, p: any) => sum + p.totalFees, 0);
 
     // Payment status breakdown
-    const pendingPayments = allPayments.filter(p => p.paymentStatus === 'pending');
-    const completedPayments = allPayments.filter(p => p.paymentStatus === 'completed');
-    const partialPayments = allPayments.filter(p => p.paymentStatus === 'partial');
+    const pendingPayments = allPayments.filter((p: any) => p.paymentStatus === 'pending');
+    const completedPayments = allPayments.filter((p: any) => p.paymentStatus === 'completed');
+    const partialPayments = allPayments.filter((p: any) => p.paymentStatus === 'partial');
 
     // Recent payments
     const recentPayments = allPayments.slice(0, 10);
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     // Get students with pending payments
     const studentDues: Record<string, any> = {};
     allPayments
-      .filter(p => p.paymentStatus !== 'completed')
+      .filter((p: any) => p.paymentStatus !== 'completed')
       .forEach((payment: any) => {
         const studentIdStr = payment.studentId.toString();
         if (!studentDues[studentIdStr]) {
@@ -86,16 +86,16 @@ export async function GET(req: NextRequest) {
 
     if (trainerId) {
       const batches = await Batch.find({ trainerId }).lean();
-      trainerBatchIds = batches.map(b => b._id.toString());
-      trainerPayments = allPayments.filter(p =>
+      trainerBatchIds = batches.map((b: any) => b._id.toString());
+      trainerPayments = allPayments.filter((p: any) =>
         trainerBatchIds.includes(p.batchId.toString())
       );
     }
 
-    const trainerTotalRevenue = trainerPayments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const trainerTotalRevenue = trainerPayments.reduce((sum: number, p: any) => sum + p.paidAmount, 0);
     const trainerTotalPending = trainerPayments
-      .filter(p => p.paymentStatus !== 'completed')
-      .reduce((sum, p) => sum + p.dueAmount, 0);
+      .filter((p: any) => p.paymentStatus !== 'completed')
+      .reduce((sum: number, p: any) => sum + p.dueAmount, 0);
 
     return NextResponse.json({
       success: true,
@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
         summary: {
           totalRevenue: trainerId ? trainerTotalRevenue : totalRevenue,
           totalPending: trainerId ? trainerTotalPending : totalPending,
-          totalExpected: trainerId ? trainerPayments.reduce((sum, p) => sum + p.totalFees, 0) : totalExpected,
+          totalExpected: trainerId ? trainerPayments.reduce((sum: number, p: any) => sum + p.totalFees, 0) : totalExpected,
           pendingCount: pendingPayments.length,
           completedCount: completedPayments.length,
           partialCount: partialPayments.length,

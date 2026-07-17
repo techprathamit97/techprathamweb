@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
     .lean();
 
     // Transform batches into courses format
-    const courses = populatedBatches.map(batch => {
+    const courses = populatedBatches.map((batch: any) => {
       const course = batch.courseId || {};
       const trainer = batch.trainerId || {};
 
@@ -83,8 +83,8 @@ export async function GET(req: NextRequest) {
 
     // Get unique trainers from batches
     const trainers = populatedBatches
-      .filter(batch => batch.trainerId)
-      .map(batch => {
+      .filter((batch: any) => batch.trainerId)
+      .map((batch: any) => {
         const trainer = batch.trainerId || {};
         const course = batch.courseId || {};
         return {
@@ -105,16 +105,16 @@ export async function GET(req: NextRequest) {
     // Calculate stats
     const stats = {
       totalCourses: courses.length,
-      completedCourses: courses.filter(c => c.completed).length,
-      inProgressCourses: courses.filter(c => !c.completed).length,
+      completedCourses: courses.filter((c: any) => c.completed).length,
+      inProgressCourses: courses.filter((c: any) => !c.completed).length,
       avgProgress: courses.length > 0
-        ? Math.round(courses.reduce((acc, c) => acc + c.progress, 0) / courses.length)
+        ? Math.round(courses.reduce((acc: number, c: any) => acc + c.progress, 0) / courses.length)
         : 0,
-      totalPaid: courses.reduce((acc, c) => acc + c.paidAmount, 0),
-      totalAmount: courses.reduce((acc, c) => acc + c.totalAmount, 0),
-      pendingAmount: courses.reduce((acc, c) => acc + c.pendingAmount, 0),
+      totalPaid: courses.reduce((acc: number, c: any) => acc + c.paidAmount, 0),
+      totalAmount: courses.reduce((acc: number, c: any) => acc + c.totalAmount, 0),
+      pendingAmount: courses.reduce((acc: number, c: any) => acc + c.pendingAmount, 0),
       totalBatches: courses.length,
-      activeBatches: courses.filter(c => !c.completed).length,
+      activeBatches: courses.filter((c: any) => !c.completed).length,
       upcomingClasses: 0,
       totalAssignments: 0,
       pendingAssignments: 0,
@@ -138,7 +138,7 @@ export async function GET(req: NextRequest) {
         stats,
         courses,
         trainers,
-        batches: populatedBatches.map(b => ({
+        batches: populatedBatches.map((b: any) => ({
           batchId: b._id.toString(),
           batchName: b.batchName,
           courseTitle: b.courseId?.title || '',

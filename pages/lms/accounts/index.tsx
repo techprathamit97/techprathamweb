@@ -51,9 +51,8 @@ const AccountsManagement = () => {
   });
 
   useEffect(() => {
-    
-      setCurrentTab('lms-accounts');
-    }, []);
+    // Intentionally left blank; the LMS layout does not require a tab state here.
+  }, []);
 
   
 

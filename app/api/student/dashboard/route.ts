@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     .lean();
     
     // Format batch data for dashboard
-    const formattedBatches = batches.map(batch => ({
+    const formattedBatches = batches.map((batch: any) => ({
       _id: batch._id,
       batchId: batch._id.toString(),
       course_title: batch.courseId?.title || 'N/A',
@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     }));
 
     // Get batch IDs for quiz filtering
-    const batchIds = formattedBatches.map(b => b._id);
+    const batchIds = formattedBatches.map((b: any) => b._id);
 
     // Fetch quizzes assigned to student's batches
     const quizzes = await Quiz.find({
@@ -98,11 +98,11 @@ export async function GET(req: NextRequest) {
     }).lean();
 
     // Get the refIds of already attempted quizzes
-    const attemptedQuizIds = submissions.map(s => s.refId.toString());
+    const attemptedQuizIds = submissions.map((s: any) => s.refId.toString());
 
     // Format available quizzes (filter out already attempted ones for simplicity)
-    const availableQuizzes = quizzes.map(quiz => {
-      const submission = submissions.find(s => s.refId.toString() === quiz._id.toString());
+    const availableQuizzes = quizzes.map((quiz: any) => {
+      const submission = submissions.find((s: any) => s.refId.toString() === quiz._id.toString());
       return {
         _id: quiz._id,
         title: quiz.title,
@@ -117,8 +117,8 @@ export async function GET(req: NextRequest) {
     });
 
     // Format quiz attempts for display
-    const formattedQuizAttempts = submissions.map(sub => {
-      const quiz = quizzes.find(q => q._id.toString() === sub.refId.toString());
+    const formattedQuizAttempts = submissions.map((sub: any) => {
+      const quiz = quizzes.find((q: any) => q._id.toString() === sub.refId.toString());
       const maxMarks = quiz?.totalMarks || quiz?.questions?.length || 0;
       const score = sub.score || 0;
       const percentage = maxMarks > 0 ? Math.round((score / maxMarks) * 100) : 0;
@@ -149,16 +149,16 @@ export async function GET(req: NextRequest) {
 
     // Format completed classes with recordings - show ALL completed classes with recordings
     const completedRecordings = completedClassesWithRecordings
-      .filter(cls => cls.recordings && cls.recordings.length > 0)
+      .filter((cls: any) => cls.recordings && cls.recordings.length > 0)
       // Remove the slice - show all recordings, not just the latest one
-      .map(cls => ({
+      .map((cls: any) => ({
         _id: cls._id.toString(),
         moduleTitle: cls.moduleTitle || `Module ${cls.moduleIndex + 1}`,
         moduleDescription: cls.moduleDescription || '',
         moduleIndex: cls.moduleIndex,
         scheduledDate: cls.scheduledDate,
         scheduledTime: cls.scheduledTime,
-        recordings: cls.recordings.map(rec => ({
+        recordings: cls.recordings.map((rec: any) => ({
           _id: rec._id?.toString() || Date.now().toString(),
           url: rec.url,
           title: rec.title,
@@ -177,7 +177,7 @@ export async function GET(req: NextRequest) {
     }).lean();
 
     // Format scheduled classes for joining
-    const formattedScheduledClasses = scheduledClasses.map(cls => {
+    const formattedScheduledClasses = scheduledClasses.map((cls: any) => {
       // Check if can join (within 15 min window BEFORE class + 30 min grace period AFTER class ends)
       const now = new Date();
       const classDate = new Date(cls.scheduledDate);
@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
     }).sort({ createdAt: -1 }).lean();
 
     // Format certificates for display
-    const formattedCertificates = certificates.map(cert => ({
+    const formattedCertificates = certificates.map((cert: any) => ({
       _id: cert._id,
       certificateId: cert.certificateId || cert.certificateNo,
       courseName: cert.courseName,
@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
     }));
 
     // Create enrolled courses data (for compatibility with existing dashboard)
-    const enrolledCourses = formattedBatches.map(batch => ({
+    const enrolledCourses = formattedBatches.map((batch: any) => ({
       _id: batch._id,
       course_title: batch.course_title,
       course_link: batch.course_title.toLowerCase().replace(/\s+/g, '-'),
@@ -274,9 +274,9 @@ export async function GET(req: NextRequest) {
     
     // Calculate quiz stats
     const totalQuizzes = quizzes.length;
-    const passedQuizzes = formattedQuizAttempts.filter(a => a.passed).length;
+    const passedQuizzes = formattedQuizAttempts.filter((a: any) => a.passed).length;
     const avgQuizScore = formattedQuizAttempts.length > 0
-      ? Math.round(formattedQuizAttempts.reduce((sum, a) => sum + a.percentage, 0) / formattedQuizAttempts.length)
+      ? Math.round(formattedQuizAttempts.reduce((sum: number, a: any) => sum + a.percentage, 0) / formattedQuizAttempts.length)
       : 0;
 
     const dashboardData = {
@@ -291,8 +291,8 @@ export async function GET(req: NextRequest) {
       enrolledCourses: enrolledCourses,
       batches: formattedBatches,
       upcomingClasses: formattedBatches
-        .filter(batch => batch.status === 'active' || batch.status === 'upcoming')
-        .map(batch => ({
+        .filter((batch: any) => batch.status === 'active' || batch.status === 'upcoming')
+        .map((batch: any) => ({
           batchId: batch.batchId,
           courseTitle: batch.course_title, // Changed from course_title
           batchName: batch.batchName,
@@ -312,12 +312,12 @@ export async function GET(req: NextRequest) {
       certificates: formattedCertificates,
       stats: {
         totalCourses: enrolledCourses.length,
-        completedCourses: enrolledCourses.filter(c => c.courseCompletion).length,
-        activeBatches: formattedBatches.filter(b => b.status === 'active').length,
-        upcomingBatches: formattedBatches.filter(b => b.status === 'upcoming').length,
+        completedCourses: enrolledCourses.filter((c: any) => c.courseCompletion).length,
+        activeBatches: formattedBatches.filter((b: any) => b.status === 'active').length,
+        upcomingBatches: formattedBatches.filter((b: any) => b.status === 'upcoming').length,
         issuedCertificates: formattedCertificates.length, // Actual certificates issued to student
         avgProgress: enrolledCourses.length > 0 ?
-          Math.round(enrolledCourses.reduce((sum, c) => sum + c.progressPercentage, 0) / enrolledCourses.length) : 0,
+          Math.round(enrolledCourses.reduce((sum: number, c: any) => sum + c.progressPercentage, 0) / enrolledCourses.length) : 0,
         totalPaid: 0, // Default to 0, can be updated with actual payment data
         paidInvoices: 0, // Default to 0
         totalPending: 0, // Default to 0

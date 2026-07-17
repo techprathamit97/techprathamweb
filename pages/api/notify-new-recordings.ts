@@ -35,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Here you could add email notifications, push notifications, etc.
     // For now, we'll just log the notification
 
-    const notifications = students.map(student => ({
+    const notifications = students.map((student: any) => ({
       studentId: student._id,
       studentName: student.name,
       studentEmail: student.email,

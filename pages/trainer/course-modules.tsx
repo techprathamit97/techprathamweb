@@ -755,7 +755,8 @@ const TrainerCourseModules = () => {
     });
     setCertificateForm({
       completionDate: new Date().toISOString().split('T')[0],
-      issueDate: new Date().toISOString().split('T')[0]
+      issueDate: new Date().toISOString().split('T')[0],
+      startDate: ''
     });
   };
 
@@ -1145,7 +1146,8 @@ const TrainerCourseModules = () => {
                                         open: true,
                                         classId: module._id,
                                         currentDescription: module.moduleDescription || '',
-                                        moduleTitle: module.moduleTitle || ''
+                                        moduleTitle: module.moduleTitle || '',
+                                        completeAfterSave: false
                                       });
                                       setDescriptionForm({ moduleDescription: module.moduleDescription || '' });
                                     }}
@@ -1223,7 +1225,8 @@ const TrainerCourseModules = () => {
                                       open: true,
                                       classId: classItem._id,
                                       currentDescription: classItem.moduleDescription || '',
-                                      moduleTitle: classItem.moduleTitle || ''
+                                      moduleTitle: classItem.moduleTitle || '',
+                                      completeAfterSave: false
                                     });
                                     setDescriptionForm({ moduleDescription: classItem.moduleDescription || '' });
                                   }}
@@ -1489,7 +1492,7 @@ const TrainerCourseModules = () => {
               <div className="flex items-center justify-between p-4 border-b">
                 <h3 className="font-semibold text-gray-900">What We Covered</h3>
                 <button
-                  onClick={() => setDescriptionModal({ open: false, classId: '', currentDescription: '', moduleTitle: '' })}
+                  onClick={() => setDescriptionModal({ open: false, classId: '', currentDescription: '', moduleTitle: '', completeAfterSave: false })}
                   className="p-1 hover:bg-gray-100 rounded"
                 >
                   <X className="h-5 w-5" />

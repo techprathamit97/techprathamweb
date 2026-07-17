@@ -74,6 +74,7 @@ interface Payment {
   verifiedBy?: string;
   paymentForType?: 'student' | 'trainer';
   trainerId?: string;
+  transactionId?: string;
 }
 
 interface Summary {

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
       .lean();
 
     // Calculate totals
-    const totalPaid = payments.reduce((sum, p) => sum + p.paidAmount, 0);
+    const totalPaid = payments.reduce((sum: number, p: any) => sum + p.paidAmount, 0);
     const totalFees = payments.length > 0 ? payments[0].totalFees : 0;
     const totalDue = totalFees - totalPaid;
 

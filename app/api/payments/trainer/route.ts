@@ -20,11 +20,11 @@ export async function GET(req: NextRequest) {
 
     // Get trainer's batches
     const batches = await Batch.find({ trainerId }).lean();
-    const batchIds = batches.map(b => b._id.toString());
+    const batchIds = batches.map((b: any) => b._id.toString());
 
     // Build query for trainer's students' payments
     const query: any = {
-      batchId: { $in: batches.map(b => b._id) },
+      batchId: { $in: batches.map((b: any) => b._id) },
       isDeleted: false
     };
 

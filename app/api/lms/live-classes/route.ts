@@ -22,6 +22,7 @@ export async function GET(request: Request) {
     const batchId = searchParams.get('batchId');
 
     const db = await getDb();
+    if (!db) throw new Error('Database connection failed');
 
     // Query DailyClass for scheduled classes
     const query: any = {};

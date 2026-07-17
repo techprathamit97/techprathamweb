@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
         rating: trainer.rating || 4.5
       },
       students: allStudents,
-      batches: batches.map(batch => ({
+      batches: batches.map((batch: any) => ({
         batchId: batch._id.toString(),
         course_title: batch.courseId?.title || 'N/A',
         status: batch.status || 'active'

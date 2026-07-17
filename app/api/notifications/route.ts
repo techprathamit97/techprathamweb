@@ -274,38 +274,8 @@ export async function DELETE(req: NextRequest) {
 // Helper function to emit real-time notification via Socket.IO
 async function emitNotification(notification: any) {
   try {
-    // Import io from the socket server
-    const { io } = await import('@/lib/socket');
-    if (!io) {
-      console.log('Socket.IO not initialized, skipping emit');
-      return;
-    }
-
-    let room;
-    if (notification.studentId) {
-      room = `student_${notification.studentId}`;
-    } else if (notification.trainerId) {
-      room = `trainer_${notification.trainerId}`;
-    } else if (notification.adminId) {
-      room = `admin_${notification.adminId}`;
-    } else {
-      console.log('No valid recipient for notification');
-      return;
-    }
-
-    io.to(room).emit('notification', {
-      id: notification._id,
-      title: notification.title,
-      message: notification.message,
-      type: notification.type,
-      priority: notification.priority,
-      read: notification.read,
-      relatedId: notification.relatedId,
-      actionUrl: notification.actionUrl,
-      createdAt: notification.createdAt
-    });
-
-    console.log(`Notification emitted to ${room}:`, notification.title);
+    // Socket.IO functionality removed - BigBlueButton integration does not use custom WebSockets
+    console.log('Socket.IO not available, skipping real-time emit');
   } catch (error) {
     console.error('Error emitting notification:', error);
   }

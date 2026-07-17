@@ -34,8 +34,8 @@ export async function GET(req: NextRequest) {
       .lean();
     
     // Calculate performance metrics
-    const totalStudents = batches.reduce((sum, batch) => sum + (batch.studentIds?.length || 0), 0);
-    const activeBatches = batches.filter(b => b.status === 'active').length;
+    const totalStudents = batches.reduce((sum: number, batch: any) => sum + (batch.studentIds?.length || 0), 0);
+    const activeBatches = batches.filter((b: any) => b.status === 'active').length;
     
     // Generate salary history (mock data for demo)
     const currentDate = new Date();
@@ -92,12 +92,12 @@ export async function GET(req: NextRequest) {
       },
       salaryHistory: salaryHistory,
       stats: {
-        totalEarnings: salaryHistory.reduce((sum, s) => sum + s.netSalary, 0),
-        averageSalary: salaryHistory.reduce((sum, s) => sum + s.netSalary, 0) / salaryHistory.length,
-        totalBonus: salaryHistory.reduce((sum, s) => sum + s.performanceBonus, 0),
-        totalDeductions: salaryHistory.reduce((sum, s) => sum + s.deductions, 0),
-        pendingAmount: salaryHistory.filter(s => s.status === 'pending').reduce((sum, s) => sum + s.netSalary, 0),
-        paidAmount: salaryHistory.filter(s => s.status === 'paid').reduce((sum, s) => sum + s.netSalary, 0)
+        totalEarnings: salaryHistory.reduce((sum: number, s: any) => sum + s.netSalary, 0),
+        averageSalary: salaryHistory.reduce((sum: number, s: any) => sum + s.netSalary, 0) / salaryHistory.length,
+        totalBonus: salaryHistory.reduce((sum: number, s: any) => sum + s.performanceBonus, 0),
+        totalDeductions: salaryHistory.reduce((sum: number, s: any) => sum + s.deductions, 0),
+        pendingAmount: salaryHistory.filter((s: any) => s.status === 'pending').reduce((sum: number, s: any) => sum + s.netSalary, 0),
+        paidAmount: salaryHistory.filter((s: any) => s.status === 'paid').reduce((sum: number, s: any) => sum + s.netSalary, 0)
       },
       paymentSchedule: {
         nextPaymentDate: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 5),

@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     // Group classes by batch and module
     const classMap = new Map();
-    allModuleClasses.forEach(cls => {
+    allModuleClasses.forEach((cls: any) => {
       const key = `${cls.batchId}_${cls.moduleIndex}`;
       classMap.set(key, {
         ...cls,
@@ -129,10 +129,10 @@ export async function GET(request: NextRequest) {
 
     // Calculate stats
     const totalCourses = enrolledCourses.length;
-    const completedCourses = enrolledCourses.filter(c => c.courseCompletion).length;
+    const completedCourses = enrolledCourses.filter((c: any) => c.courseCompletion).length;
     const inProgressCourses = totalCourses - completedCourses;
-    const avgProgress = totalCourses > 0 ? 
-      Math.round(enrolledCourses.reduce((sum, c) => sum + c.progressPercentage, 0) / totalCourses) : 0;
+    const avgProgress = totalCourses > 0 ?
+      Math.round(enrolledCourses.reduce((sum: number, c: any) => sum + c.progressPercentage, 0) / totalCourses) : 0;
 
     // Get completed classes with recordings for this student's batches
     // Sort by moduleIndex descending to get the latest completed class first
@@ -146,9 +146,9 @@ export async function GET(request: NextRequest) {
 
     // Format completed classes with recordings - show ALL completed classes with recordings
     const completedRecordings = completedClassesWithRecordings
-      .filter(cls => cls.recordings && cls.recordings.length > 0)
+      .filter((cls: any) => cls.recordings && cls.recordings.length > 0)
       // Remove the slice - show all recordings, not just the latest one
-      .map(cls => {
+      .map((cls: any) => {
         // Find this student's progress for this class
         const studentProgress = cls.studentProgress?.find(
           (sp: any) => sp.studentId?.toString() === studentIdStr
@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
           progress: studentProgress?.progress || 0,
           progressUpdatedAt: studentProgress?.updatedAt,
           progressUpdatedBy: studentProgress?.updatedBy,
-          recordings: cls.recordings.map(rec => ({
+          recordings: cls.recordings.map((rec: any) => ({
             _id: rec._id?.toString() || Date.now().toString(),
             url: rec.url,
             title: rec.title,
@@ -184,7 +184,7 @@ export async function GET(request: NextRequest) {
     }).lean();
 
     // Format scheduled classes for joining
-    const scheduledClasses = allScheduledClasses.map(cls => {
+    const scheduledClasses = allScheduledClasses.map((cls: any) => {
       // Generate student join URL for BigBlueButton
       let bbbJoinUrl = null;
       if (cls.bbbMeetingId && cls.bbbAttendeePassword) {
@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Clear moduleProgress - modules will now only show after trainer uploads recording
-    enrolledCourses.forEach(course => {
+    enrolledCourses.forEach((course: any) => {
       course.moduleProgress = [];
     });
 
@@ -282,7 +282,7 @@ function generateModuleProgress(course: any, batch: any, classMap: Map<string, a
     // Generate sample topics for each module
     const topics = generateTopicsForModule(i, scheduledClass);
     const totalTopics = topics.length;
-    const completedTopics = topics.filter(t => t.completed).length;
+    const completedTopics = topics.filter((t: any) => t.completed).length;
     const progress = totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0;
 
     moduleProgress.push({

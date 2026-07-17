@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { toast } from 'sonner';
 import {
   LayoutDashboard,
   Users,
@@ -44,7 +45,16 @@ const LMSSidebar = () => {
   ];
 
   const handleSignOut = () => {
-    router.push('/');
+    try {
+      localStorage.removeItem('admin');
+      localStorage.removeItem('userSession');
+      sessionStorage.removeItem('admin');
+      toast.success('You have been logged out');
+      router.push('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast.error('Unable to logout right now');
+    }
   };
 
   return (

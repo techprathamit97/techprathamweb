@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter, useParams } from 'next/router';
+import { useRouter } from 'next/router';
+import { useParams } from 'next/navigation';
 import StudentLayout from '@/src/student/common/StudentLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -78,7 +79,7 @@ interface Progress {
 const StudentCoursePlayer = () => {
   const router = useRouter();
   const params = useParams();
-  const courseId = params.courseId as string;
+  const courseId = params?.courseId as string | undefined;
 
   const [course, setCourse] = useState<Course | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -103,10 +104,15 @@ const StudentCoursePlayer = () => {
       return;
     }
 
+    if (!courseId) {
+      router.push('/student/courses');
+      return;
+    }
+
     const studentData = JSON.parse(stored);
     setStudent(studentData);
     fetchCourseAndProgress(studentData.studentId, courseId);
-  }, [courseId]);
+  }, [courseId, router]);
 
   const fetchCourseAndProgress = async (studentId: string, cid: string) => {
     setIsLoading(true);

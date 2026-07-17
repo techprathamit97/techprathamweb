@@ -29,13 +29,13 @@ import {
   CheckCircle,
   AlertCircle,
   Users,
+  BadgeCheck,
   BookOpen,
   CreditCard,
   FileText,
   Search,
   Filter,
   Eye,
-  Verify
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -360,7 +360,14 @@ const FinanceDashboard = () => {
                       <Search className="w-4 h-4 mr-2" />
                       Search Payments
                     </Button>
-                    <Button variant="outline" className="w-full justify-start" onClick={() => document.querySelector('[data-value="pending"]')?.click()}>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start"
+                      onClick={() => {
+                        const pendingTab = document.querySelector('[data-value="pending"]') as HTMLElement | null;
+                        pendingTab?.click();
+                      }}
+                    >
                       <Clock className="w-4 h-4 mr-2" />
                       View Pending Dues
                     </Button>
@@ -551,7 +558,7 @@ const FinanceDashboard = () => {
                                   size="sm"
                                   onClick={() => handleVerifyPayment(payment._id, 'completed')}
                                 >
-                                  <Verify className="h-4 w-4" />
+                                  <BadgeCheck className="h-4 w-4" />
                                 </Button>
                               )}
                             </div>
@@ -624,7 +631,7 @@ const FinanceDashboard = () => {
                     onClick={() => handleVerifyPayment(selectedPayment._id, 'completed')}
                     className="w-full"
                   >
-                    <Verify className="w-4 h-4 mr-2" />
+                    <BadgeCheck className="w-4 h-4 mr-2" />
                     Verify & Mark as Completed
                   </Button>
                 )}

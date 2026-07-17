@@ -36,6 +36,7 @@ interface Quiz {
   passingMarks: number;
   dueDate: string;
   createdAt: string;
+  status?: string;
 }
 
 interface Question {
