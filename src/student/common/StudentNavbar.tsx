@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import NotificationBell from '@/components/notifications/NotificationBell';
 
 const StudentNavbar = () => {
   const [studentData, setStudentData] = useState<any>(null);
@@ -32,12 +31,7 @@ const StudentNavbar = () => {
           {/* Right Section */}
           <div className="flex items-center gap-4 ml-6">
             {/* Notifications */}
-            {(studentData?._id || studentData?.studentId) && (
-              <NotificationBell
-                userId={studentData._id || studentData.studentId}
-                userType="student"
-              />
-            )}
+           
 
             {/* User Profile */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">

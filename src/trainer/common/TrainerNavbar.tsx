@@ -4,7 +4,7 @@ import { Search, LogOut } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import NotificationBell from '@/components/notifications/NotificationBell';
+
 
 const TrainerNavbar = () => {
   const [trainerData, setTrainerData] = useState<any>(null);
@@ -42,12 +42,7 @@ const TrainerNavbar = () => {
           {/* Right Section */}
           <div className="flex items-center gap-4 ml-6">
             {/* Notifications */}
-            {(trainerData?._id || trainerData?.trainerId) && (
-              <NotificationBell
-                userId={trainerData._id || trainerData.trainerId}
-                userType="trainer"
-              />
-            )}
+           
 
             {/* User Profile */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
