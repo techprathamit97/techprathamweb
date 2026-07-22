@@ -37,7 +37,7 @@ const StudentNavbar = () => {
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
               <Avatar className="w-9 h-9">
                 <AvatarFallback className="bg-blue-100 text-blue-600 font-semibold">
-                  {studentData?.name?..split(' ').map((n: string) => n[0]).join('') || 'S'}
+                  {studentData?.name?.split(' ').map((n: string) => n[0]).join('') || 'S'}
                 </AvatarFallback>
               </Avatar>
               <div className="hidden md:block">
