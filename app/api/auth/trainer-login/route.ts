@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { POST as unifiedLogin } from '../login/route';
 
 // Legacy trainer login endpoint - now redirects to unified auth
 export async function POST(req: NextRequest) {
   try {
     const { loginId, password } = await req.json();
     
-    // Forward to unified login API
-    const response = await fetch(`${req.nextUrl.origin}/api/auth/login`, {
+    // Create a new request with unified login format
+    const unifiedReq = new NextRequest(req.url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: req.headers,
       body: JSON.stringify({ 
         loginId: loginId, 
         password: password 
       })
     });
     
+    // Call unified login function directly (no HTTP request)
+    const response = await unifiedLogin(unifiedReq);
     const data = await response.json();
     
     if (response.ok && data.role === 'trainer') {
