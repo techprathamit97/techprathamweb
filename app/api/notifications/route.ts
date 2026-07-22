@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
+import { sendPushNotification } from '@/lib/pushNotifications';
 const Notification = require('@/models/Notification');
 
 // GET /api/notifications - Get notifications for user
@@ -122,6 +123,7 @@ export async function POST(req: NextRequest) {
       // Emit socket event for each notification
       for (const notification of createdNotifications) {
         await emitNotification(notification);
+        await trySendPush(notification);
       }
 
       return NextResponse.json({
@@ -164,6 +166,7 @@ export async function POST(req: NextRequest) {
 
     // Emit real-time notification
     await emitNotification(notification);
+    await trySendPush(notification);
 
     return NextResponse.json({
       success: true,
@@ -278,5 +281,27 @@ async function emitNotification(notification: any) {
     console.log('Socket.IO not available, skipping real-time emit');
   } catch (error) {
     console.error('Error emitting notification:', error);
+  }
+}
+
+async function trySendPush(notification: any) {
+  if (notification.studentId) {
+    await sendPushNotification(notification.studentId.toString(), 'student', {
+      title: notification.title,
+      message: notification.message,
+      url: notification.actionUrl || '/student/notifications'
+    });
+  } else if (notification.trainerId) {
+    await sendPushNotification(notification.trainerId.toString(), 'trainer', {
+      title: notification.title,
+      message: notification.message,
+      url: notification.actionUrl || '/trainer'
+    });
+  } else if (notification.adminId) {
+    await sendPushNotification(notification.adminId.toString(), 'admin', {
+      title: notification.title,
+      message: notification.message,
+      url: notification.actionUrl || '/lms/batches'
+    });
   }
 }

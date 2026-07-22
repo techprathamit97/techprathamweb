@@ -19,7 +19,9 @@ import {
   FileVideo,
   FolderDown,
   Settings,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -53,6 +55,21 @@ const TrainerJoinClass = () => {
     meetingId: string;
     startedAt: number;
   } | null>(null);
+
+  // Schedule class modal state
+  const [scheduleModal, setScheduleModal] = useState<{
+    open: boolean;
+    loading: boolean;
+  }>({ open: false, loading: false });
+  const [scheduleForm, setScheduleForm] = useState({
+    batchId: '',
+    moduleTitle: '',
+    moduleIndex: 1,
+    scheduledDate: '',
+    scheduledTime: '10:00',
+    duration: 60
+  });
+  const [availableBatches, setAvailableBatches] = useState<any[]>([]);
 
   // Store active meeting in localStorage and set up unload handler
   useEffect(() => {
@@ -169,14 +186,19 @@ const TrainerJoinClass = () => {
 
     const trainer = JSON.parse(storedData);
     setTrainerInfo(trainer);
-    fetchScheduledClasses(trainer._id || trainer.trainerId);
+    
+    // Use the MongoDB _id if available, fallback to trainerId
+    const trainerIdToUse = trainer._id || trainer.trainerId;
+    console.log('Using trainer ID:', trainerIdToUse);
+    
+    fetchScheduledClasses(trainerIdToUse);
 
     // Start auto-upload service automatically
     startAutoUploadService();
 
     // Poll every 30 seconds to update class status
     const interval = setInterval(() => {
-      fetchScheduledClasses(trainer._id || trainer.trainerId);
+      fetchScheduledClasses(trainerIdToUse);
     }, 30000);
 
     // Check auto-upload status every 2 minutes
@@ -192,46 +214,51 @@ const TrainerJoinClass = () => {
 
   const startAutoUploadService = async () => {
     try {
-      const response = await fetch('/api/start-auto-upload-service', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start' })
-      });
-
-      const data = await response.json();
-      
-      if (data.success) {
-        setAutoUploadStatus('running');
-        console.log('🚀 Auto-upload service started');
-        toast.success('🔄 Automatic recording upload is now active!');
-      }
+      // Auto-upload service not implemented yet
+      console.log('Auto-upload service not implemented');
+      setAutoUploadStatus('unknown');
+      // Don't show error toast for missing feature
     } catch (error) {
-      console.error('Failed to start auto-upload service:', error);
+      console.error('Auto-upload service error:', error);
       setAutoUploadStatus('stopped');
     }
   };
 
   const checkAutoUploadStatus = async () => {
     try {
-      const response = await fetch('/api/start-auto-upload-service', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'status' })
-      });
-
-      const data = await response.json();
-      setAutoUploadStatus(data.status);
+      // Auto-upload service not implemented yet
+      setAutoUploadStatus('unknown');
     } catch (error) {
-      console.error('Failed to check auto-upload status:', error);
+      console.error('Auto-upload status check error:', error);
     }
   };
 
   const fetchScheduledClasses = async (trainerId: string) => {
     try {
-      const res = await fetch(`/api/trainer/course-modules?trainerId=${trainerId}`);
-      const data = await res.json();
+      console.log('Fetching scheduled classes for trainer:', trainerId);
+      
+      // Try with the trainer _id first, then fall back to trainerId field
+      let res = await fetch(`/api/trainer/course-modules?trainerId=${trainerId}`);
+      let data = await res.json();
 
-      if (res.ok && data.data) {
+      if (!res.ok || !data.success) {
+        console.log('First attempt failed, trying alternative approach...');
+        
+        // If failed, try to get trainer's MongoDB _id from dashboard API first
+        const dashboardRes = await fetch(`/api/trainer/dashboard?trainerId=${trainerId}`);
+        const dashboardData = await dashboardRes.json();
+        
+        if (dashboardRes.ok && dashboardData.success && dashboardData.data.trainer) {
+          // Try with the MongoDB _id
+          const mongoId = dashboardData.data.trainer._id || dashboardData.data.trainer.trainerId;
+          console.log('Trying with MongoDB _id:', mongoId);
+          
+          res = await fetch(`/api/trainer/course-modules?trainerId=${mongoId}`);
+          data = await res.json();
+        }
+      }
+
+      if (res.ok && data.success && data.data) {
         // Extract all scheduled classes from all courses
         const allScheduledClasses: ScheduledClass[] = [];
         
@@ -253,23 +280,180 @@ const TrainerJoinClass = () => {
         });
 
         setScheduledClasses(allScheduledClasses);
+        console.log('Loaded scheduled classes:', allScheduledClasses);
+      } else {
+        console.error('Failed to fetch scheduled classes:', data);
+        toast.error('Failed to load scheduled classes: ' + (data.error || 'Unknown error'));
+        
+        // Set empty array so UI doesn't break
+        setScheduledClasses([]);
       }
     } catch (error) {
       console.error('Fetch error:', error);
       toast.error('Failed to load scheduled classes');
+      setScheduledClasses([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Fetch available batches for scheduling
+  const fetchAvailableBatches = async (trainerId: string) => {
+    try {
+      const res = await fetch(`/api/trainer/dashboard?trainerId=${trainerId}`);
+      const data = await res.json();
+
+      if (res.ok && data.success && data.data && data.data.batches) {
+        setAvailableBatches(data.data.batches);
+      }
+    } catch (error) {
+      console.error('Failed to fetch batches:', error);
+    }
+  };
+
+  // Open schedule modal and fetch batches
+  const openScheduleModal = async () => {
+    setScheduleForm({
+      batchId: '',
+      moduleTitle: '',
+      moduleIndex: 1,
+      scheduledDate: '',
+      scheduledTime: '10:00',
+      duration: 60
+    });
+    setScheduleModal({ open: true, loading: false });
+
+    // Always fetch fresh batches when opening modal
+    if (trainerInfo) {
+      const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
+      console.log('Fetching batches for trainer:', trainerIdToUse);
+      toast.info('Loading batches...');
+      
+      try {
+        console.log('Fetching batches for trainer:', trainerInfo._id || trainerInfo.trainerId);
+        toast.info('Loading batches...');
+        
+        const res = await fetch(`/api/trainer/dashboard?trainerId=${trainerIdToUse}`);
+        const data = await res.json();
+        
+        console.log('Full trainer dashboard API response:', data);
+        
+        if (res.ok && data.success && data.data && data.data.batches) {
+          const batches = data.data.batches;
+          console.log('Extracted batches:', batches);
+          setAvailableBatches(batches);
+          toast.success(`Loaded ${batches.length} batches`);
+        } else {
+          console.error('Failed to load batches:', data);
+          toast.error('Failed to load batches: ' + (data.error || 'Unknown error'));
+          
+          // Try alternative API endpoint
+          console.log('Trying alternative LMS batches API...');
+          const altRes = await fetch(`/api/lms/batches?trainerId=${trainerIdToUse}`);
+          const altData = await altRes.json();
+          
+          console.log('Alternative API response:', altData);
+          
+          if (altRes.ok && altData.data) {
+            setAvailableBatches(altData.data);
+            toast.success(`Loaded ${altData.data.length} batches from alternative API`);
+          } else {
+            toast.error('No batches found. Please create a batch first.');
+          }
+        }
+      } catch (error) {
+        console.error('Batch fetch error:', error);
+        toast.error('Network error loading batches');
+      }
+    }
+  };
+
+  // Schedule a new class
+  const handleScheduleClass = async () => {
+    if (!scheduleForm.batchId || !scheduleForm.moduleTitle || !scheduleForm.scheduledDate || !scheduleForm.scheduledTime) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setScheduleModal(prev => ({ ...prev, loading: true }));
+
+    try {
+      // Get batch info to find courseId
+      const selectedBatch = availableBatches.find(b => (b._id === scheduleForm.batchId || b.batchId === scheduleForm.batchId));
+      if (!selectedBatch) {
+        throw new Error('Please select a valid batch');
+      }
+
+      console.log('Selected batch:', selectedBatch);
+      console.log('Creating class with BBB integration...');
+
+      // Get courseId from the selected batch
+      const courseId = selectedBatch.courseId || selectedBatch._id;
+
+      console.log('Course ID for batch:', courseId);
+
+      const response = await fetch('/api/module-class', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: scheduleForm.batchId,
+          courseId: courseId,
+          moduleIndex: scheduleForm.moduleIndex,
+          moduleTitle: scheduleForm.moduleTitle,
+          trainerId: trainerInfo?._id || trainerInfo?.trainerId,
+          scheduledDate: scheduleForm.scheduledDate,
+          scheduledTime: scheduleForm.scheduledTime,
+          duration: scheduleForm.duration,
+          // BBB will auto-generate meeting link, no manual link needed
+          useBBB: true, // Flag to indicate BBB integration
+          autoGenerateBBB: true
+        })
+      });
+
+      const data = await response.json();
+
+      console.log('Class creation response:', data);
+
+      if (data.success) {
+        toast.success('Class scheduled successfully with BigBlueButton!');
+        if (data.bbbMeetingId) {
+          toast.info(`BBB Meeting ID: ${data.bbbMeetingId}`);
+        }
+        setScheduleModal({ open: false, loading: false });
+
+        // Refresh scheduled classes
+        if (trainerInfo) {
+          const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
+          fetchScheduledClasses(trainerIdToUse);
+        }
+      } else {
+        throw new Error(data.error || 'Failed to schedule class');
+      }
+    } catch (error: any) {
+      console.error('Schedule error:', error);
+      toast.error('Failed to schedule class: ' + error.message);
+      setScheduleModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+      
+     
+
   const handleJoinClass = async (classItem: ScheduledClass) => {
+    // Prevent multiple join attempts for the same class
+    if (joiningClass === classItem._id) {
+      console.log('Already joining this class, preventing duplicate');
+      return;
+    }
+    
     setJoiningClass(classItem._id);
     
     try {
       const trainerName = trainerInfo?.name || trainerInfo?.trainerName || 'Trainer';
       
-      console.log('Joining via direct BBB API...');
+      console.log('Attempting to join class via BBB API...');
       
+      // Try direct BBB API first
       const response = await fetch('/api/join-class', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -284,9 +468,9 @@ const TrainerJoinClass = () => {
       console.log('Join response:', data);
 
       if (data.success && data.joinUrl) {
-        console.log('Opening direct BBB join URL:', data.joinUrl);
+        console.log('Opening BBB join URL:', data.joinUrl);
 
-        // Store active meeting in localStorage for automatic recording processing
+        // Store active meeting for automatic recording
         const meetingInfo = {
           classId: classItem._id,
           meetingId: data.meetingId || `class-${classItem._id}`,
@@ -295,9 +479,8 @@ const TrainerJoinClass = () => {
         };
         localStorage.setItem('activeBBBMeeting', JSON.stringify(meetingInfo));
         setActiveMeeting(meetingInfo);
-        console.log('Stored active meeting:', meetingInfo);
 
-        // Open directly - this bypasses Greenlight authentication
+        // Open BBB room
         window.open(data.joinUrl, '_blank', 'width=1200,height=800');
 
         toast.success(`Joining BigBlueButton: ${data.className}`);
@@ -306,20 +489,38 @@ const TrainerJoinClass = () => {
           toast.info('Meeting created successfully! You can now admit students.', { duration: 5000 });
         }
 
-        // Start monitoring this meeting for automatic recording processing
         setTimeout(() => {
-          toast.info('🎬 Automatic recording processing is now active. Recordings will upload to S3 when you leave the meeting or close this tab.', { duration: 7000 });
+          toast.info('🎬 Automatic recording processing is active. Recordings will upload when you leave the meeting.', { duration: 7000 });
         }, 3000);
+        
+      } else if (data.alreadyJoined) {
+        // Handle duplicate join prevention from backend
+        toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
+        toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
       } else {
         throw new Error(data.error || 'Failed to generate join URL');
       }
       
     } catch (error: any) {
-      console.error('Join error:', error);
-      toast.error('Failed to join class: ' + error.message);
+      console.error('BBB API join failed:', error);
       
-      // Show helpful message instead of broken demo link
-      toast.info('Please try again or contact support if the issue persists', { duration: 5000 });
+      // Fallback: Show manual Greenlight instructions
+      const fallbackMessage = `
+BBB API access is currently having issues. 
+
+TEMPORARY WORKAROUND:
+1. Go to: https://class.techpratham.org
+2. Create a room named: "${classItem.moduleTitle}"
+3. Copy the room link and share with students
+4. Use "Get Recordings" button after class to process recordings
+
+We're working on fixing the direct integration.`;
+
+      if (confirm(fallbackMessage + '\n\nWould you like to open Greenlight now?')) {
+        window.open('https://class.techpratham.org', '_blank');
+      }
+      
+      toast.error('BBB integration temporarily unavailable. Please use Greenlight directly.', { duration: 8000 });
     } finally {
       setJoiningClass(null);
     }
@@ -463,638 +664,247 @@ const TrainerJoinClass = () => {
           </p>
         </div>
 
-        {/* BigBlueButton Info Card */}
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <Video className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-blue-900">BigBlueButton Integration</h3>
-                <p className="text-blue-700 text-sm mt-1">
-                  Your classes are hosted on BigBlueButton with automatic recording, screen sharing, 
-                  whiteboard, and interactive features. Join 15 minutes before the scheduled time.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+       
+       
 
-        {/* Auto-Upload Status Card */}
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-green-100 p-2 rounded-lg">
-                <Upload className="h-5 w-5 text-green-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-green-900">Automatic Recording Upload</h3>
-                <p className="text-green-700 text-sm mt-1">
-                  System automatically checks BigBlueButton every 5 minutes and uploads new recordings to AWS S3.
-                </p>
-                <div className="flex items-center gap-2 mt-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    autoUploadStatus === 'running' ? 'bg-green-500' : 
-                    autoUploadStatus === 'stopped' ? 'bg-red-500' : 'bg-gray-400'
-                  }`}></div>
-                  <span className="text-sm font-medium text-green-800">
-                    Status: {autoUploadStatus === 'running' ? 'Active' : 
-                             autoUploadStatus === 'stopped' ? 'Stopped' : 'Checking...'}
-                  </span>
-                  {autoUploadStatus === 'running' && (
-                    <span className="text-xs text-green-600 ml-2">• Checking every 5 minutes</span>
+       
+        
+
+       
+
+       
+
+
+        {/* Schedule New Class Button */}
+        <div className="flex justify-between items-center">
+          
+          
+          <Button
+            onClick={openScheduleModal}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Schedule New Class
+          </Button>
+        </div>
+
+        {/* Schedule Class Modal */}
+        {scheduleModal.open && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span>Schedule New Class</span>
+                  <button
+                    onClick={() => setScheduleModal({ open: false, loading: false })}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Debug Info */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-xs font-medium text-gray-700 mb-2">Debug: Batch Loading</p>
+                  <div className="space-y-1 text-xs text-gray-600">
+                    <p>Available batches: {availableBatches.length}</p>
+                    <p>Trainer info: {trainerInfo ? `${trainerInfo.name} (${trainerInfo._id || trainerInfo.trainerId})` : 'Not loaded'}</p>
+                    {availableBatches.length > 0 && (
+                      <div className="mt-2">
+                        <p className="font-medium">First batch:</p>
+                        <pre className="text-xs bg-white p-1 rounded border max-h-20 overflow-auto">
+                          {JSON.stringify(availableBatches[0], null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    onClick={async () => {
+                      if (trainerInfo) {
+                        const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
+                        console.log('Testing API call with trainer ID:', trainerIdToUse);
+                        
+                        try {
+                          const res = await fetch(`/api/trainer/dashboard?trainerId=${trainerIdToUse}`);
+                          const data = await res.json();
+                          console.log('API Response:', data);
+                          toast.info(`API Response: ${res.status} - Check console for details`);
+                        } catch (error) {
+                          console.error('API Test Error:', error);
+                          toast.error('API Test Failed - Check console');
+                        }
+                      }
+                    }}
+                    size="sm"
+                    className="mt-2"
+                  >
+                    Test API Call
+                  </Button>
+                </div>
+
+                {/* Batch Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Batch *
+                  </label>
+                  <select
+                    value={scheduleForm.batchId}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, batchId: e.target.value }))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">-- Select a Batch --</option>
+                    {availableBatches.length === 0 ? (
+                      <option value="" disabled>Loading batches...</option>
+                    ) : (
+                      availableBatches.map((batch) => (
+                        <option key={batch._id || batch.batchId} value={batch._id || batch.batchId}>
+                          {batch.batchName || batch.name || 'Unknown Batch'} - {batch.course_title || batch.courseTitle || 'Course'}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {availableBatches.length === 0 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      No batches found. Make sure you have created batches for your courses.
+                    </p>
+                  )}
+                  {availableBatches.length > 0 && (
+                    <p className="text-xs text-green-600 mt-1">
+                      ✓ {availableBatches.length} batch(es) available
+                    </p>
                   )}
                 </div>
-                <div className="flex gap-2 mt-3">
+
+                {/* Module Title */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Module/Class Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={scheduleForm.moduleTitle}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, moduleTitle: e.target.value }))}
+                    placeholder="e.g., Introduction to React"
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Module Index */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Module Number
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={scheduleForm.moduleIndex}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, moduleIndex: parseInt(e.target.value) || 1 }))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Date and Time */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Date *
+                    </label>
+                    <input
+                      type="date"
+                      value={scheduleForm.scheduledDate}
+                      onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduledDate: e.target.value }))}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Time *
+                    </label>
+                    <input
+                      type="time"
+                      value={scheduleForm.scheduledTime}
+                      onChange={(e) => setScheduleForm(prev => ({ ...prev, scheduledTime: e.target.value }))}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Duration */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Duration (minutes)
+                  </label>
+                  <select
+                    value={scheduleForm.duration}
+                    onChange={(e) => setScheduleForm(prev => ({ ...prev, duration: parseInt(e.target.value) }))}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value={30}>30 minutes</option>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>60 minutes</option>
+                    <option value={90}>90 minutes</option>
+                    <option value={120}>120 minutes</option>
+                  </select>
+                </div>
+
+                {/* BBB Integration Info */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Video className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-900">BigBlueButton Integration</span>
+                  </div>
+                  <p className="text-xs text-blue-700">
+                    Meeting room will be automatically created when you start the class. 
+                    Students can join 15 minutes before the scheduled time.
+                  </p>
+                  <div className="mt-2 text-xs text-blue-600">
+                    ✓ Automatic recording enabled<br/>
+                    ✓ Screen sharing & whiteboard<br/>
+                    ✓ Interactive features included
+                  </div>
+                </div>
+
+                {/* Debug Info */}
+                {availableBatches.length > 0 && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs font-medium text-gray-700 mb-1">Debug: Available Batches</p>
+                    <p className="text-xs text-gray-600">
+                      Found {availableBatches.length} batches. First batch: {JSON.stringify(availableBatches[0], null, 2).substring(0, 200)}...
+                    </p>
+                  </div>
+                )}
+
+                {/* Submit Button */}
+                <div className="flex gap-2 pt-2">
                   <Button
-                    onClick={async () => {
-                      try {
-                        const action = autoUploadStatus === 'running' ? 'stop' : 'start';
-                        const response = await fetch('/api/start-auto-upload-service', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action })
-                        });
-                        
-                        const data = await response.json();
-                        if (data.success) {
-                          setAutoUploadStatus(data.status);
-                          toast.success(action === 'start' ? '🚀 Auto-upload started!' : '⏹️ Auto-upload stopped!');
-                        }
-                      } catch (error) {
-                        toast.error('❌ Failed to toggle auto-upload service');
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className={autoUploadStatus === 'running' ? 'text-red-600 border-red-600' : 'text-green-600 border-green-600'}
+                    onClick={handleScheduleClass}
+                    disabled={scheduleModal.loading}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700"
                   >
-                    {autoUploadStatus === 'running' ? '⏹️ Stop Auto-Upload' : '▶️ Start Auto-Upload'}
+                    {scheduleModal.loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Scheduling...
+                      </>
+                    ) : (
+                      <>
+                        <Calendar className="h-4 w-4 mr-2" />
+                        Schedule Class
+                      </>
+                    )}
                   </Button>
-                  
                   <Button
-                    onClick={async () => {
-                      try {
-                        toast.info('🔄 Running manual check...');
-                        
-                        const response = await fetch('/api/auto-upload-recordings', {
-                          method: 'POST'
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                          if (data.processed > 0) {
-                            toast.success(`✅ ${data.processed} new recordings uploaded!`);
-                            // Refresh classes
-                            if (trainerInfo) {
-                              fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                            }
-                          } else {
-                            toast.info('ℹ️ No new recordings found to process');
-                          }
-                        }
-                      } catch (error) {
-                        toast.error('❌ Manual check failed');
-                      }
-                    }}
+                    onClick={() => setScheduleModal({ open: false, loading: false })}
                     variant="outline"
-                    size="sm"
-                    className="text-blue-600 border-blue-600"
                   >
-                    🔄 Check Now
+                    Cancel
                   </Button>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-purple-200 bg-purple-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <FileVideo className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-purple-900">Automatic Recording Feature</h3>
-                <p className="text-purple-700 text-sm mt-1">
-                  When you join as a trainer, recording starts automatically. After class ends, 
-                  click "Get Recordings" to download and save recordings to AWS S3. 
-                  Recordings will then be available to students in their course materials.
-                </p>
-                <div className="mt-2 text-xs text-purple-600">
-                  <strong>Note:</strong> Only trainers can start/stop recordings. Recordings may take 2-5 minutes to process after class ends.
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* BBB Management Center */}
-        <Card className="border-purple-200 bg-gradient-to-r from-purple-50 to-blue-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <Settings className="h-5 w-5 text-purple-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-purple-900">BBB Status: CONFIRMED BROKEN ❌</h3>
-                <p className="text-purple-700 text-sm mt-1">
-                  <strong>Issue:</strong> BBB server returns HTML presentation viewer pages instead of downloadable video files.
-                  <br />
-                  <strong>Impact:</strong> All video downloads fail with "JSON parse error" - server needs administrator attention.
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    onClick={() => window.open('/bbb-issue-summary', '_blank')}
-                    className="bg-red-600 hover:bg-red-700"
-                    size="sm"
-                  >
-                    <AlertTriangle className="h-4 w-4 mr-2" />
-                    View Issue Summary
-                  </Button>
-                  
-                  <Button
-                    onClick={() => window.open('/view-bbb-recordings', '_blank')}
-                    className="bg-purple-600 hover:bg-purple-700"
-                    size="sm"
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    View BBB Recordings
-                  </Button>
-                </div>
-                
-                <div className="mt-2 text-xs text-purple-600">
-                  <strong>Root Cause:</strong> Server misconfiguration • <strong>Status:</strong> Needs server administrator • <strong>Workaround:</strong> Manual upload only
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* BBB Recording Troubleshooting Guide */}
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-yellow-100 p-2 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-yellow-900">Quick Recording Troubleshooting</h3>
-                <p className="text-yellow-700 text-sm mt-1">
-                  If recordings don't appear after ending a meeting, try these quick fixes:
-                </p>
-                <div className="flex gap-2 mt-3">
-                  <Button
-                    onClick={() => window.open('/bbb-management', '_blank')}
-                    variant="outline"
-                    size="sm"
-                    className="text-purple-600 border-purple-600"
-                  >
-                    🔧 Full BBB Diagnostic
-                  </Button>
-                  
-                  <Button 
-                    onClick={() => {
-                      const helpInfo = `
-🎬 QUICK BBB RECORDING TROUBLESHOOTING
-
-❌ NO RECORDINGS FOUND? Common causes:
-
-1️⃣ RECORDING NOT STARTED:
-   • Recording button not clicked in BBB meeting
-   • Meeting ended too quickly (less than 30 seconds)
-
-2️⃣ BBB SERVER ISSUE (Current Problem):
-   • Server returns 862-byte HTML error pages instead of videos
-   • All July 2026 recordings are broken due to this
-
-3️⃣ PROCESSING DELAY:
-   • BBB needs 2-5 minutes to process recordings
-
-🔧 IMMEDIATE SOLUTIONS:
-
-✅ USE BBB MANAGEMENT CENTER:
-   • Test all BBB endpoints
-   • Download working recordings locally
-   • Clean up broken 862-byte files
-
-⚠️ CURRENT STATUS:
-   • BBB server is broken (returns HTML error pages)
-   • Only June 2026 recordings work (5-40 MB files)
-   • July 2026 recordings are all 862 bytes (junk)
-
-💡 BEST PRACTICE:
-   Always record locally as backup until BBB server is fixed!`;
-                      
-                      alert(helpInfo);
-                      toast.info('💡 Open BBB Management Center for comprehensive diagnostics!');
-                    }}
-                    variant="outline" 
-                    size="sm"
-                    className="text-orange-600 border-orange-600"
-                  >
-                    Quick Help Guide
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-orange-200 bg-orange-50">
-          <CardContent className="p-4">
-            <div className="flex items-start gap-3">
-              <div className="bg-orange-100 p-2 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-orange-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-orange-900">BBB Configuration Debug</h3>
-                <p className="text-orange-700 text-sm mt-1">
-                  If you're getting "Checksums do not match" errors, test your BBB configuration.
-                </p>
-                <div className="flex gap-2 mt-2">
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        const response = await fetch('/api/check-env');
-                        const data = await response.json();
-                        
-                        console.log('Environment Check:', data);
-                        
-                        if (data.success) {
-                          const env = data.environment;
-                          const expected = data.expectedValues;
-                          
-                          const envInfo = `
-Environment Variables:
-• Server URL: ${env.BIGBLUEBUTTON_SERVER_URL}
-• API Secret: ${env.BIGBLUEBUTTON_API_SECRET === 'NOT SET' ? 'NOT SET' : 'SET (' + env.secretLength + ' chars)'}
-
-Expected:
-• Server URL: ${expected.BIGBLUEBUTTON_SERVER_URL}  
-• API Secret: ${expected.BIGBLUEBUTTON_API_SECRET}
-
-Status: ${env.BIGBLUEBUTTON_SERVER_URL === expected.BIGBLUEBUTTON_SERVER_URL && env.secretLength === 42 ? '✅ Correct' : '❌ Mismatch'}
-                          `.trim();
-                          
-                          alert(envInfo);
-                        } else {
-                          alert('Error checking environment: ' + data.error);
-                        }
-                      } catch (error) {
-                        console.error('Env check failed:', error);
-                        alert('Env check failed: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600 border-blue-600"
-                  >
-                    Check Env
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        console.log('Testing exact BBB API replication...');
-                        
-                        const response = await fetch('/api/test-exact-bbb', {
-                          method: 'POST'
-                        });
-                        const data = await response.json();
-                        
-                        console.log('Exact BBB Test Result:', data);
-                        
-                        if (data.success) {
-                          alert('✅ Exact BBB API Test Successful!\n\n' +
-                                `Meeting ID: ${data.meetingId}\n` +
-                                `Checksum: ${data.checksum}\n\n` +
-                                'This confirms BBB API is working!');
-                        } else {
-                          alert('❌ Exact BBB API Test Failed:\n\n' + 
-                                data.error + '\n\n' +
-                                'Check console for full response.');
-                        }
-                      } catch (error) {
-                        console.error('Exact BBB test failed:', error);
-                        alert('Exact BBB test failed: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-purple-600 border-purple-600"
-                  >
-                    Test Exact BBB
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        console.log('Testing BBB meeting creation...');
-                        
-                        const response = await fetch('/api/test-bbb-create', {
-                          method: 'POST'
-                        });
-                        const data = await response.json();
-                        
-                        console.log('BBB Create Test Result:', data);
-                        
-                        if (data.success) {
-                          alert('✅ BBB Meeting Creation Test Successful!\n\n' +
-                                `Meeting ID: ${data.meetingData.meetingId}\n` +
-                                `Join URL: ${data.meetingData.joinUrl}`);
-                        } else {
-                          alert('❌ BBB Meeting Creation Failed:\n\n' + 
-                                data.error + '\n\n' +
-                                'Check console for details.');
-                        }
-                      } catch (error) {
-                        console.error('BBB create test failed:', error);
-                        alert('BBB create test failed: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 border-green-600"
-                  >
-                    Test BBB Create
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        const response = await fetch('/api/test-same-meeting');
-                        const data = await response.json();
-                        
-                        console.log('Same Meeting Test Result:', data);
-                        
-                        if (data.success) {
-                          const info = `
-✅ Same Meeting Test Results:
-
-Meeting Created: ${data.meetingCreated ? 'YES' : 'NO'}
-Meeting ID: ${data.meetingId}
-Same Meeting ID Verified: ${data.verification.sameMeetingId ? 'YES' : 'NO'}
-
-TRAINER URL:
-${data.trainer.joinUrl}
-
-STUDENT URL:  
-${data.student.joinUrl}
-
-🔍 TESTING INSTRUCTIONS:
-1. Both URLs use the SAME Meeting ID: ${data.meetingId}
-2. Open Trainer URL in one browser tab/window
-3. Open Student URL in another browser tab/window  
-4. Both should join the SAME BigBlueButton room
-5. Check that session tokens are the same
-
-If you get different session tokens, the issue persists.
-If you get the same session token, the fix is working!
-                          `.trim();
-                          
-                          alert(info);
-                          
-                        } else {
-                          alert('❌ Same Meeting Test Failed:\n\n' + data.error);
-                        }
-                      } catch (error) {
-                        console.error('Same meeting test failed:', error);
-                        alert('Same meeting test failed: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-indigo-600 border-indigo-600"
-                  >
-                    Test Same Meeting
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        const response = await fetch('/api/test-same-meeting');
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                          if (navigator.clipboard) {
-                            await navigator.clipboard.writeText(data.trainer.joinUrl);
-                            toast.success('Trainer join URL copied to clipboard!');
-                            
-                            alert(`Trainer URL copied!\n\nOpen this in one browser tab:\n${data.trainer.joinUrl}\n\nThen click "Copy Student URL" for the second tab.`);
-                          } else {
-                            alert(`Copy this Trainer URL manually:\n\n${data.trainer.joinUrl}`);
-                          }
-                        } else {
-                          alert('Failed to generate test URLs: ' + data.error);
-                        }
-                      } catch (error) {
-                        alert('Error: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 border-green-600"
-                  >
-                    Copy Trainer URL
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        const response = await fetch('/api/test-same-meeting');
-                        const data = await response.json();
-                        
-                        if (data.success) {
-                          if (navigator.clipboard) {
-                            await navigator.clipboard.writeText(data.student.joinUrl);
-                            toast.success('Student join URL copied to clipboard!');
-                            
-                            alert(`Student URL copied!\n\nOpen this in a second browser tab:\n${data.student.joinUrl}\n\nBoth tabs should join the SAME meeting room!`);
-                          } else {
-                            alert(`Copy this Student URL manually:\n\n${data.student.joinUrl}`);
-                          }
-                        } else {
-                          alert('Failed to generate test URLs: ' + data.error);
-                        }
-                      } catch (error) {
-                        alert('Error: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600 border-blue-600"
-                  >
-                    Copy Student URL
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      try {
-                        console.log('🔍 Running comprehensive BBB recording debug...');
-                        
-                        toast.info('🔍 Analyzing BigBlueButton recordings... Please wait.');
-                        
-                        const response = await fetch('/api/debug-bbb-recordings');
-                        const data = await response.json();
-                        
-                        console.log('🔍 Debug BBB recordings result:', data);
-                        
-                        if (data.success) {
-                          const summary = data.summary;
-                          const recordings = data.recordings;
-                          const troubleshooting = data.troubleshooting;
-                          
-                          let debugInfo = `
-🎬 BBB Recording Debug Report
-
-🔧 SERVER STATUS:
-• BBB Server: ${data.bbbServer.url}
-• API Secret: ${data.bbbServer.secretConfigured ? '✅ Configured' : '❌ Missing'} (${data.bbbServer.secretLength} chars)
-• API Call: ${data.apiTest.success ? '✅ SUCCESS' : '❌ FAILED'}
-${data.apiTest.error ? `• API Error: ${data.apiTest.error}` : ''}
-
-📊 RECORDINGS SUMMARY:
-• Total recordings found: ${recordings.total}
-• Ready to process: ${summary.canProcessNow}
-• Published recordings: ${recordings.published}
-• Unpublished (processing): ${recordings.unpublished}
-• With video URLs: ${recordings.withVideo}
-
-📹 RECORDING DETAILS:`;
-
-                          if (recordings.list.length > 0) {
-                            recordings.list.forEach((rec: any, index: number) => {
-                              if (rec.error) {
-                                debugInfo += `\n${index + 1}. ERROR: ${rec.error}`;
-                              } else {
-                                debugInfo += `\n${index + 1}. ${rec.name}
-   • Meeting: ${rec.meetingId}
-   • Status: ${rec.state} | Published: ${rec.published ? '✅' : '❌'}
-   • Video URL: ${rec.videoUrl ? '✅ Available' : '❌ Missing'}
-   • Can Process: ${rec.canProcess ? '✅ YES' : '❌ NO'}
-   • Duration: ${rec.duration || 0} minutes`;
-                              }
-                            });
-                          } else {
-                            debugInfo += '\n❌ No recordings found';
-                          }
-
-                          debugInfo += `\n\n🛠️ TROUBLESHOOTING:`;
-                          Object.entries(troubleshooting).forEach(([key, value]) => {
-                            if (value) {
-                              debugInfo += `\n• ${value}`;
-                            }
-                          });
-
-                          debugInfo += `\n\n🚀 NEXT STEPS:`;
-                          data.nextSteps.forEach((step: string, index: number) => {
-                            debugInfo += `\n${index + 1}. ${step}`;
-                          });
-
-                          alert(debugInfo);
-                          
-                          // Provide specific guidance
-                          if (summary.canProcessNow > 0) {
-                            toast.success(`🎉 ${summary.canProcessNow} recording(s) are ready for processing!`);
-                            toast.info('Click "Process All Recordings" to download and upload to S3.');
-                          } else if (recordings.unpublished > 0) {
-                            toast.warning(`⏳ ${recordings.unpublished} recording(s) are still being processed by BigBlueButton.`);
-                            toast.info('Wait 2-5 more minutes and try again.');
-                          } else if (recordings.total === 0) {
-                            toast.info('ℹ️ No recordings found. Create a test class with recording enabled.');
-                          } else {
-                            toast.warning('⚠️ Recordings found but cannot be processed. Check troubleshooting info.');
-                          }
-                        } else {
-                          alert('❌ Debug failed:\n\n' + data.error + '\n\nTroubleshooting:\n' + 
-                                Object.values(data.troubleshooting || {}).join('\n'));
-                        }
-                      } catch (error) {
-                        console.error('❌ Debug failed:', error);
-                        alert('❌ Debug failed: ' + error);
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 border-red-600"
-                  >
-                    Debug BBB Recordings
-                  </Button>
-                  
-                  <Button 
-                    onClick={async () => {
-                      if (!confirm('🚀 This will download ALL 13 recordings from BigBlueButton and upload them to S3. This may take several minutes. Continue?')) {
-                        return;
-                      }
-                      
-                      try {
-                        toast.info('🔄 Processing all BBB recordings... This will take a few minutes.', { duration: 10000 });
-                        
-                        const response = await fetch('/api/process-all-bbb-recordings', {
-                          method: 'POST'
-                        });
-                        const data = await response.json();
-                        
-                        console.log('📊 BBB processing result:', data);
-                        
-                        if (data.success) {
-                          const info = `
-🎉 BBB Recording Processing Complete!
-
-📊 RESULTS:
-• Total recordings found: ${data.totalRecordings}
-• Successfully processed: ${data.processedRecordings}
-• Skipped: ${data.skippedRecordings}
-• Errors: ${data.errorRecordings}
-
-📁 S3 LOCATION:
-${data.s3Folder}
-
-📝 DETAILED RESULTS:
-${data.processResults.slice(0, 5).map((result: any) => 
-  `${result.index}. ${result.name || 'Unknown'} - ${result.status.toUpperCase()}${result.className ? ` (${result.className})` : ''}`
-).join('\n')}${data.processResults.length > 5 ? `\n... and ${data.processResults.length - 5} more` : ''}
-
-${data.processedRecordings > 0 
-  ? '✅ SUCCESS! Videos are now uploaded to S3 and available to students!' 
-  : '⚠️ No recordings were processed. Check the detailed results above.'}`;
-                          
-                          alert(info);
-                          
-                          if (data.processedRecordings > 0) {
-                            toast.success(`🎉 ${data.processedRecordings} recordings uploaded to S3!`);
-                            toast.info('📁 Check: techpratham-image-storage/module_recordings/', { duration: 8000 });
-                            
-                            // Refresh classes to show new recordings
-                            if (trainerInfo) {
-                              fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                            }
-                          } else {
-                            toast.warning('⚠️ No recordings were processed.');
-                          }
-                        } else {
-                          alert('❌ Processing failed:\n\n' + data.error);
-                          toast.error('❌ Processing failed. Check console for details.');
-                        }
-                      } catch (error) {
-                        console.error('❌ Processing failed:', error);
-                        alert('❌ Processing failed: ' + error);
-                        toast.error('❌ Network error occurred.');
-                      }
-                    }}
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 border-green-600"
-                  >
-                    📥 Download All BBB Videos
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Scheduled Classes */}
         {scheduledClasses.length > 0 ? (
@@ -1493,515 +1303,7 @@ ${!hasRecordings
         )}
 
         {/* Quick Actions */}
-        <Card className="border-gray-200">
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button 
-              onClick={() => router.push('/trainer/course-modules')}
-              variant="outline" 
-              className="w-full justify-start"
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Schedule New Class
-            </Button>
-            <Button 
-              onClick={() => router.push('/trainer/students')}
-              variant="outline" 
-              className="w-full justify-start"
-            >
-              <Users className="h-4 w-4 mr-2" />
-              View Students
-            </Button>
-            <Button 
-              onClick={() => router.push('/trainer/dashboard')}
-              variant="outline" 
-              className="w-full justify-start"
-            >
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Go to Dashboard
-            </Button>
-            
-            {/* Debug Test Button - For completed classes */}
-            <Button 
-              onClick={async () => {
-                const completedClass = scheduledClasses.find(cls => cls.status === 'completed');
-                if (!completedClass) {
-                  toast.error('No completed classes found to test');
-                  return;
-                }
-                
-                try {
-                  toast.info('🕵️ Running comprehensive End & Upload diagnostic...', { duration: 10000 });
-                  
-                  const response = await fetch('/api/debug-end-upload-issue', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ classId: completedClass._id })
-                  });
-                  
-                  const data = await response.json();
-                  
-                  if (data.success) {
-                    const bbb = data.bbbResults;
-                    const recordings = data.recordings;
-                    
-                    let message = `🕵️ COMPREHENSIVE DIAGNOSTIC for ${data.classInfo.title}\n\n`;
-                    message += `📊 BBB SERVER:\n`;
-                    message += `• Connection: ${bbb.serverAccessible ? '✅ Working' : '❌ Failed'}\n`;
-                    message += `• Total BBB Recordings: ${bbb.totalRecordings}\n`;
-                    message += `• Target Meeting ID: ${bbb.targetMeetingId}\n`;
-                    message += `• Target Recordings: ${bbb.targetRecordings}\n`;
-                    message += `• DB Recordings: ${data.classInfo.dbRecordings}\n\n`;
-                    
-                    message += `🎯 TARGET RECORDINGS:\n`;
-                    if (recordings.target.length > 0) {
-                      recordings.target.forEach((rec: any, i: number) => {
-                        message += `${i + 1}. ${rec.name} - ${rec.published ? '✅' : '⏳'} ${rec.state} ${rec.hasVideoUrl ? '🎥' : '❌'}\n`;
-                      });
-                    } else {
-                      message += `❌ No recordings found for meeting: ${bbb.targetMeetingId}\n`;
-                    }
-                    
-                    message += `\n🔍 DIAGNOSIS:\n`;
-                    data.diagnosis.forEach((d: string) => message += d + '\n');
-                    
-                    if (data.testResult) {
-                      message += `\n🧪 TEST RESULT:\n`;
-                      message += `• Success: ${data.testResult.success ? '✅' : '❌'}\n`;
-                      message += `• Processed: ${data.testResult.totalProcessed || 0}\n`;
-                      message += `• Skipped: ${data.testResult.totalSkipped || 0}\n`;
-                      if (data.testResult.error) {
-                        message += `• Error: ${data.testResult.error}\n`;
-                      }
-                    }
-                    
-                    alert(message);
-                    
-                    // Show specific guidance based on results
-                    if (bbb.targetRecordings === 0) {
-                      toast.error('❌ No recordings found! Recording was not started during the meeting or meeting ID is wrong.');
-                      toast.info('💡 Start recording in BBB by clicking the red record button during class.');
-                    } else if (data.testResult && data.testResult.totalProcessed > 0) {
-                      toast.success('✅ Recordings processed! Check if they appear in the interface now.');
-                      // Refresh classes
-                      if (trainerInfo) {
-                        fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                      }
-                    } else {
-                      toast.warning('⚠️ Recordings found but not processed. Check the detailed diagnostic above.');
-                    }
-                  } else {
-                    alert('❌ Diagnostic failed: ' + data.error);
-                  }
-                } catch (error: any) {
-                  toast.error('Test error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-blue-600 border-blue-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🕵️ Diagnose End & Upload
-            </Button>
-
-            {/* Video Playback Test Button */}
-            <Button 
-              onClick={async () => {
-                // Find a class with recordings
-                const classWithRecordings = scheduledClasses.find(cls => 
-                  cls.status === 'completed' && 
-                  (cls as any).recordings && 
-                  (cls as any).recordings.length > 0
-                );
-                
-                if (!classWithRecordings) {
-                  toast.error('No classes with recordings found to test video playback');
-                  return;
-                }
-                
-                const recording = (classWithRecordings as any).recordings[0];
-                const videoUrl = recording.url;
-                
-                try {
-                  toast.info('🎥 Testing video playback...', { duration: 8000 });
-                  
-                  const response = await fetch('/api/test-video-playback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      videoUrl: videoUrl, 
-                      classId: classWithRecordings._id 
-                    })
-                  });
-                  
-                  const data = await response.json();
-                  
-                  if (data.success) {
-                    let message = `🎥 VIDEO PLAYBACK TEST RESULTS\n\n`;
-                    message += `📹 Video: ${recording.title}\n`;
-                    message += `🔗 URL: ${videoUrl}\n\n`;
-                    
-                    message += `🧪 TESTS:\n`;
-                    message += `• URL Format: ${data.tests.urlFormat.isHttps ? '✅' : '❌'} HTTPS, ${data.tests.urlFormat.format} format\n`;
-                    
-                    if (data.tests.s3Object) {
-                      message += `• S3 Object: ${data.tests.s3Object.exists ? '✅' : '❌'} ${data.tests.s3Object.exists ? `Exists (${Math.round(data.tests.s3Object.size / 1024 / 1024)}MB)` : 'Not found'}\n`;
-                    }
-                    
-                    if (data.tests.httpAccess) {
-                      message += `• HTTP Access: ${data.tests.httpAccess.accessible ? '✅' : '❌'} Status ${data.tests.httpAccess.status}\n`;
-                      message += `• CORS Headers: ${data.tests.httpAccess.headers.accessControlAllowOrigin ? '✅' : '⚠️'} ${data.tests.httpAccess.headers.accessControlAllowOrigin || 'Missing'}\n`;
-                    }
-                    
-                    message += `\n❌ ISSUES:\n`;
-                    if (data.issues.length === 0) {
-                      message += `✅ No issues found - video should play correctly!\n`;
-                    } else {
-                      data.issues.forEach((issue: string) => message += issue + '\n');
-                    }
-                    
-                    message += `\n🔧 RECOMMENDATIONS:\n`;
-                    data.recommendations.forEach((rec: string) => message += rec + '\n');
-                    
-                    alert(message);
-                    
-                    if (data.issues.length > 0) {
-                      toast.warning(`⚠️ Found ${data.issues.length} video playback issue(s). Check the detailed report.`);
-                      
-                      if (data.issues.some((i: string) => i.includes('CORS'))) {
-                        toast.info('💡 Try fixing S3 CORS configuration with the "Fix S3 CORS" button below.');
-                      }
-                    } else {
-                      toast.success('✅ Video should play correctly!');
-                    }
-                  } else {
-                    alert('❌ Video test failed: ' + data.error);
-                  }
-                } catch (error: any) {
-                  toast.error('Video test error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-green-600 border-green-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🎥 Test Video Playback
-            </Button>
-
-            {/* Fix S3 CORS Button */}
-            <Button 
-              onClick={async () => {
-                if (!confirm('Fix S3 CORS configuration for video playback?\n\nThis will set CORS headers to allow videos to play in browsers.')) {
-                  return;
-                }
-                
-                try {
-                  toast.info('🔧 Fixing S3 CORS configuration...');
-                  
-                  const response = await fetch('/api/fix-s3-cors', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'set' })
-                  });
-                  
-                  const data = await response.json();
-                  
-                  if (data.success) {
-                    toast.success('✅ S3 CORS configuration updated for video playback!');
-                    toast.info('🎥 Try playing videos now - they should work correctly.');
-                    
-                    console.log('CORS configuration:', data.corsConfiguration);
-                  } else {
-                    toast.error('❌ Failed to update CORS: ' + data.error);
-                  }
-                } catch (error: any) {
-                  toast.error('CORS fix error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-purple-600 border-purple-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🔧 Fix S3 CORS
-            </Button>
-
-            {/* Compare Working vs Broken Videos */}
-            <Button 
-              onClick={async () => {
-                const classWithMultipleRecordings = scheduledClasses.find(cls => 
-                  cls.status === 'completed' && 
-                  (cls as any).recordings && 
-                  (cls as any).recordings.length > 1
-                );
-                
-                if (!classWithMultipleRecordings) {
-                  toast.error('Need a class with multiple recordings to compare');
-                  toast.info('💡 This compares working vs broken videos to find differences');
-                  return;
-                }
-                
-                try {
-                  toast.info('🔍 Comparing working vs broken videos...', { duration: 10000 });
-                  
-                  const response = await fetch('/api/compare-video-urls', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ classId: classWithMultipleRecordings._id })
-                  });
-                  
-                  const data = await response.json();
-                  
-                  if (data.success) {
-                    let message = `🔍 VIDEO COMPARISON ANALYSIS for ${data.className}\n\n`;
-                    message += `📊 SUMMARY:\n`;
-                    message += `• Total Videos: ${data.totalVideos}\n`;
-                    message += `• Working Videos: ${data.workingVideos} ✅\n`;
-                    message += `• Broken Videos: ${data.brokenVideos} ❌\n\n`;
-                    
-                    if (data.differences.length > 0) {
-                      message += `🔍 KEY DIFFERENCES:\n`;
-                      data.differences.forEach((diff: string) => message += diff + '\n');
-                      message += '\n';
-                    }
-                    
-                    if (data.summary.workingPattern) {
-                      message += `✅ WORKING VIDEO PATTERN:\n`;
-                      message += `• Folder: ${data.summary.workingPattern.folder}\n`;
-                      message += `• Upload Method: ${data.summary.workingPattern.uploadMethod}\n`;
-                      message += `• Content-Type: ${data.summary.workingPattern.contentType}\n\n`;
-                    }
-                    
-                    if (Object.keys(data.summary.commonIssues).length > 0) {
-                      message += `❌ COMMON ISSUES:\n`;
-                      Object.entries(data.summary.commonIssues).forEach(([issue, count]) => {
-                        message += `• ${issue} (${count} videos)\n`;
-                      });
-                    }
-                    
-                    alert(message);
-                    
-                    // Detailed analysis in console
-                    console.log('📊 Detailed Video Analysis:', data.videoAnalysis);
-                    
-                    if (data.brokenVideos > 0) {
-                      toast.warning(`⚠️ Found ${data.brokenVideos} broken video(s). Check the analysis report.`);
-                      
-                      if (Object.keys(data.summary.commonIssues).some(issue => issue.includes('CORS'))) {
-                        toast.info('💡 CORS issues detected - try "Fix S3 CORS" button');
-                      }
-                      
-                      if (Object.keys(data.summary.commonIssues).some(issue => issue.includes('Content-Type'))) {
-                        toast.info('💡 Content-Type issues detected - videos need re-upload with correct format');
-                      }
-                    } else {
-                      toast.success('✅ All videos look good!');
-                    }
-                  } else {
-                    alert('❌ Video comparison failed: ' + data.error);
-                  }
-                } catch (error: any) {
-                  toast.error('Comparison error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-orange-600 border-orange-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🔍 Compare Working vs Broken Videos
-            </Button>
-
-            {/* Fix Broken Videos Button */}
-            <Button 
-              onClick={async () => {
-                const classWithRecordings = scheduledClasses.find(cls => 
-                  cls.status === 'completed' && 
-                  (cls as any).recordings && 
-                  (cls as any).recordings.length > 0
-                );
-                
-                if (!classWithRecordings) {
-                  toast.error('Need a class with recordings to fix videos');
-                  return;
-                }
-
-                if (!confirm(`Fix broken videos in class: ${classWithRecordings.moduleTitle}?\n\nThis will:\n• Check all videos for issues\n• Fix Content-Type and CORS problems\n• Update S3 metadata\n\nProceed?`)) {
-                  return;
-                }
-                
-                try {
-                  toast.info('🔧 Analyzing and fixing broken videos...', { duration: 15000 });
-                  
-                  // First analyze
-                  const analyzeResponse = await fetch('/api/fix-broken-videos', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      classId: classWithRecordings._id,
-                      action: 'analyze'
-                    })
-                  });
-                  
-                  const analyzeData = await analyzeResponse.json();
-                  
-                  if (analyzeData.success && analyzeData.brokenVideos > 0) {
-                    toast.warning(`Found ${analyzeData.brokenVideos} broken videos. Attempting to fix...`);
-                    
-                    // Now fix them
-                    const fixResponse = await fetch('/api/fix-broken-videos', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ 
-                        classId: classWithRecordings._id,
-                        action: 'fix'
-                      })
-                    });
-                    
-                    const fixData = await fixResponse.json();
-                    
-                    if (fixData.success) {
-                      let message = `🔧 VIDEO FIX RESULTS for ${fixData.className}\n\n`;
-                      message += `📊 SUMMARY:\n`;
-                      message += `• Total Videos: ${fixData.totalVideos}\n`;
-                      message += `• Working Videos: ${fixData.workingVideos} ✅\n`;
-                      message += `• Broken Videos: ${fixData.brokenVideos} ❌\n`;
-                      message += `• Fixed Videos: ${fixData.fixedVideos} 🔧\n\n`;
-                      
-                      if (Object.keys(fixData.summary.commonIssues).length > 0) {
-                        message += `🔧 ISSUES FIXED:\n`;
-                        Object.entries(fixData.summary.commonIssues).forEach(([issue, count]) => {
-                          message += `• ${issue} (${count} videos)\n`;
-                        });
-                      }
-                      
-                      alert(message);
-                      
-                      if (fixData.fixedVideos > 0) {
-                        toast.success(`✅ Fixed ${fixData.fixedVideos} video(s)! Try playing them now.`);
-                        
-                        // Refresh the classes list
-                        if (trainerInfo) {
-                          fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                        }
-                      } else if (fixData.brokenVideos === 0) {
-                        toast.success('✅ All videos are already working correctly!');
-                      } else {
-                        toast.warning('⚠️ Could not fix all videos - check detailed report above');
-                      }
-                    }
-                  } else if (analyzeData.success && analyzeData.brokenVideos === 0) {
-                    toast.success('✅ All videos are working correctly! No fixes needed.');
-                  }
-                } catch (error: any) {
-                  toast.error('Video fix error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-red-600 border-red-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🔧 Fix Broken Videos
-            </Button>
-
-            {/* Clean Up Tiny Junk Files Button */}
-            <Button 
-              onClick={async () => {
-                if (!confirm('⚠️ CLEAN UP JUNK VIDEO FILES?\n\nBased on your S3 listing, all July 2026 videos are only 862 bytes (not real videos).\n\nThis will:\n• Analyze what these tiny files contain\n• Delete broken 862-byte files\n• Clean up S3 storage\n\nProceed?')) {
-                  return;
-                }
-                
-                try {
-                  toast.info('🔍 Analyzing tiny video files in S3...', { duration: 10000 });
-                  
-                  // First analyze the files
-                  const analyzeResponse = await fetch('/api/fix-tiny-video-files', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: 'analyze' })
-                  });
-                  
-                  const analyzeData = await analyzeResponse.json();
-                  
-                  if (analyzeData.success) {
-                    let message = `🔍 TINY FILE ANALYSIS RESULTS\n\n`;
-                    message += `📊 SUMMARY:\n`;
-                    message += `• Total Files Checked: ${analyzeData.totalAnalyzed}\n`;
-                    message += `• Suspicious Files: ${analyzeData.suspiciousFiles} ❌\n`;
-                    message += `• Valid Files: ${analyzeData.validFiles} ✅\n\n`;
-                    
-                    message += `🚨 ISSUE IDENTIFIED:\n`;
-                    message += `${analyzeData.summary.issue}\n\n`;
-                    
-                    message += `🔧 ROOT CAUSE:\n`;
-                    message += `${analyzeData.summary.cause}\n\n`;
-                    
-                    message += `💡 NEXT STEPS:\n`;
-                    analyzeData.summary.nextSteps.forEach((step: string) => {
-                      message += `• ${step}\n`;
-                    });
-                    
-                    alert(message);
-                    
-                    if (analyzeData.suspiciousFiles > 0) {
-                      if (confirm(`Found ${analyzeData.suspiciousFiles} junk files to delete.\n\nDelete these broken 862-byte files now?`)) {
-                        toast.info('🗑️ Deleting junk files...', { duration: 8000 });
-                        
-                        const deleteResponse = await fetch('/api/fix-tiny-video-files', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'delete' })
-                        });
-                        
-                        const deleteData = await deleteResponse.json();
-                        
-                        if (deleteData.success) {
-                          toast.success(`✅ Deleted ${deleteData.deletedFiles} junk files from S3!`);
-                          toast.info('💡 Now fix the BBB recording download process and re-record classes.');
-                        }
-                      }
-                    } else {
-                      toast.success('✅ No junk files found - all videos look good!');
-                    }
-                  }
-                } catch (error: any) {
-                  toast.error('Cleanup error: ' + error.message);
-                }
-              }}
-              variant="outline" 
-              className="w-full justify-start text-yellow-600 border-yellow-600"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              🗑️ Clean Up 862-Byte Junk Files
-            </Button>
-
-            {/* View All BBB Recordings Button */}
-            <Button 
-              onClick={() => {
-                // Open BBB recordings page in new tab
-                window.open('/view-bbb-recordings', '_blank');
-              }}
-              variant="outline" 
-              className="w-full justify-start text-indigo-600 border-indigo-600"
-            >
-              <Video className="h-4 w-4 mr-2" />
-              📹 View All BBB Recordings
-            </Button>
-
-            {/* Download BBB Recordings Locally Button */}
-            <Button 
-              onClick={() => {
-                // Open BBB recordings viewer in new tab
-                window.open('/view-bbb-recordings', '_blank');
-              }}
-              variant="outline" 
-              className="w-full justify-start text-green-600 border-green-600"
-            >
-              <FolderDown className="h-4 w-4 mr-2" />
-              📺 View BBB Recordings
-            </Button>
-          </CardContent>
-        </Card>
+     
       </div>
     </TrainerLayout>
   );

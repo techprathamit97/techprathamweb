@@ -48,6 +48,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const trainerId = searchParams.get('trainerId');
 
+    console.log('Course-modules API called with trainerId:', trainerId);
+
     if (!trainerId) {
       return NextResponse.json({
         success: false,
@@ -55,22 +57,62 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Find trainer and their batches
-    const trainer = await Trainer.findById(trainerId).lean();
+    // Find trainer and their batches - handle multiple ways to find trainer
+    let trainer = null;
+
+    // Try 1: Find by MongoDB _id (ObjectId)
+    if (trainerId.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('Trying to find trainer by MongoDB _id:', trainerId);
+      trainer = await Trainer.findById(trainerId).lean();
+    }
+    
+    // Try 2: Find by trainerId field
     if (!trainer) {
+      console.log('Trying to find trainer by trainerId field:', trainerId);
+      trainer = await Trainer.findOne({ trainerId: trainerId }).lean();
+    }
+    
+    // Try 3: Find by email (in case email is being used as ID)
+    if (!trainer && trainerId.includes('@')) {
+      console.log('Trying to find trainer by email:', trainerId);
+      trainer = await Trainer.findOne({ email: trainerId }).lean();
+    }
+    
+    // Try 4: Find by name (case insensitive)
+    if (!trainer) {
+      console.log('Trying to find trainer by name:', trainerId);
+      trainer = await Trainer.findOne({ 
+        name: { $regex: new RegExp(trainerId, 'i') } 
+      }).lean();
+    }
+    
+    if (!trainer) {
+      console.log('Trainer not found with any method. Available trainers:');
+      const allTrainers = await Trainer.find({}).select('_id trainerId name email').lean();
+      console.log('All trainers:', allTrainers);
+      
       return NextResponse.json({
         success: false,
-        error: 'Trainer not found'
+        error: 'Trainer not found',
+        debug: {
+          searchedFor: trainerId,
+          availableTrainers: allTrainers
+        }
       }, { status: 404 });
     }
 
-    // Find batches assigned to this trainer - also populate students
-    const batches = await Batch.find({ trainerId })
+    console.log('Found trainer:', trainer.name, 'with ID:', trainer._id);
+
+    // Find batches assigned to this trainer using the MongoDB _id
+    const batches = await Batch.find({ trainerId: trainer._id })
       .populate('courseId')
       .populate('studentIds')
       .lean();
 
+    console.log('Found batches for trainer:', batches.length);
+
     if (batches.length === 0) {
+      console.log('No batches found for trainer');
       return NextResponse.json({
         success: true,
         data: []

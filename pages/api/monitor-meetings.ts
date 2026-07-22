@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // BBB API configuration
     const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
-    const bbbApiSecret = '77NxbTZnnrkERic8MBiqK5yOsUdMtmFjdgSmqr4Nj4';
+    const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
 
     const monitorResults: any[] = [];
     let endedClasses = 0;

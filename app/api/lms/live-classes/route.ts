@@ -1,82 +1,93 @@
 import { NextResponse } from 'next/server';
-import mongoose from 'mongoose';
-
-// MongoDB connection helper
-async function getDb() {
-  const MONGODB_URI = process.env.MONGODB_URI || process.env.MONGO_URI;
-  if (!MONGODB_URI) {
-    throw new Error('MongoDB URI not configured');
-  }
-
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGODB_URI);
-  }
-  return mongoose.connection.db;
-}
+import { connectMongo } from '@/utils/mongodb';
+const ModuleClass = require('@/models/ModuleClass');
+const Batch = require('@/models/Batch');
+const Trainer = require('@/models/Trainer');
 
 export async function GET(request: Request) {
   try {
+    await connectMongo();
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'scheduled';
     const limit = parseInt(searchParams.get('limit') || '100');
     const batchId = searchParams.get('batchId');
 
-    const db = await getDb();
-    if (!db) throw new Error('Database connection failed');
+    console.log('Fetching live classes with params:', { status, limit, batchId });
 
-    // Query DailyClass for scheduled classes
-    const query: any = {};
+    // Query ModuleClass for scheduled classes (this is where trainers create classes)
+    let query: any = {};
 
     if (status === 'scheduled') {
-      query.classDate = { $gte: new Date() };
+      // Include both scheduled and live classes
+      query.$or = [
+        { status: 'scheduled' },
+        { status: 'live', isLive: true }
+      ];
+    } else {
+      query.status = status;
     }
 
     if (batchId) {
-      query.batchId = new mongoose.Types.ObjectId(batchId);
+      query.batchId = batchId;
     }
 
-    const classes = await db.collection('dailyclasses')
-      .find(query)
-      .sort({ classDate: 1 })
+    console.log('ModuleClass query:', query);
+
+    const classes = await ModuleClass.find(query)
+      .populate('batchId', 'batchName')
+      .populate('trainerId', 'name')
+      .sort({ scheduledDate: 1, scheduledTime: 1 })
       .limit(limit)
-      .toArray();
+      .lean();
 
-    // Get batch names
-    const batchIds = [...new Set(classes.map(c => c.batchId?.toString()).filter(Boolean))];
-    const batches = await db.collection('batches')
-      .find({ _id: { $in: batchIds.map(id => new mongoose.Types.ObjectId(id)) } })
-      .toArray();
+    console.log(`Found ${classes?.length || 0} classes in ModuleClass collection`);
 
-    const batchMap = new Map(batches.map(b => [b._id.toString(), b.name]));
+    // Guard against undefined classes
+    if (!classes || !Array.isArray(classes)) {
+      console.log('No classes found or invalid data');
+      return NextResponse.json({
+        success: true,
+        data: [],
+        total: 0
+      });
+    }
 
-    // Get trainer names
-    const trainerIds = [...new Set(classes.map(c => c.trainerId?.toString()).filter(Boolean))];
-    const trainers = await db.collection('trainers')
-      .find({ _id: { $in: trainerIds.map(id => new mongoose.Types.ObjectId(id)) } })
-      .toArray();
+    // Transform to match LiveClass interface expected by student frontend
+    const liveClasses = classes.map(cls => {
+      // Parse scheduled time for display
+      const scheduledDate = new Date(cls.scheduledDate);
+      const [hours, minutes] = (cls.scheduledTime || '10:00').split(':');
+      scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      
+      return {
+        _id: cls._id,
+        title: cls.moduleTitle || 'Live Class',
+        description: cls.description || cls.moduleTitle || '',
+        batchName: cls.batchId?.batchName || 'Unknown Batch',
+        trainerName: cls.trainerId?.name || 'Unknown Trainer',
+        scheduledDate: cls.scheduledDate,
+        scheduledTime: cls.scheduledTime || '10:00',
+        duration: cls.duration || 60,
+        status: cls.status || 'scheduled',
+        roomConfig: {
+          meetingLink: cls.bbbJoinUrl || cls.meetingLink || '',
+          platform: 'bbb' // Always BBB since we're using BigBlueButton
+        },
+        recording: {
+          enabled: !!(cls.recordings && cls.recordings.length > 0),
+          recordingUrl: cls.recordingUrl || ''
+        },
+        // Include BBB-specific data for join functionality
+        bbbMeetingId: cls.bbbMeetingId,
+        bbbJoinUrl: cls.bbbJoinUrl,
+        bbbModeratorJoinUrl: cls.bbbModeratorJoinUrl,
+        isLive: cls.isLive || false,
+        canJoin: cls.canJoin || false
+      };
+    });
 
-    const trainerMap = new Map(trainers.map(t => [t._id.toString(), t.name]));
-
-    // Transform to match LiveClass interface
-    const liveClasses = classes.map(cls => ({
-      _id: cls._id,
-      title: cls.topic || 'Live Class',
-      description: cls.topic || '',
-      batchName: batchMap.get(cls.batchId?.toString()) || 'Unknown Batch',
-      trainerName: trainerMap.get(cls.trainerId?.toString()) || 'Unknown Trainer',
-      scheduledDate: cls.classDate,
-      scheduledTime: cls.classDate ? new Date(cls.classDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '',
-      duration: 60, // Default duration
-      status: new Date(cls.classDate) > new Date() ? 'scheduled' : 'completed',
-      roomConfig: {
-        meetingLink: cls.meetLink || '',
-        platform: cls.meetLink?.includes('bbb') || cls.meetLink?.includes('bigbluebutton') ? 'bbb' : 'meet'
-      },
-      recording: {
-        enabled: !!cls.recordingUrl,
-        recordingUrl: cls.recordingUrl || ''
-      }
-    }));
+    console.log('Transformed live classes:', liveClasses.length);
 
     return NextResponse.json({
       success: true,

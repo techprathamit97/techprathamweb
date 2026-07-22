@@ -3,6 +3,7 @@ import { connectMongo } from '@/utils/mongodb';
 const Trainer = require('@/models/Trainer');
 const Batch = require('@/models/Batch');
 const Student = require('@/models/Student');
+const Course = require('@/models/Course');
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,17 +19,53 @@ export async function GET(req: NextRequest) {
       );
     }
     
-    // Find trainer by trainerId
-    const trainer = await Trainer.findOne({ trainerId: trainerId }).lean();
+    console.log('Trainer dashboard API called with trainerId:', trainerId);
+    
+    // Find trainer ONLY in the Trainer collection (not User collection)
+    let trainer = null;
+    
+    // Try 1: Find by MongoDB _id in Trainer collection
+    if (trainerId.match(/^[0-9a-fA-F]{24}$/)) {
+      console.log('Looking for trainer by MongoDB _id in Trainer collection:', trainerId);
+      trainer = await Trainer.findById(trainerId).lean();
+    }
+    
+    // Try 2: Find by trainerId field in Trainer collection
+    if (!trainer) {
+      console.log('Looking for trainer by trainerId field in Trainer collection:', trainerId);
+      trainer = await Trainer.findOne({ trainerId: trainerId }).lean();
+    }
+    
+    // Try 3: Find by email in Trainer collection
+    if (!trainer && trainerId.includes('@')) {
+      console.log('Looking for trainer by email in Trainer collection:', trainerId);
+      trainer = await Trainer.findOne({ email: trainerId }).lean();
+    }
     
     if (!trainer) {
+      console.log('Trainer not found in Trainer collection');
+      
+      // Debug: Show what trainers exist in Trainer collection
+      const allTrainers = await Trainer.find({}).select('_id trainerId name email').limit(10).lean();
+      console.log('Available trainers in Trainer collection:', allTrainers);
+      
       return NextResponse.json(
-        { error: 'Trainer not found' },
+        { 
+          error: 'Trainer not found',
+          
+        },
         { status: 404 }
       );
     }
     
-    // Get batches assigned to this trainer
+    console.log('Found trainer in Trainer collection:', {
+      _id: trainer._id,
+      trainerId: trainer.trainerId,
+      name: trainer.name,
+      email: trainer.email
+    });
+    
+    // Get batches assigned to this trainer using the MongoDB _id
     const batches = await Batch.find({ 
       trainerId: trainer._id 
     })
@@ -36,12 +73,15 @@ export async function GET(req: NextRequest) {
     .populate('studentIds')
     .lean();
     
+    console.log(`Found ${batches.length} batches for trainer ${trainer.name}`);
+    
     // Format batch data for dashboard
     const formattedBatches = batches.map((batch: any) => ({
       _id: batch._id,
       batchId: batch._id.toString(),
       batchName: batch.batchName,
       course_title: batch.courseId?.title || 'N/A',
+      courseId: batch.courseId?._id || batch.courseId,
       schedule: {
         startDate: batch.startDate,
         endDate: batch.endDate,
@@ -53,6 +93,8 @@ export async function GET(req: NextRequest) {
       status: batch.status || 'active',
       meetingLink: batch.meetingLink || ''
     }));
+    
+    console.log('Formatted batches:', formattedBatches.length);
     
     // Get all students from the batches
     const allStudents = batches.reduce((acc: any[], batch: any) => {
@@ -71,6 +113,7 @@ export async function GET(req: NextRequest) {
     
     const dashboardData = {
       trainer: {
+        _id: trainer._id.toString(),
         trainerId: trainer.trainerId,
         name: trainer.name,
         email: trainer.email,
@@ -90,6 +133,8 @@ export async function GET(req: NextRequest) {
         completedStudents: allStudents.filter((s: any) => s.courseCompletion).length
       }
     };
+    
+    console.log('Returning dashboard data with', dashboardData.batches.length, 'batches');
     
     return NextResponse.json({
       success: true,

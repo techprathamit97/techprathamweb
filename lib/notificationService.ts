@@ -1,4 +1,5 @@
 import { connectMongo } from '@/utils/mongodb';
+import { sendPushNotification } from '@/lib/pushNotifications';
 const Notification = require('@/models/Notification');
 const Student = require('@/models/Student');
 const Batch = require('@/models/Batch');
@@ -47,6 +48,15 @@ export async function createNotification(params: CreateNotificationParams) {
   });
 
   await notification.save();
+
+  if (params.studentId) {
+    await sendPushNotification(params.studentId, 'student', {
+      title: params.title,
+      message: params.message,
+      url: params.actionUrl || '/student/notifications'
+    });
+  }
+
   return notification;
 }
 
@@ -86,6 +96,14 @@ export async function notifyBatchStudents(
   await Notification.insertMany(notifications);
   console.log(`Created ${notifications.length} notifications for batch ${batchId}`);
 
+  for (const notification of notifications) {
+    await sendPushNotification(notification.studentId, 'student', {
+      title: notification.title,
+      message: notification.message,
+      url: notification.actionUrl || '/student/notifications'
+    });
+  }
+
   return notifications;
 }
 
@@ -111,6 +129,14 @@ export async function notifyStudents(
 
   const result = await Notification.insertMany(notifications);
   console.log(`Created ${result.length} notifications`);
+
+  for (const notification of result) {
+    await sendPushNotification(notification.studentId, 'student', {
+      title: notification.title,
+      message: notification.message,
+      url: notification.actionUrl || '/student/notifications'
+    });
+  }
 
   return result;
 }

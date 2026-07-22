@@ -224,7 +224,7 @@ export async function createMeeting(
     console.log('[BBB CREATE] API call result:', result);
 
     if (result.returncode === 'SUCCESS') {
-      // Generate join URLs
+      // Generate join URLs using the API (which includes proper checksum)
       const attendeePassword = result.attendeePassword || result.attendeePW;
       const moderatorPassword = result.moderatorPassword || result.moderatorPW;
       const actualMeetingId = result.meetingID;
@@ -236,9 +236,10 @@ export async function createMeeting(
         moderatorPassword: moderatorPassword ? 'set' : 'missing'
       });
 
-      const serverUrl = process.env.BIGBLUEBUTTON_SERVER_URL;
-      const apiUrl = serverUrl?.endsWith('/api') ? serverUrl : `${serverUrl}/api`;
-      
+      // Generate join URLs with proper checksums via BBB API
+      const joinResult = await getJoinUrl(actualMeetingId, 'Student', attendeePassword, 'attendee');
+      const moderatorJoinResult = await getJoinUrl(actualMeetingId, 'Trainer', moderatorPassword, 'moderator');
+
       return {
         success: true,
         meetingId: actualMeetingId,
@@ -246,8 +247,8 @@ export async function createMeeting(
         attendeePassword,
         moderatorPassword,
         createTime: result.createTime,
-        joinUrl: `${apiUrl}/join?meetingID=${encodeURIComponent(actualMeetingId)}&password=${encodeURIComponent(attendeePassword)}&fullName=Student&redirect=true`,
-        moderatorJoinUrl: `${apiUrl}/join?meetingID=${encodeURIComponent(actualMeetingId)}&password=${encodeURIComponent(moderatorPassword)}&fullName=Trainer&redirect=true`,
+        joinUrl: joinResult.joinUrl,
+        moderatorJoinUrl: moderatorJoinResult.joinUrl,
       };
     } else {
       console.error('[BBB CREATE] Meeting creation failed:', result);

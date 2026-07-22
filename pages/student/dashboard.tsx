@@ -18,7 +18,8 @@ import {
   Target,
   User,
   LogOut,
-  X
+  X,
+  Video
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -224,6 +225,7 @@ const StudentDashboard = () => {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [recordingModal, setRecordingModal] = useState<{ open: boolean; url: string; title: string }>({ open: false, url: '', title: '' });
+  const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
 
   useEffect(() => {
     // Check if student is logged in
@@ -434,7 +436,171 @@ const StudentDashboard = () => {
         
 
         {/* Scheduled Classes */}
-       
+        <Card className="border-gray-200 shadow-sm">
+          <CardHeader className="border-b border-gray-200">
+            <CardTitle className="text-gray-900 flex items-center gap-2">
+              <Video className="h-5 w-5 text-red-600" />
+              Live Classes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6">
+            {dashboardData.scheduledClasses.length === 0 ? (
+              <div className="text-center py-8">
+                <Video className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900">No live classes scheduled</h3>
+                <p className="text-gray-500 mt-2">Check back later for scheduled classes</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {dashboardData.scheduledClasses.map((classItem) => {
+                  const now = new Date();
+                  const classDate = new Date(classItem.scheduledDate);
+                  const [hours, minutes] = classItem.scheduledTime.split(':');
+                  classDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                  
+                  const endTime = new Date(classDate.getTime() + classItem.duration * 60 * 1000);
+                  const joinTime = new Date(classDate.getTime() - 15 * 60 * 1000); // 15 minutes before
+                  
+                  const isLive = classItem.isLive || classItem.status === 'live';
+                  const canJoin = (now >= joinTime && now <= endTime) || isLive;
+                  const isPast = now > endTime;
+                  
+                  let statusColor = 'bg-blue-100 text-blue-700 border-blue-200';
+                  let statusLabel = 'Scheduled';
+                  
+                  if (isLive) {
+                    statusColor = 'bg-red-100 text-red-700 border-red-200';
+                    statusLabel = 'LIVE NOW';
+                  } else if (canJoin && !isLive) {
+                    statusColor = 'bg-green-100 text-green-700 border-green-200';
+                    statusLabel = 'Ready to Join';
+                  } else if (isPast) {
+                    statusColor = 'bg-gray-100 text-gray-700 border-gray-200';
+                    statusLabel = 'Completed';
+                  }
+                  
+                  return (
+                    <div 
+                      key={classItem._id}
+                      className={`bg-white border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        isLive ? 'border-red-500 border-2 shadow-lg' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-lg font-semibold text-gray-900">{classItem.moduleTitle}</h4>
+                          <p className="text-gray-600 text-sm mt-1">Module {classItem.moduleIndex}</p>
+                        </div>
+                        <Badge className={`${statusColor} ${isLive ? 'animate-pulse' : ''}`}>
+                          {statusLabel}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-gray-600 mb-4">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4" />
+                          <span>{new Date(classItem.scheduledDate).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>{classItem.scheduledTime}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>{classItem.duration} min</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Video className="h-4 w-4" />
+                          <span>BigBlueButton</span>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3">
+                        {canJoin ? (
+                          <Button 
+                            onClick={async () => {
+                              // Prevent multiple join attempts for the same class
+                              if (joiningClass === classItem._id) {
+                                console.log('Already joining this class, preventing duplicate');
+                                return;
+                              }
+                              
+                              setJoiningClass(classItem._id);
+                              
+                              try {
+                                const studentData = localStorage.getItem('student');
+                                if (!studentData) {
+                                  toast.error('Please log in first');
+                                  return;
+                                }
+                                
+                                const student = JSON.parse(studentData);
+                                const studentName = student.name || student.studentName || 'Student';
+                                
+                                const response = await fetch('/api/join-class', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    classId: classItem._id,
+                                    userName: studentName,
+                                    userType: 'student'
+                                  })
+                                });
+
+                                const data = await response.json();
+
+                                if (data.success && data.joinUrl) {
+                                  // Open BigBlueButton in new window
+                                  window.open(data.joinUrl, '_blank', 'width=1200,height=800');
+                                  toast.success(`Joining ${data.className}!`);
+                                } else if (data.alreadyJoined) {
+                                  // Handle duplicate join prevention from backend
+                                  toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
+                                  toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
+                                } else {
+                                  throw new Error(data.error || 'Failed to join class');
+                                }
+                              } catch (error: any) {
+                                console.error('Join error:', error);
+                                toast.error(`Failed to join class: ${error.message}`);
+                              } finally {
+                                setJoiningClass(null);
+                              }
+                            }}
+                            disabled={joiningClass === classItem._id}
+                            className={`${
+                              isLive 
+                                ? 'bg-red-600 hover:bg-red-700' 
+                                : 'bg-green-600 hover:bg-green-700'
+                            } text-white`}
+                          >
+                            <PlayCircle className="h-4 w-4 mr-2" />
+                            {joiningClass === classItem._id 
+                              ? 'Joining...' 
+                              : (isLive ? 'Join Live Class' : 'Join Class')
+                            }
+                          </Button>
+                        ) : isPast ? (
+                          <Button disabled variant="outline">
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                            Class Completed
+                          </Button>
+                        ) : (
+                          <Button disabled variant="outline">
+                            <Clock className="h-4 w-4 mr-2" />
+                            Available at {classItem.scheduledTime}
+                          </Button>
+                        )}
+                        
+                        {/* Only show BBB join - no backup links needed */}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* My Courses */}
         <Card className="border-gray-200 shadow-sm">
@@ -671,52 +837,7 @@ const StudentDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* Upcoming Classes */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="border-b border-gray-200">
-            <CardTitle className="text-gray-900 flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-green-600" />
-              Upcoming Classes
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            {dashboardData.upcomingClasses.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No upcoming classes</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {dashboardData.upcomingClasses.map((classItem) => (
-                  <div 
-                    key={classItem.batchId} 
-                    className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between hover:shadow-md transition-shadow"
-                  >
-                    <div>
-                      <h4 className="text-gray-900 font-medium">{classItem.courseTitle}</h4>
-                      <p className="text-gray-600 text-sm mt-1 flex items-center gap-1">
-                        <Clock className="inline h-3 w-3" />
-                        {classItem.timing} • {classItem.days.join(', ')}
-                      </p>
-                      <p className="text-gray-500 text-xs mt-1">Trainer: {classItem.trainerName}</p>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Badge className="bg-green-100 text-green-700 border-green-200">Active</Badge>
-                      {classItem.meetingLink && (
-                        <Button 
-                          size="sm" 
-                          className="bg-blue-600 hover:bg-blue-700 text-white"
-                          onClick={() => window.open(classItem.meetingLink, '_blank')}
-                        >
-                          Join Now
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+       
 
         {/* Two Column Layout for Quizzes and Certificates */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

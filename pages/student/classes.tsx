@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import StudentLayout from '@/src/student/common/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Video, Calendar, Clock, Users, Play, Circle, Clock3, FileVideo, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Video, Calendar, Clock, Users, Play, Circle, Clock3, FileVideo, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,36 +44,79 @@ const StudentClasses = () => {
   const [recordings, setRecordings] = useState<SessionRecording[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('upcoming');
-  const [studentBatches, setStudentBatches] = useState<string[]>([]);
   const [playingRecording, setPlayingRecording] = useState<SessionRecording | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [videoLoading, setVideoLoading] = useState(false);
+  const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
 
   const fetchClasses = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Get all live classes
-      const params = new URLSearchParams();
-      params.set('status', 'scheduled');
-      params.set('limit', '100');
-
-      const response = await fetch(`/api/lms/live-classes?${params}`);
+      console.log('Fetching classes using student dashboard API...');
+      
+      // Get student ID
+      const studentData = localStorage.getItem('student');
+      if (!studentData) {
+        console.error('No student data found');
+        setScheduledClasses([]);
+        return;
+      }
+      
+      const student = JSON.parse(studentData);
+      const studentId = student.studentId || student._id;
+      
+      console.log('Fetching dashboard data for student:', studentId);
+      
+      // Use the same API as dashboard to get scheduled classes
+      const response = await fetch(`/api/student/dashboard?studentId=${studentId}`);
       const data = await response.json();
 
-      if (data.success) {
-        // Filter classes by student's batches
-        const filteredClasses = data.data?.filter((cls: any) => 
-          studentBatches.length === 0 || studentBatches.includes(cls.batchId?.toString() || cls.batchId)
-        ) || [];
-        setScheduledClasses(filteredClasses);
+      console.log('Student dashboard API response:', data);
+
+      if (data.success && data.data && data.data.scheduledClasses) {
+        const classes = data.data.scheduledClasses;
+        console.log(`Found ${classes.length} scheduled classes`);
+        
+        // Transform to match LiveClass interface
+        const transformedClasses = classes.map((cls: any) => ({
+          _id: cls._id,
+          title: cls.moduleTitle,
+          description: cls.moduleTitle || '',
+          batchName: 'Student Batch', // We can get this from batch data later
+          trainerName: 'Trainer', // We can get this from batch data later
+          scheduledDate: cls.scheduledDate,
+          scheduledTime: cls.scheduledTime,
+          duration: cls.duration,
+          status: cls.status,
+          roomConfig: {
+            meetingLink: cls.bbbJoinUrl || cls.meetingLink || '',
+            platform: 'bbb'
+          },
+          recording: {
+            enabled: false,
+            recordingUrl: ''
+          },
+          // Include original fields for join functionality
+          canJoin: cls.canJoin,
+          isLive: cls.isLive,
+          bbbMeetingId: cls.bbbMeetingId,
+          bbbJoinUrl: cls.bbbJoinUrl
+        }));
+        
+        console.log('Transformed classes:', transformedClasses);
+        setScheduledClasses(transformedClasses);
+      } else {
+        console.error('No scheduled classes found in API response');
+        setScheduledClasses([]);
       }
     } catch (error) {
       console.error('Error fetching classes:', error);
+      setScheduledClasses([]);
     } finally {
       setLoading(false);
     }
-  }, [studentBatches]);
+  }, []);
 
   const fetchRecordings = useCallback(async () => {
     try {
@@ -106,31 +149,13 @@ const StudentClasses = () => {
   }, []);
 
   useEffect(() => {
-    // Get student's batches from localStorage
-    const studentData = localStorage.getItem('student');
-    if (studentData) {
-      try {
-        const parsed = JSON.parse(studentData);
-        // Fetch student's enrolled batches from API
-        const fetchStudentBatches = async () => {
-          try {
-            const response = await fetch(`/api/student/dashboard?studentId=${parsed.studentId}`);
-            const data = await response.json();
-            if (data.success && data.data.batches) {
-              setStudentBatches(data.data.batches.map((b: any) => b._id || b.batchId));
-            }
-          } catch (error) {
-            console.error('Error fetching student batches:', error);
-          }
-        };
-        fetchStudentBatches();
-      } catch (error) {
-        console.error('Error parsing student data:', error);
-      }
-    }
+    // Fetch classes immediately when component mounts
+    console.log('Component mounted, fetching classes...');
   }, []);
 
   useEffect(() => {
+    console.log('Active tab changed to:', activeTab);
+    
     if (activeTab === 'upcoming' || activeTab === 'today') {
       fetchClasses();
     } else if (activeTab === 'recordings') {
@@ -197,6 +222,14 @@ const StudentClasses = () => {
   };
 
   const handleJoinClass = async (cls: LiveClass) => {
+    // Prevent multiple join attempts for the same class
+    if (joiningClass === cls._id) {
+      console.log('Already joining this class, preventing duplicate');
+      return;
+    }
+    
+    setJoiningClass(cls._id);
+    
     try {
       console.log('=== STUDENT JOINING CLASS ===');
       console.log('Class:', cls);
@@ -234,12 +267,17 @@ const StudentClasses = () => {
         
         // Show success message
         alert(`Joining ${data.className}\n\nThe BigBlueButton window should open automatically. If it doesn't, please enable pop-ups and try again.`);
+      } else if (data.alreadyJoined) {
+        // Handle duplicate join prevention from backend
+        alert(`⚠️ ${data.error}\n\nPlease check your other browser tabs or windows to find the existing meeting.`);
       } else {
         throw new Error(data.error || 'Failed to join class');
       }
     } catch (error: any) {
       console.error('Join error:', error);
       alert(`Failed to join class: ${error.message}\n\nPlease try again or contact your instructor.`);
+    } finally {
+      setJoiningClass(null);
     }
   };
 
@@ -364,14 +402,22 @@ const StudentClasses = () => {
 
                       <div className="flex gap-3">
                         {cls.status === 'live' ? (
-                          <Button className="bg-red-500 hover:bg-red-600" onClick={() => handleJoinClass(cls)}>
+                          <Button 
+                            className="bg-red-500 hover:bg-red-600" 
+                            onClick={() => handleJoinClass(cls)}
+                            disabled={joiningClass === cls._id}
+                          >
                             <Play className="w-4 h-4 mr-2" />
-                            Join Now
+                            {joiningClass === cls._id ? 'Joining...' : 'Join Now'}
                           </Button>
                         ) : canJoinClass(cls) ? (
-                          <Button className="bg-green-500 hover:bg-green-600" onClick={() => handleJoinClass(cls)}>
+                          <Button 
+                            className="bg-green-500 hover:bg-green-600" 
+                            onClick={() => handleJoinClass(cls)}
+                            disabled={joiningClass === cls._id}
+                          >
                             <Video className="w-4 h-4 mr-2" />
-                            Join Class
+                            {joiningClass === cls._id ? 'Joining...' : 'Join Class'}
                           </Button>
                         ) : (
                           <Button disabled variant="outline">

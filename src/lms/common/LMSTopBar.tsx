@@ -3,7 +3,7 @@ import { Menu, Bell, Search, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 const LMSTopBar = () => {
   // Admin ID for notifications - using a fixed ID for LMS admin

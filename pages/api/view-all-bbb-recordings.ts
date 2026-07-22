@@ -16,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('📹 FETCHING ALL BBB RECORDINGS...');
 
     const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
-    const bbbApiSecret = '77NxbTZnnrkERic8MBiqK5yOsUdMtmFjdgSmqr4Nj4';
+    const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
 
     // Get ALL recordings from BigBlueButton
     const getRecordingsParams = '';
