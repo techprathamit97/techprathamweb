@@ -539,7 +539,7 @@ const StudentClasses = () => {
                             disabled={joiningClass === cls._id}
                           >
                             <Play className="w-4 h-4 mr-2" />
-                            {joiningClass === cls._id ? 'Entering...' : 'Enter Class'}
+                            {joiningClass === cls._id ? 'Entering...' : 'Enter Class..'}
                           </Button>
                         ) : cls.status === 'live' ? (
                           <Button
