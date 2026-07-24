@@ -49,6 +49,23 @@ const StudentClasses = () => {
   const [videoLoading, setVideoLoading] = useState(false);
   const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
 
+  // Track which classes the student has joined in current session - persist to localStorage
+  const [joinedClasses, setJoinedClasses] = useState<Set<string>>(new Set());
+
+  // Load joined classes from localStorage on mount
+  useEffect(() => {
+    const storedJoined = localStorage.getItem('studentJoinedClasses');
+    if (storedJoined) {
+      try {
+        const joined = JSON.parse(storedJoined);
+        setJoinedClasses(new Set(joined));
+        console.log('Restored joined classes:', joined);
+      } catch (e) {
+        console.error('Error parsing joined classes:', e);
+      }
+    }
+  }, []);
+
   const fetchClasses = useCallback(async () => {
     try {
       setLoading(true);
@@ -221,38 +238,105 @@ const StudentClasses = () => {
     return now >= new Date(classStart.getTime() - joinWindow) && now <= endTime;
   };
 
-  const handleJoinClass = async (cls: LiveClass) => {
+  const handleJoinClass = async (cls: LiveClass, isRejoining: boolean = false) => {
     // Prevent multiple join attempts for the same class
     if (joiningClass === cls._id) {
       console.log('Already joining this class, preventing duplicate');
       return;
     }
-    
+
+    // Prevent rapid clicking - check localStorage timestamp
+    const lastJoinAttempt = localStorage.getItem(`joinAttempt_${cls._id}`);
+    if (lastJoinAttempt && !isRejoining) {
+      const timeSinceLastAttempt = Date.now() - parseInt(lastJoinAttempt);
+      if (timeSinceLastAttempt < 5000) { // 5 seconds cooldown
+        console.log('Too soon to join again, please wait...');
+        alert('Please wait a few seconds before joining again.');
+        return;
+      }
+    }
+
+    // Set join attempt timestamp
+    localStorage.setItem(`joinAttempt_${cls._id}`, Date.now().toString());
+
+    // Check if a canonical token exists on server for this student/class before creating one
+    // For rejoin, always use the existing token from localStorage
+    let sessionToken = localStorage.getItem(`bbbSessionToken_${cls._id}`) || '';
+
+    if (!sessionToken || sessionToken.trim() === '') {
+      // Only generate new token if none exists (first join)
+      console.log('No valid session token found, fetching from server...');
+      try {
+        const studentData = localStorage.getItem('student');
+        const student = studentData ? JSON.parse(studentData) : null;
+        const studentId = student ? (student.studentId || student._id) : null;
+
+        if (studentId) {
+          // Call API to get or create canonical token. Pass any locally stored token as preferredToken to claim it.
+          const tokenResp = await fetch('/api/bbb/session-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              classId: cls._id, 
+              studentId, 
+              preferredToken: sessionToken || undefined 
+            })
+          });
+
+          const tokenData = await tokenResp.json();
+          if (tokenData && tokenData.success && tokenData.sessionToken) {
+            sessionToken = tokenData.sessionToken;
+            try { localStorage.setItem(`bbbSessionToken_${cls._id}`, sessionToken); } catch (e) { console.warn('localStorage set failed', e); }
+            console.log('Using canonical session token from server:', sessionToken, 'source:', tokenData.source);
+          } else {
+            // fallback to local token generation if server did not return one
+            sessionToken = Math.random().toString(36).substring(2, 10);
+            localStorage.setItem(`bbbSessionToken_${cls._id}`, sessionToken);
+            console.log('Created fallback session token:', sessionToken);
+          }
+        } else {
+          // No student id found — fallback to local token
+          sessionToken = Math.random().toString(36).substring(2, 10);
+          localStorage.setItem(`bbbSessionToken_${cls._id}`, sessionToken);
+          console.log('Created new session token (no studentId):', sessionToken);
+        }
+      } catch (err) {
+        console.warn('Failed to obtain canonical session token, falling back to local token:', err);
+        sessionToken = Math.random().toString(36).substring(2, 10);
+        try { localStorage.setItem(`bbbSessionToken_${cls._id}`, sessionToken); } catch (e) {}
+      }
+    } else {
+      console.log('Using existing session token for rejoin:', sessionToken);
+    }
+
     setJoiningClass(cls._id);
-    
+
     try {
       console.log('=== STUDENT JOINING CLASS ===');
-      console.log('Class:', cls);
-      
+      console.log('Class:', cls, 'IsRejoining:', isRejoining);
+
       // Get student info
       const studentData = localStorage.getItem('student');
       if (!studentData) {
         alert('Please log in first');
         return;
       }
-      
+
       const student = JSON.parse(studentData);
-      const studentName = student.name || student.studentName || 'Student';
-      
+      // Use session token specific to this class to prevent duplicates when rejoining
+      const studentName = `${student.name || student.studentName || 'Student'}-${sessionToken}`;
+
       console.log('Student name:', studentName);
-      
+
       const response = await fetch('/api/join-class', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           classId: cls._id,
           userName: studentName,
-          userType: 'student'
+          userType: 'student',
+          sessionToken: sessionToken,
+          studentId: student.studentId || student._id
         })
       });
 
@@ -261,15 +345,61 @@ const StudentClasses = () => {
 
       if (data.success && data.joinUrl) {
         console.log('Opening BBB join URL:', data.joinUrl);
-        
+        // If server returned a canonical session token, persist it to localStorage
+        if (data.sessionToken && data.sessionToken !== sessionToken) {
+          try {
+            localStorage.setItem(`bbbSessionToken_${cls._id}`, data.sessionToken);
+            sessionToken = data.sessionToken;
+            console.log('Updated local session token from server:', data.sessionToken);
+          } catch (e) {
+            console.warn('Failed to update local session token:', e);
+          }
+        }
+
         // Open BigBlueButton in new window
         window.open(data.joinUrl, '_blank', 'width=1200,height=800');
-        
+
+        // Track that this student has joined this class (only on first join, not rejoin)
+        if (!isRejoining || !joinedClasses.has(cls._id)) {
+          setJoinedClasses(prev => {
+            const newSet = new Set(prev);
+            newSet.add(cls._id);
+            // Persist to localStorage
+            localStorage.setItem('studentJoinedClasses', JSON.stringify([...newSet]));
+            return newSet;
+          });
+        }
+
         // Show success message
-        alert(`Joining ${data.className}\n\nThe BigBlueButton window should open automatically. If it doesn't, please enable pop-ups and try again.`);
+        const message = isRejoining
+          ? `Rejoining ${data.className}\n\nThe BigBlueButton window should open automatically.`
+          : `Joining ${data.className}\n\nThe BigBlueButton window should open automatically. If it doesn't, please enable pop-ups and try again.`;
+        alert(message);
+      } else if (data.enforcedToken) {
+        // Handle session token enforcement - update localStorage and retry
+        console.log('Server enforced correct session token:', data.correctSessionToken);
+        
+        if (data.correctSessionToken) {
+          try {
+            localStorage.setItem(`bbbSessionToken_${cls._id}`, data.correctSessionToken);
+            alert(`🔄 Session Token Updated: Your session token has been corrected.\n\nPlease click "Join Class" again to proceed with the correct token.`);
+          } catch (e) {
+            console.warn('Failed to update session token:', e);
+            alert(`❌ ${data.error}\n\nPlease refresh the page and try joining again.`);
+          }
+        } else {
+          alert(`❌ ${data.error}\n\nPlease refresh the page and try joining again.`);
+        }
       } else if (data.alreadyJoined) {
         // Handle duplicate join prevention from backend
-        alert(`⚠️ ${data.error}\n\nPlease check your other browser tabs or windows to find the existing meeting.`);
+        if (data.duplicateType === 'exact_token_match' || data.duplicateType === 'token_in_use') {
+          alert(`🚫 Cannot Join: ${data.error}\n\nYour session token "${data.sessionToken || 'unknown'}" is already active in this meeting.\n\nPlease:\n1. Check your other browser tabs/windows\n2. Wait for your existing session to end\n3. Contact support if this persists`);
+        } else {
+          alert(`⚠️ ${data.error}\n\nPlease check your other browser tabs or windows to find the existing meeting.`);
+        }
+      } else if (data.rateLimited) {
+        // Handle rate limiting
+        alert(`⏳ Please Wait: ${data.error}\n\nThis prevents duplicate joins and server overload.`);
       } else {
         throw new Error(data.error || 'Failed to join class');
       }
@@ -401,19 +531,29 @@ const StudentClasses = () => {
                       )}
 
                       <div className="flex gap-3">
-                        {cls.status === 'live' ? (
-                          <Button 
-                            className="bg-red-500 hover:bg-red-600" 
-                            onClick={() => handleJoinClass(cls)}
+                        {/* Check if student has already joined this class */}
+                        {joinedClasses.has(cls._id) ? (
+                          <Button
+                            className="bg-blue-500 hover:bg-blue-600"
+                            onClick={() => handleJoinClass(cls, true)}
+                            disabled={joiningClass === cls._id}
+                          >
+                            <Play className="w-4 h-4 mr-2" />
+                            {joiningClass === cls._id ? 'Entering...' : 'Enter Class'}
+                          </Button>
+                        ) : cls.status === 'live' ? (
+                          <Button
+                            className="bg-red-500 hover:bg-red-600"
+                            onClick={() => handleJoinClass(cls, false)}
                             disabled={joiningClass === cls._id}
                           >
                             <Play className="w-4 h-4 mr-2" />
                             {joiningClass === cls._id ? 'Joining...' : 'Join Now'}
                           </Button>
                         ) : canJoinClass(cls) ? (
-                          <Button 
-                            className="bg-green-500 hover:bg-green-600" 
-                            onClick={() => handleJoinClass(cls)}
+                          <Button
+                            className="bg-green-500 hover:bg-green-600"
+                            onClick={() => handleJoinClass(cls, false)}
                             disabled={joiningClass === cls._id}
                           >
                             <Video className="w-4 h-4 mr-2" />

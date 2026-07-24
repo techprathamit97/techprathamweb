@@ -227,6 +227,23 @@ const StudentDashboard = () => {
   const [recordingModal, setRecordingModal] = useState<{ open: boolean; url: string; title: string }>({ open: false, url: '', title: '' });
   const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
 
+  // Track which classes the student has joined - persist to localStorage
+  const [joinedClasses, setJoinedClasses] = useState<Set<string>>(new Set());
+
+  // Load joined classes from localStorage on mount
+  useEffect(() => {
+    const storedJoined = localStorage.getItem('studentJoinedClasses');
+    if (storedJoined) {
+      try {
+        const joined = JSON.parse(storedJoined);
+        setJoinedClasses(new Set(joined));
+        console.log('Restored joined classes:', joined);
+      } catch (e) {
+        console.error('Error parsing joined classes:', e);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     // Check if student is logged in
     const storedData = localStorage.getItem('student');
@@ -524,19 +541,40 @@ const StudentDashboard = () => {
                                 console.log('Already joining this class, preventing duplicate');
                                 return;
                               }
-                              
+
+                              // Prevent rapid clicking - check localStorage timestamp
+                              const lastJoinAttempt = localStorage.getItem(`joinAttempt_${classItem._id}`);
+                              if (lastJoinAttempt) {
+                                const timeSinceLastAttempt = Date.now() - parseInt(lastJoinAttempt);
+                                if (timeSinceLastAttempt < 5000) { // 5 seconds cooldown
+                                  console.log('Too soon to join again, please wait...');
+                                  toast.warning('Please wait a few seconds before joining again.');
+                                  return;
+                                }
+                              }
+
+                              // Set join attempt timestamp
+                              localStorage.setItem(`joinAttempt_${classItem._id}`, Date.now().toString());
+
                               setJoiningClass(classItem._id);
-                              
+
                               try {
                                 const studentData = localStorage.getItem('student');
                                 if (!studentData) {
                                   toast.error('Please log in first');
                                   return;
                                 }
-                                
+
                                 const student = JSON.parse(studentData);
-                                const studentName = student.name || student.studentName || 'Student';
-                                
+                                // Use a consistent session-based name to prevent duplicates when rejoining
+                                // Get or create a unique session ID for this student on this browser
+                                let sessionId = localStorage.getItem('bbbSessionId');
+                                if (!sessionId) {
+                                  sessionId = Math.random().toString(36).substring(2, 8);
+                                  localStorage.setItem('bbbSessionId', sessionId);
+                                }
+                                const studentName = `${student.name || student.studentName || 'Student'}-${sessionId}`;
+
                                 const response = await fetch('/api/join-class', {
                                   method: 'POST',
                                   headers: { 'Content-Type': 'application/json' },
@@ -553,10 +591,47 @@ const StudentDashboard = () => {
                                   // Open BigBlueButton in new window
                                   window.open(data.joinUrl, '_blank', 'width=1200,height=800');
                                   toast.success(`Joining ${data.className}!`);
+
+                                  // Track that this student has joined this class
+                                  setJoinedClasses(prev => {
+                                    const newSet = new Set(prev);
+                                    newSet.add(classItem._id);
+                                    // Persist to localStorage
+                                    localStorage.setItem('studentJoinedClasses', JSON.stringify([...newSet]));
+                                    return newSet;
+                                  });
+                                } else if (data.enforcedToken) {
+                                  // Handle session token enforcement 
+                                  console.log('Server enforced correct session token:', data.correctSessionToken);
+                                  
+                                  if (data.correctSessionToken) {
+                                    try {
+                                      localStorage.setItem(`bbbSessionToken_${classItem._id}`, data.correctSessionToken);
+                                      toast.warning('🔄 Session Token Updated');
+                                      toast.info('Please click "Join Class" again to proceed with the correct token.');
+                                    } catch (e) {
+                                      console.warn('Failed to update session token:', e);
+                                      toast.error(`❌ ${data.error}`);
+                                      toast.info('Please refresh the page and try joining again.');
+                                    }
+                                  } else {
+                                    toast.error(`❌ ${data.error}`);
+                                    toast.info('Please refresh the page and try joining again.');
+                                  }
                                 } else if (data.alreadyJoined) {
                                   // Handle duplicate join prevention from backend
-                                  toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
-                                  toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
+                                  if (data.duplicateType === 'exact_token_match' || data.duplicateType === 'token_in_use') {
+                                    toast.error(`🚫 Cannot Join: ${data.error}`);
+                                    toast.warning(`Your session token "${data.sessionToken || 'unknown'}" is already active in this meeting.`);
+                                    toast.info('Please check your other browser tabs or wait for your existing session to end.');
+                                  } else {
+                                    toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
+                                    toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
+                                  }
+                                } else if (data.rateLimited) {
+                                  // Handle rate limiting
+                                  toast.warning(`⏳ ${data.error}`, { duration: 6000 });
+                                  toast.info('This prevents duplicate joins and server overload.', { duration: 6000 });
                                 } else {
                                   throw new Error(data.error || 'Failed to join class');
                                 }

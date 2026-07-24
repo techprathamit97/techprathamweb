@@ -3,6 +3,34 @@ import { connectMongo } from '@/utils/mongodb';
 import crypto from 'crypto';
 import ModuleClass from '@/models/ModuleClass';
 
+// Simple in-memory rate limiting to prevent rapid multiple clicks
+const joinAttempts = new Map<string, number>();
+const RATE_LIMIT_WINDOW = 10000; // 10 seconds
+const MAX_ATTEMPTS = 2; // Max 2 join attempts per 10 seconds per user+class
+
+function isRateLimited(userId: string, classId: string): boolean {
+  const key = `${userId}-${classId}`;
+  const now = Date.now();
+  
+  const lastAttempt = joinAttempts.get(key) || 0;
+  if (now - lastAttempt < RATE_LIMIT_WINDOW) {
+    return true; // Rate limited
+  }
+  
+  joinAttempts.set(key, now);
+  
+  // Clean up old entries periodically
+  if (joinAttempts.size > 1000) {
+    for (const [k, timestamp] of joinAttempts.entries()) {
+      if (now - timestamp > RATE_LIMIT_WINDOW * 2) {
+        joinAttempts.delete(k);
+      }
+    }
+  }
+  
+  return false;
+}
+
 // Helper function to generate BBB API checksum - IMPORTANT: Use URL-encoded params!
 function generateBBBChecksum(apiCall: string, params: string, secret: string): string {
   const stringToHash = apiCall + params + secret;
@@ -15,17 +43,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { classId, userName, userType } = req.body;
+    const { classId, userName, userType, sessionToken: incomingSessionToken, studentId } = req.body;
+    let sessionToken = incomingSessionToken;
 
     console.log('=== DIRECT BBB API JOIN ===');
     console.log('Class ID:', classId);
     console.log('User Name:', userName);
     console.log('User Type:', userType);
+    console.log('Session Token:', sessionToken);
 
     if (!classId || !userName || !userType) {
       return res.status(400).json({
         success: false,
         error: 'Missing required fields: classId, userName, userType'
+      });
+    }
+
+    // Rate limiting check to prevent rapid multiple joins
+    const userId = studentId || userName;
+    if (isRateLimited(userId, classId)) {
+      console.log('🚫 RATE LIMITED: Too many join attempts');
+      return res.status(429).json({
+        success: false,
+        error: 'Please wait 10 seconds before trying to join again. This prevents duplicate joins.',
+        rateLimited: true,
+        message: 'Rate limit exceeded - please wait before retrying'
       });
     }
 
@@ -46,92 +88,188 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Generate meeting ID early to check for duplicates
     let meetingId = moduleClass.bbbMeetingId || `class-${classId}`;
-    
+
+    // Check if there's a stored meeting in the database
+    const storedMeetingId = moduleClass.bbbMeetingId;
+
     // PREVENT DUPLICATE JOINS - Check if user is already in meeting
+    // Use sessionToken to track if user has already joined this specific class
     try {
       const bbbServerUrl = process.env.BIGBLUEBUTTON_SERVER_URL;
       const bbbApiSecret = process.env.BIGBLUEBUTTON_API_SECRET;
-      
+
       if (bbbServerUrl && bbbApiSecret) {
         const normalizedServerUrl = bbbServerUrl.replace(/\/$/, '');
         const apiUrl = normalizedServerUrl.endsWith('/api') ? normalizedServerUrl : `${normalizedServerUrl}/api`;
-        
-        // Check meeting participants to prevent duplicates
+
+        // Enforce session token consistency - always use the token from database if it exists
+        const moduleClass = await ModuleClass.findById(classId);
+        if (moduleClass && studentId) {
+          console.log('Checking for existing session token mapping...');
+          console.log('Incoming sessionToken:', sessionToken);
+          console.log('Student ID:', studentId);
+          
+          // Find existing token mapping for this student
+          if (moduleClass.studentSessionTokens && moduleClass.studentSessionTokens.length > 0) {
+            const mapping = moduleClass.studentSessionTokens.find(m => 
+              m.studentId && String(m.studentId) === String(studentId)
+            );
+            
+            if (mapping && mapping.sessionToken) {
+              // STRICT ENFORCEMENT: Always use the database token for consistency
+              if (sessionToken && sessionToken !== mapping.sessionToken) {
+                console.log(`⚠️ ENFORCING DATABASE TOKEN! Client: ${sessionToken}, Database: ${mapping.sessionToken}`);
+                console.log('Client must use the authoritative database token');
+                return res.status(400).json({
+                  success: false,
+                  error: `Session token mismatch. You must use the assigned token: ${mapping.sessionToken}`,
+                  correctSessionToken: mapping.sessionToken,
+                  clientProvidedToken: sessionToken,
+                  enforcedToken: true,
+                  message: 'Please refresh the page and try again with the correct session token'
+                });
+              }
+              sessionToken = mapping.sessionToken;
+              console.log('✅ Using existing session token from database:', sessionToken);
+            } else {
+              console.log('No existing token mapping found for student:', studentId);
+            }
+          } else {
+            console.log('No studentSessionTokens found in moduleClass');
+          }
+          
+          // CRITICAL CHECK: If sessionToken is in joinedSessionTokens, this student has already joined
+          if (sessionToken && moduleClass.joinedSessionTokens && moduleClass.joinedSessionTokens.includes(sessionToken)) {
+            console.log('🚫 BLOCKED: Session token already in joinedSessionTokens');
+            return res.status(400).json({
+              success: false,
+              error: `Your session token "${sessionToken}" has already joined this meeting. You cannot join multiple times.`,
+              alreadyJoined: true,
+              duplicateType: 'session_already_joined',
+              sessionToken: sessionToken,
+              message: 'Session token already used for this meeting'
+            });
+          }
+        }
+
+        // Check BBB meeting participants to prevent duplicates
         const getMeetingInfoParams = `meetingID=${encodeURIComponent(meetingId)}`;
         const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
         const getMeetingInfoUrl = `${apiUrl}/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
-        
+
         console.log('Checking for existing participants in meeting:', meetingId);
-        
+
         const participantResponse = await fetch(getMeetingInfoUrl);
         const participantXML = await participantResponse.text();
-        
+
         if (participantXML.includes('<returncode>SUCCESS</returncode>') && participantXML.includes('<attendees>')) {
           // Extract participant names from XML
           const attendeeMatches = participantXML.match(/<fullName><!\[CDATA\[(.*?)\]\]><\/fullName>/g) || [];
-          const existingNames = attendeeMatches.map(match => 
+          const existingNames = attendeeMatches.map(match =>
             match.replace(/<fullName><!\[CDATA\[/, '').replace(/\]\]><\/fullName>/, '').toLowerCase()
           );
-          
+
           console.log('Existing participants:', existingNames);
           console.log('Trying to join as:', userName.toLowerCase());
-          
-          // Check if user is already in meeting (exact match)
-          if (existingNames.includes(userName.toLowerCase())) {
-            console.log('⚠️ User already in meeting - preventing duplicate join');
-            return res.status(400).json({
-              success: false,
-              error: `You are already in this meeting! Please check your other browser tabs or windows.`,
-              alreadyJoined: true,
-              meetingId: meetingId,
-              message: 'Duplicate join prevented - exact name match'
+
+          // STRICT DUPLICATE PREVENTION: Check if this exact session token is already in the meeting
+          if (sessionToken) {
+            const expectedUserName = `${userName}-${sessionToken}`.toLowerCase();
+            const hasExactMatch = existingNames.some(name => name === expectedUserName);
+
+            if (hasExactMatch) {
+              console.log('🚫 BLOCKED: User with exact same session token already in meeting');
+              return res.status(400).json({
+                success: false,
+                error: `You are already in this meeting! A user with the same session token "${sessionToken}" is already connected.`,
+                alreadyJoined: true,
+                duplicateType: 'exact_token_match',
+                meetingId: meetingId,
+                message: 'Duplicate join blocked - same session token already active in meeting'
+              });
+            }
+
+            // Also check for any participant with the same session token (regardless of name prefix)
+            const hasTokenMatch = existingNames.some(name => {
+              const nameTokenMatch = name.match(/-([a-z0-9]+)$/);
+              return nameTokenMatch && nameTokenMatch[1] === sessionToken;
             });
+
+            if (hasTokenMatch) {
+              console.log('🚫 BLOCKED: Session token already in use in meeting');
+              return res.status(400).json({
+                success: false,
+                error: `Your session token "${sessionToken}" is already being used in this meeting. Please wait for your existing session to end or contact support.`,
+                alreadyJoined: true,
+                duplicateType: 'token_in_use',
+                meetingId: meetingId,
+                sessionToken: sessionToken,
+                message: 'Duplicate join blocked - session token already in use'
+              });
+            }
           }
-          
-          // Check for similar names (more strict matching to reduce false positives)
-          const userFirstName = userName.toLowerCase().split(' ')[0];
-          const similarName = existingNames.find(name => {
-            const nameFirstName = name.split(' ')[0];
-            // Only flag as similar if first names match exactly and are at least 3 characters
-            return nameFirstName === userFirstName && userFirstName.length >= 3;
-          });
-          
-          if (similarName) {
-            console.log('⚠️ Similar name found in meeting - potential duplicate');
-            return res.status(400).json({
-              success: false,
-              error: `A user with a similar name "${similarName}" is already in the meeting. If this is you, please check your other tabs.`,
-              alreadyJoined: true,
-              similarName: similarName,
-              meetingId: meetingId,
-              message: 'Potential duplicate join prevented - similar name match'
-            });
-          }
-          
-          // Additional check: Prevent rapid successive join attempts from same IP/user
-          // (This could be enhanced with Redis/database for production)
+
           console.log(`✅ Duplicate check passed. User "${userName}" can join meeting with ${existingNames.length} existing participants.`);
         }
       }
     } catch (duplicateCheckError) {
       console.log('Duplicate check failed, proceeding with join:', duplicateCheckError);
-      // Continue with join if duplicate check fails (don't block legitimate users)
+      // Continue with join if duplicate check fails
     }
 
-    // If class is not live or meeting ID is old, generate a new one
+    // If class is not live, check if there's still an active BBB meeting before clearing
     const isClassLive = moduleClass.status === 'live' && moduleClass.isLive === true;
-    let currentMeetingId = moduleClass.bbbMeetingId;
+    let currentMeetingId = moduleClass.bbbMeetingId || '';
+
     if (!isClassLive && moduleClass.bbbMeetingId) {
-      console.log('Class is not live - will generate new meeting ID');
-      // Clear old meeting ID so a new one is created
-      await ModuleClass.findByIdAndUpdate(classId, {
-        bbbMeetingId: null,
-        status: 'scheduled',
-        isLive: false
-      });
-      // Clear the local variable so a new meeting ID is generated
-      
-      console.log('Cleared old meeting ID, will create new one');
+      // Before clearing, verify if the meeting is actually still running on BBB
+      const bbbServerUrl = process.env.BIGBLUEBUTTON_SERVER_URL;
+      const bbbApiSecret = process.env.BIGBLUEBUTTON_API_SECRET;
+
+      if (bbbServerUrl && bbbApiSecret) {
+        const normalizedServerUrl = bbbServerUrl.replace(/\/$/, '');
+        const apiUrl = normalizedServerUrl.endsWith('/api') ? normalizedServerUrl : `${normalizedServerUrl}/api`;
+
+        try {
+          const getMeetingInfoParams = `meetingID=${encodeURIComponent(moduleClass.bbbMeetingId)}`;
+          const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
+          const getMeetingInfoUrl = `${apiUrl}/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
+
+          const infoResponse = await fetch(getMeetingInfoUrl);
+          const infoXML = await infoResponse.text();
+
+          // Check if meeting is still running
+          if (infoXML.includes('<returncode>SUCCESS</returncode>') &&
+              !infoXML.includes('<ended>true</ended>') &&
+              !infoXML.includes('meetingForciblyEnded')) {
+            // Meeting is still active on BBB - DON'T clear the meeting ID
+            console.log('✅ Meeting is still active on BBB, keeping existing meeting ID:', moduleClass.bbbMeetingId);
+            currentMeetingId = moduleClass.bbbMeetingId;
+          } else {
+            // Meeting has ended - clear and create new one
+            console.log('Meeting has ended on BBB - will create new meeting ID');
+            await ModuleClass.findByIdAndUpdate(classId, {
+              bbbMeetingId: null,
+              status: 'scheduled',
+              isLive: false
+            });
+            currentMeetingId = '';
+            console.log('Cleared old meeting ID, will create new one');
+          }
+        } catch (error) {
+          console.log('Error checking meeting status, proceeding with caution:', error);
+          // If we can't verify, keep the existing meeting ID to allow rejoin
+          currentMeetingId = moduleClass.bbbMeetingId;
+        }
+      } else {
+        // No BBB config, clear the meeting ID
+        await ModuleClass.findByIdAndUpdate(classId, {
+          bbbMeetingId: null,
+          status: 'scheduled',
+          isLive: false
+        });
+        currentMeetingId = '';
+      }
     }
 
     // BBB API configuration from environment
@@ -205,32 +343,58 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           meetingEnded = true;
           meetingExists = false;
         } else {
-          // Meeting exists and is active
+          // Meeting exists and is active - REUSE the existing meeting!
           const meetingIdMatch = infoXML.match(/<meetingID><!\[CDATA\[(.*?)\]\]><\/meetingID>/);
           actualMeetingId = meetingIdMatch ? meetingIdMatch[1] : meetingId;
           meetingExists = true;
           meetingCreated = false;
-          console.log(`Meeting exists with ID: ${actualMeetingId}`);
+          console.log(`Reusing existing meeting with ID: ${actualMeetingId}`);
+
+          // Keep using the stored meeting ID (don't generate new one)
+          meetingId = storedMeetingId || meetingId;
         }
       } else if (infoXML.includes('notFound') || infoXML.includes('No such meeting')) {
         console.log('Meeting not found in BBB - will create new meeting');
+        // Only create new if no stored meeting ID exists
+        if (storedMeetingId) {
+          meetingId = storedMeetingId;
+          console.log('Using stored meeting ID:', meetingId);
+        }
         meetingExists = false;
       } else {
         console.log('Meeting does not exist yet');
+        // Use stored meeting ID if available
+        if (storedMeetingId) {
+          meetingId = storedMeetingId;
+        }
       }
     } catch (error) {
       console.log('Error checking meeting info:', error);
     }
 
-    // If meeting was ended, generate a new meeting ID
+    // If meeting was ended, generate a new meeting ID ONLY if we don't have a valid stored one
     if (meetingEnded) {
-      meetingId = `${meetingId}-${Date.now()}`;
-      console.log('Generated new meeting ID after ended:', meetingId);
+      // Check if we should reuse stored meeting ID (for trainer rejoining)
+      if (storedMeetingId && !storedMeetingId.includes('-ended')) {
+        // Reuse stored meeting ID - it will auto-create on BBB when someone joins
+        meetingId = storedMeetingId;
+        console.log('Reusing stored meeting ID after end:', meetingId);
 
-      // Update the class with new meeting ID
-      await ModuleClass.findByIdAndUpdate(classId, {
-        bbbMeetingId: meetingId
-      });
+        // Update database to clear ended status
+        await ModuleClass.findByIdAndUpdate(classId, {
+          bbbMeetingId: meetingId,
+          status: 'live',
+          isLive: true
+        });
+      } else {
+        meetingId = `class-${classId}-${Date.now()}`;
+        console.log('Generated new meeting ID after ended:', meetingId);
+
+        // Update the class with new meeting ID
+        await ModuleClass.findByIdAndUpdate(classId, {
+          bbbMeetingId: meetingId
+        });
+      }
     }
 
     // Only create meeting if it doesn't exist
@@ -320,11 +484,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let finalJoinMeetingId = finalMeetingId;
     let joinUrl: string;
 
+    // Determine the final session token and full name to use for join
+    // If userName contains a token suffix, extract base name
+    let baseName = userName;
+    const userNameTokenMatch = userName ? userName.match(/(.+?)-([a-z0-9]+)$/i) : null;
+    if (userNameTokenMatch) {
+      baseName = userNameTokenMatch[1];
+    }
+
+    // Ensure we have a sessionToken value (may have been set earlier from mapping)
+    if (!sessionToken || typeof sessionToken !== 'string') {
+      sessionToken = Math.random().toString(36).substring(2, 10);
+      console.log('Generated fallback session token:', sessionToken);
+    }
+
+    // Final full name used for the meeting join (ensures server and BBB use same token)
+    const finalFullName = `${baseName}-${sessionToken}`;
+
     // Helper function to create join URL
     const createJoinUrl = (meetingId: string): string => {
       const joinParams = {
         meetingID: meetingId,
-        fullName: userName,
+        fullName: finalFullName,
         password: password,
         redirect: 'true'
       };
@@ -345,8 +526,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let needsNewMeeting = false;
 
     // Also check if earlier logic detected meetingEnded (for live classes)
-    if (meetingEnded) {
-      console.log('Meeting was previously detected as ended, will create new meeting');
+    if (meetingEnded && !storedMeetingId) {
+      console.log('Meeting was previously detected as ended with no stored ID, will create new meeting');
       needsNewMeeting = true;
     }
 
@@ -378,10 +559,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       needsNewMeeting = true;
     }
 
-    // If meeting was ended or doesn't exist, create a new one
+    // If meeting was ended or doesn't exist, create a new one BUT reuse stored meeting ID if available
     if (needsNewMeeting) {
-      finalJoinMeetingId = `${meetingId}-${Date.now()}`;
-      console.log('Creating new meeting with ID:', finalJoinMeetingId);
+      // Use stored meeting ID if available (for rejoin scenarios)
+      if (storedMeetingId) {
+        finalJoinMeetingId = storedMeetingId;
+        console.log('Reusing stored meeting ID for rejoin:', finalJoinMeetingId);
+      } else {
+        finalJoinMeetingId = `${meetingId}-${Date.now()}`;
+        console.log('Creating new meeting with ID:', finalJoinMeetingId);
+      }
 
       // Create the new meeting
       const createParams = {
@@ -433,6 +620,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     joinUrl = createJoinUrl(finalJoinMeetingId);
 
+    // Track session token in database to prevent duplicates and enable rejoining
+    if (sessionToken && userType === 'student') {
+      try {
+        // Add to set of tokens
+        await ModuleClass.findByIdAndUpdate(classId, {
+          $addToSet: { joinedSessionTokens: sessionToken }
+        });
+
+        // Also store mapping studentId -> sessionToken so the same student reuses token later
+        if (studentId) {
+          try {
+            // Try to update existing mapping atomically
+            const updateResult = await ModuleClass.findOneAndUpdate(
+              { _id: classId, 'studentSessionTokens.studentId': studentId },
+              { $set: { 'studentSessionTokens.$.sessionToken': sessionToken } },
+              { new: true }
+            );
+
+            if (!updateResult) {
+              // No existing mapping found, push a new one
+              await ModuleClass.findByIdAndUpdate(classId, { $push: { studentSessionTokens: { studentId: studentId, sessionToken: sessionToken } } });
+            }
+
+            console.log('Upserted student->sessionToken mapping for student:', studentId, sessionToken);
+          } catch (mapErr) {
+            console.log('Failed to upsert studentSessionTokens mapping:', mapErr);
+          }
+        } else {
+          console.log('No studentId provided; skipping studentSessionTokens mapping');
+        }
+
+        console.log('Tracked session token in database:', sessionToken);
+      } catch (tokenError) {
+        console.log('Failed to track session token:', tokenError);
+        // Don't fail the join if token tracking fails
+      }
+    }
+
     console.log('=== JOIN URL GENERATION DEBUG ===');
     console.log('Original Meeting ID:', meetingId);
     console.log('Final Meeting ID:', finalJoinMeetingId);
@@ -472,6 +697,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(200).json({
       success: true,
       joinUrl: joinUrl,
+      sessionToken: sessionToken,
       meetingId: finalJoinMeetingId,
       originalMeetingId: meetingId,
       className: moduleClass.moduleTitle,

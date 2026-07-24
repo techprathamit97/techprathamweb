@@ -114,6 +114,9 @@ const moduleClassSchema = new mongoose.Schema({
       enum: ['present', 'absent', 'late', 'left-early'],
       default: 'absent'
     }
+    ,
+    // Track a per-attendee session token (optional)
+    sessionToken: { type: String, default: null }
   }],
 
   // Manual student progress tracking (set by trainer)
@@ -178,6 +181,15 @@ const moduleClassSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  // Track which session tokens have joined to prevent duplicate users
+  joinedSessionTokens: [{
+    type: String
+  }],
+  // Map student -> sessionToken to reuse tokens when the same student rejoins
+  studentSessionTokens: [{
+    studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student' },
+    sessionToken: { type: String }
+  }],
 
   // Technical information
   platform: {

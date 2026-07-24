@@ -10,16 +10,11 @@ import {
   PlayCircle,
   Users,
   Video,
-  ExternalLink,
   AlertCircle,
   CheckCircle,
   Loader2,
   Download,
   Upload,
-  FileVideo,
-  FolderDown,
-  Settings,
-  AlertTriangle,
   Plus,
   X
 } from 'lucide-react';
@@ -48,13 +43,17 @@ const TrainerJoinClass = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [joiningClass, setJoiningClass] = useState<string | null>(null);
   const [processingRecordings, setProcessingRecordings] = useState<string | null>(null);
-  const [monitoringActive, setMonitoringActive] = useState(false);
-  const [autoUploadStatus, setAutoUploadStatus] = useState<'stopped' | 'running' | 'unknown'>('unknown');
   const [activeMeeting, setActiveMeeting] = useState<{
     classId: string;
     meetingId: string;
     startedAt: number;
   } | null>(null);
+
+  // Track which classes the trainer has joined - persist to localStorage
+  const [joinedClasses, setJoinedClasses] = useState<Set<string>>(new Set());
+
+  // Track if trainer has explicitly ended a session (to hide Join button until new session)
+  const [endedSessions, setEndedSessions] = useState<Set<string>>(new Set());
 
   // Schedule class modal state
   const [scheduleModal, setScheduleModal] = useState<{
@@ -71,50 +70,39 @@ const TrainerJoinClass = () => {
   });
   const [availableBatches, setAvailableBatches] = useState<any[]>([]);
 
-  // Store active meeting in localStorage and set up unload handler
+  // Store active meeting in localStorage
   useEffect(() => {
     // Load active meeting from localStorage on mount
     const storedMeeting = localStorage.getItem('activeBBBMeeting');
+    const storedEndedSessions = localStorage.getItem('endedBBBSessions');
+
     if (storedMeeting) {
       try {
         const meeting = JSON.parse(storedMeeting);
         setActiveMeeting(meeting);
+
+        // Restore the joined class state
+        if (meeting.classId) {
+          setJoinedClasses(prev => new Set(prev).add(meeting.classId));
+        }
+
         console.log('Found active meeting in localStorage:', meeting);
       } catch (e) {
         console.error('Error parsing stored meeting:', e);
       }
     }
 
-    // Handle beforeunload - trigger recording processing when trainer closes the tab
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (activeMeeting) {
-        console.log('Trainer closing tab with active meeting:', activeMeeting);
-
-        // Trigger recording processing before closing
-        triggerRecordingOnExit(activeMeeting.classId, activeMeeting.meetingId);
-
-        // Note: We can't block the unload, but we can send the request
-        e.preventDefault();
-        // Modern browsers ignore this message, but the request will still be sent
+    // Restore ended sessions
+    if (storedEndedSessions) {
+      try {
+        const ended = JSON.parse(storedEndedSessions);
+        setEndedSessions(new Set(ended));
+        console.log('Restored ended sessions:', ended);
+      } catch (e) {
+        console.error('Error parsing ended sessions:', e);
       }
-    };
-
-    // Also handle visibility change (when tab becomes hidden)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden' && activeMeeting) {
-        console.log('Tab became hidden with active meeting');
-        // Don't trigger immediately on tab switch - wait for a while
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [activeMeeting]);
+    }
+  }, []);
 
   // Heartbeat to detect if trainer is still active in meeting
   useEffect(() => {
@@ -145,12 +133,27 @@ const TrainerJoinClass = () => {
 
           // Clear active meeting
           localStorage.removeItem('activeBBBMeeting');
+
+          // Clear session flag
+          if (activeMeeting) {
+            sessionStorage.removeItem(`meeting_started_${activeMeeting.classId}`);
+          }
+
+          // Remove from joined classes (trainer can join again)
+          setJoinedClasses(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(activeMeeting.classId);
+            return newSet;
+          });
+
           setActiveMeeting(null);
+
+          toast.info('You have left the meeting. You can rejoin anytime until you click "End Session".');
         }
       } catch (error) {
         console.error('Heartbeat error:', error);
       }
-    }, 60000); // Check every minute
+    }, 30000); // Check every 30 seconds
 
     return () => clearInterval(heartbeatInterval);
   }, [activeMeeting]);
@@ -193,45 +196,15 @@ const TrainerJoinClass = () => {
     
     fetchScheduledClasses(trainerIdToUse);
 
-    // Start auto-upload service automatically
-    startAutoUploadService();
-
     // Poll every 30 seconds to update class status
     const interval = setInterval(() => {
       fetchScheduledClasses(trainerIdToUse);
     }, 30000);
 
-    // Check auto-upload status every 2 minutes
-    const statusInterval = setInterval(() => {
-      checkAutoUploadStatus();
-    }, 2 * 60 * 1000);
-
     return () => {
       clearInterval(interval);
-      clearInterval(statusInterval);
     };
   }, []);
-
-  const startAutoUploadService = async () => {
-    try {
-      // Auto-upload service not implemented yet
-      console.log('Auto-upload service not implemented');
-      setAutoUploadStatus('unknown');
-      // Don't show error toast for missing feature
-    } catch (error) {
-      console.error('Auto-upload service error:', error);
-      setAutoUploadStatus('stopped');
-    }
-  };
-
-  const checkAutoUploadStatus = async () => {
-    try {
-      // Auto-upload service not implemented yet
-      setAutoUploadStatus('unknown');
-    } catch (error) {
-      console.error('Auto-upload status check error:', error);
-    }
-  };
 
   const fetchScheduledClasses = async (trainerId: string) => {
     try {
@@ -294,20 +267,6 @@ const TrainerJoinClass = () => {
       setScheduledClasses([]);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // Fetch available batches for scheduling
-  const fetchAvailableBatches = async (trainerId: string) => {
-    try {
-      const res = await fetch(`/api/trainer/dashboard?trainerId=${trainerId}`);
-      const data = await res.json();
-
-      if (res.ok && data.success && data.data && data.data.batches) {
-        setAvailableBatches(data.data.batches);
-      }
-    } catch (error) {
-      console.error('Failed to fetch batches:', error);
     }
   };
 
@@ -483,6 +442,12 @@ const TrainerJoinClass = () => {
         // Open BBB room
         window.open(data.joinUrl, '_blank', 'width=1200,height=800');
 
+        // Mark this class as joined by the trainer
+        setJoinedClasses(prev => new Set(prev).add(classItem._id));
+
+        // Mark that meeting was started in this browser session (for beforeunload handling)
+        sessionStorage.setItem(`meeting_started_${classItem._id}`, 'true');
+
         toast.success(`Joining BigBlueButton: ${data.className}`);
 
         if (data.meetingCreated) {
@@ -495,8 +460,18 @@ const TrainerJoinClass = () => {
         
       } else if (data.alreadyJoined) {
         // Handle duplicate join prevention from backend
-        toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
-        toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
+        if (data.duplicateType === 'exact_token_match' || data.duplicateType === 'token_in_use') {
+          toast.error(`🚫 Cannot Join: ${data.error}`);
+          toast.warning(`Session token "${data.sessionToken || 'unknown'}" is already active in this meeting.`);
+          toast.info('Please wait for existing session to end or contact support.');
+        } else {
+          toast.warning(`⚠️ ${data.error}`, { duration: 6000 });
+          toast.info('Please check your other browser tabs or windows to find the existing meeting.', { duration: 6000 });
+        }
+      } else if (data.rateLimited) {
+        // Handle rate limiting
+        toast.warning(`⏳ ${data.error}`, { duration: 6000 });
+        toast.info('This prevents duplicate joins and server overload.', { duration: 6000 });
       } else {
         throw new Error(data.error || 'Failed to generate join URL');
       }
@@ -603,18 +578,6 @@ We're working on fixing the direct integration.`;
     }
   };
 
-  const canJoinClass = (classItem: ScheduledClass) => {
-    const now = new Date();
-    const classDate = new Date(classItem.scheduledDate);
-    const [hours, minutes] = classItem.scheduledTime.split(':');
-    classDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
-    const endTime = new Date(classDate.getTime() + classItem.duration * 60 * 1000);
-    const joinTime = new Date(classDate.getTime() - 15 * 60 * 1000); // 15 minutes before
-    
-    return now >= joinTime && now <= endTime && classItem.status === 'scheduled';
-  };
-
   const getClassStatus = (classItem: ScheduledClass) => {
     const now = new Date();
     const classDate = new Date(classItem.scheduledDate);
@@ -705,43 +668,7 @@ We're working on fixing the direct integration.`;
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Debug Info */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                  <p className="text-xs font-medium text-gray-700 mb-2">Debug: Batch Loading</p>
-                  <div className="space-y-1 text-xs text-gray-600">
-                    <p>Available batches: {availableBatches.length}</p>
-                    <p>Trainer info: {trainerInfo ? `${trainerInfo.name} (${trainerInfo._id || trainerInfo.trainerId})` : 'Not loaded'}</p>
-                    {availableBatches.length > 0 && (
-                      <div className="mt-2">
-                        <p className="font-medium">First batch:</p>
-                        <pre className="text-xs bg-white p-1 rounded border max-h-20 overflow-auto">
-                          {JSON.stringify(availableBatches[0], null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      if (trainerInfo) {
-                        const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
-                        console.log('Testing API call with trainer ID:', trainerIdToUse);
-                        
-                        try {
-                          const res = await fetch(`/api/trainer/dashboard?trainerId=${trainerIdToUse}`);
-                          const data = await res.json();
-                          console.log('API Response:', data);
-                          toast.info(`API Response: ${res.status} - Check console for details`);
-                        } catch (error) {
-                          console.error('API Test Error:', error);
-                          toast.error('API Test Failed - Check console');
-                        }
-                      }
-                    }}
-                    size="sm"
-                    className="mt-2"
-                  >
-                    Test API Call
-                  </Button>
-                </div>
+              
 
                 {/* Batch Selection */}
                 <div>
@@ -849,31 +776,10 @@ We're working on fixing the direct integration.`;
                 </div>
 
                 {/* BBB Integration Info */}
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Video className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-900">BigBlueButton Integration</span>
-                  </div>
-                  <p className="text-xs text-blue-700">
-                    Meeting room will be automatically created when you start the class. 
-                    Students can join 15 minutes before the scheduled time.
-                  </p>
-                  <div className="mt-2 text-xs text-blue-600">
-                    ✓ Automatic recording enabled<br/>
-                    ✓ Screen sharing & whiteboard<br/>
-                    ✓ Interactive features included
-                  </div>
-                </div>
+                 
 
                 {/* Debug Info */}
-                {availableBatches.length > 0 && (
-                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-                    <p className="text-xs font-medium text-gray-700 mb-1">Debug: Available Batches</p>
-                    <p className="text-xs text-gray-600">
-                      Found {availableBatches.length} batches. First batch: {JSON.stringify(availableBatches[0], null, 2).substring(0, 200)}...
-                    </p>
-                  </div>
-                )}
+             
 
                 {/* Submit Button */}
                 <div className="flex gap-2 pt-2">
@@ -913,8 +819,7 @@ We're working on fixing the direct integration.`;
             
             {scheduledClasses.map((classItem) => {
               const statusInfo = getClassStatus(classItem);
-              const canJoin = canJoinClass(classItem);
-              
+
               return (
                 <Card key={classItem._id} className="border-gray-200 hover:shadow-md transition-shadow">
                   <CardContent className="p-6">
@@ -951,28 +856,46 @@ We're working on fixing the direct integration.`;
                       </div>
 
                       <div className="flex flex-col gap-2 items-end">
-                        {/* Join Button */}
-                        <Button
-                          onClick={() => handleJoinClass(classItem)}
-                          disabled={joiningClass === classItem._id}
-                          className={`${
-                            classItem.isLive 
-                              ? 'bg-red-600 hover:bg-red-700' 
-                              : 'bg-green-600 hover:bg-green-700'
-                          } text-white`}
-                        >
-                          {joiningClass === classItem._id ? (
-                            <>
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Joining...
-                            </>
-                          ) : (
-                            <>
-                              <PlayCircle className="h-4 w-4 mr-2" />
-                              {classItem.isLive ? 'Join Live Class' : 'Start Class'}
-                            </>
-                          )}
-                        </Button>
+                        {/* Join Button - Show if NOT already joined AND session not explicitly ended */}
+                        {!joinedClasses.has(classItem._id) && !endedSessions.has(classItem._id) && (
+                          <Button
+                            onClick={() => handleJoinClass(classItem)}
+                            disabled={joiningClass === classItem._id}
+                            className={`${
+                              classItem.isLive
+                                ? 'bg-red-600 hover:bg-red-700'
+                                : 'bg-green-600 hover:bg-green-700'
+                            } text-white`}
+                          >
+                            {joiningClass === classItem._id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Joining...
+                              </>
+                            ) : (
+                              <>
+                                <PlayCircle className="h-4 w-4 mr-2" />
+                                {classItem.isLive ? 'Join Live Class' : 'Start Class'}
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {/* Show "Session Ended" badge when session was explicitly ended by trainer */}
+                        {endedSessions.has(classItem._id) && statusInfo.status !== 'completed' && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded-md">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>Session Ended</span>
+                          </div>
+                        )}
+
+                        {/* Show "Class Started" badge when already joined but not ended */}
+                        {joinedClasses.has(classItem._id) && statusInfo.status !== 'completed' && (
+                          <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 px-3 py-2 rounded-md">
+                            <CheckCircle className="h-4 w-4" />
+                            <span>Class Started</span>
+                          </div>
+                        )}
 
                         {/* Manual Upload Button - Show for any class */}
                         <Button
@@ -1028,16 +951,38 @@ We're working on fixing the direct integration.`;
                           Upload Video
                         </Button>
 
-                        {/* End & Upload Button - Show for live classes */}
-                        {statusInfo.status === 'live' && (
+                        {/* End & Upload Button - Show when trainer has joined this class */}
+                        {joinedClasses.has(classItem._id) && statusInfo.status !== 'completed' && (
                           <Button
                             onClick={async () => {
                               if (confirm('End this class and automatically upload the recording to S3?\n\nThis will:\n1. End the BigBlueButton meeting\n2. Wait for recording to process\n3. Download and upload to AWS S3\n4. Make video available to students')) {
                                 try {
                                   setProcessingRecordings(classItem._id);
-                                  
+
                                   toast.info('🔚 Ending class and uploading recording...');
-                                  
+
+                                  // First, clear all session tokens to prevent future duplicate joins
+                                  try {
+                                    const endSessionResponse = await fetch('/api/bbb/end-session', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({
+                                        classId: classItem._id,
+                                        trainerAction: 'end_session'
+                                      })
+                                    });
+                                    
+                                    const endSessionData = await endSessionResponse.json();
+                                    if (endSessionData.success) {
+                                      console.log('✅ Session tokens cleared successfully');
+                                      toast.success('🔐 Session tokens cleared - students can join fresh next time');
+                                    } else {
+                                      console.warn('⚠️ Failed to clear session tokens:', endSessionData.error);
+                                    }
+                                  } catch (sessionError) {
+                                    console.warn('⚠️ Session clearing failed:', sessionError);
+                                  }
+
                                   // Use the working end-class API
                                   const response = await fetch('/api/end-class', {
                                     method: 'POST',
@@ -1048,14 +993,14 @@ We're working on fixing the direct integration.`;
                                       moderatorPW: 'tp2024'
                                     })
                                   });
-                                  
+
                                   const data = await response.json();
-                                  
+
                                   if (data.success) {
                                     if (data.recordingsProcessed > 0) {
                                       toast.success(`🎉 Class ended and ${data.recordingsProcessed} recording(s) uploaded to S3!`);
                                       toast.info(`📁 Recordings are now available to students in their course materials`);
-                                      
+
                                       // Show recording details
                                       if (data.recordings && data.recordings.length > 0) {
                                         console.log('📹 Uploaded recordings:', data.recordings);
@@ -1067,20 +1012,38 @@ We're working on fixing the direct integration.`;
                                       toast.warning('⚠️ No recordings found yet - they may still be processing');
                                       toast.info('💡 Recording will automatically appear when ready, or use "Get Recordings" button in 2-5 minutes');
                                     }
-                                    
+
                                     // Clear active meeting
                                     localStorage.removeItem('activeBBBMeeting');
+                                    // Clear session flag
+                                    sessionStorage.removeItem(`meeting_started_${classItem._id}`);
                                     setActiveMeeting(null);
-                                    
+
+                                    // Mark session as ended - trainer can now rejoin if needed
+                                    setEndedSessions(prev => {
+                                      const newSet = new Set(prev);
+                                      newSet.add(classItem._id);
+                                      // Persist to localStorage
+                                      localStorage.setItem('endedBBBSessions', JSON.stringify([...newSet]));
+                                      return newSet;
+                                    });
+
+                                    // Remove from joined classes
+                                    setJoinedClasses(prev => {
+                                      const newSet = new Set(prev);
+                                      newSet.delete(classItem._id);
+                                      return newSet;
+                                    });
+
                                   } else {
                                     throw new Error(data.error || data.message);
                                   }
-                                  
+
                                   // Refresh the classes list
                                   if (trainerInfo) {
                                     fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
                                   }
-                                  
+
                                 } catch (error: any) {
                                   console.error('End & Upload error:', error);
                                   toast.error('❌ Failed to end class and upload: ' + error.message);

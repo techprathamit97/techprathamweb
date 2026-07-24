@@ -10,6 +10,9 @@ const paymentSchema = new mongoose.Schema({
   courseName: { type: String, required: true },
   trainerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Trainer' },
 
+  // Customer location
+  location: { type: String, default: '' },
+
   // Amount details
   totalFees: { type: Number, required: true },
   paidAmount: { type: Number, required: true },
