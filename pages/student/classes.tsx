@@ -372,8 +372,8 @@ const StudentClasses = () => {
 
         // Show success message
         const message = isRejoining
-          ? `Rejoining ${data.className}\n\nThe BigBlueButton window should open automatically.`
-          : `Joining ${data.className}\n\nThe BigBlueButton window should open automatically. If it doesn't, please enable pop-ups and try again.`;
+          ? `Rejoining ${data.className}\n\nThe Tech Pratham LMS window should open automatically.`
+          : `Joining ${data.className}\n\nThe Tech Pratham LMS window should open automatically. If it doesn't, please enable pop-ups and try again.`;
         alert(message);
       } else if (data.enforcedToken) {
         // Handle session token enforcement - update localStorage and retry

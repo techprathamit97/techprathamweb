@@ -123,6 +123,7 @@ const BatchesManagement = () => {
   const [isAssigningCertificates, setIsAssigningCertificates] = useState(false);
   const [selectedCertificate, setSelectedCertificate] = useState<any>(null);
   const [editCertificateData, setEditCertificateData] = useState({
+    studentName: '',
     startDate: '',
     endDate: '',
     grade: 'A',
@@ -507,6 +508,7 @@ const BatchesManagement = () => {
   const openEditCertificateDialog = (cert: any) => {
     setSelectedCertificate(cert);
     setEditCertificateData({
+      studentName: cert.studentName || '',
       startDate: cert.startDate ? new Date(cert.startDate).toISOString().split('T')[0] : '',
       endDate: cert.endDate ? new Date(cert.endDate).toISOString().split('T')[0] : '',
       grade: cert.grade || 'A',
@@ -524,6 +526,7 @@ const BatchesManagement = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           certificateId: selectedCertificate._id,
+          studentName: editCertificateData.studentName || null,
           startDate: editCertificateData.startDate || null,
           endDate: editCertificateData.endDate || null
         })
@@ -1725,6 +1728,17 @@ const BatchesManagement = () => {
             <div className="p-3 bg-gray-700 rounded-lg">
               <p className="text-gray-400 text-sm">Course</p>
               <p className="text-white font-medium">{selectedCertificate?.courseName}</p>
+            </div>
+
+            <div>
+              <Label className="text-white">Student Name</Label>
+              <Input
+                type="text"
+                value={editCertificateData.studentName}
+                onChange={(e) => setEditCertificateData(prev => ({ ...prev, studentName: e.target.value }))}
+                className="bg-gray-600 border-gray-500 text-white mt-1"
+                placeholder="Enter student name"
+              />
             </div>
 
             <div>

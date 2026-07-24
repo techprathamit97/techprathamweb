@@ -374,9 +374,9 @@ const TrainerJoinClass = () => {
       console.log('Class creation response:', data);
 
       if (data.success) {
-        toast.success('Class scheduled successfully with BigBlueButton!');
+        toast.success('Class scheduled successfully with Tech Pratham!');
         if (data.bbbMeetingId) {
-          toast.info(`BBB Meeting ID: ${data.bbbMeetingId}`);
+          toast.info(`Tech Pratham LMS Meeting ID: ${data.bbbMeetingId}`);
         }
         setScheduleModal({ open: false, loading: false });
 
@@ -448,7 +448,7 @@ const TrainerJoinClass = () => {
         // Mark that meeting was started in this browser session (for beforeunload handling)
         sessionStorage.setItem(`meeting_started_${classItem._id}`, 'true');
 
-        toast.success(`Joining BigBlueButton: ${data.className}`);
+        toast.success(`Joining Tech Pratham LMS: ${data.className}`);
 
         if (data.meetingCreated) {
           toast.info('Meeting created successfully! You can now admit students.', { duration: 5000 });
@@ -481,7 +481,7 @@ const TrainerJoinClass = () => {
       
       // Fallback: Show manual Greenlight instructions
       const fallbackMessage = `
-BBB API access is currently having issues. 
+Tech Pratham LMS API access is currently having issues. 
 
 TEMPORARY WORKAROUND:
 1. Go to: https://class.techpratham.org
@@ -512,7 +512,7 @@ We're working on fixing the direct integration.`;
         batchName: classItem.batchName
       });
       
-      toast.info('🔍 Checking BigBlueButton for recordings... Please wait.');
+      toast.info('🔍 Checking Tech Pratham for recordings... Please wait.');
       
       const response = await fetch('/api/process-bbb-recordings', {
         method: 'POST',
@@ -528,7 +528,7 @@ We're working on fixing the direct integration.`;
 
       if (data.success) {
         if (data.totalProcessed > 0) {
-          toast.success(`🎉 Successfully processed ${data.totalProcessed} recording(s) from BigBlueButton!`);
+          toast.success(`🎉 Successfully processed ${data.totalProcessed} recording(s) from Tech Pratham!`);
           toast.info(`📤 Recordings uploaded to AWS S3 and are now available to students.`, { duration: 7000 });
           
           // Show detailed info
@@ -547,7 +547,7 @@ We're working on fixing the direct integration.`;
           }
         } else {
           toast.warning('⏳ No new recordings found to process.');
-          toast.info('📝 This could mean:\n• Recordings are still processing in BigBlueButton (wait 2-5 minutes)\n• No recording was made during the class\n• Recordings were already processed', { duration: 8000 });
+          toast.info('📝 This could mean:\n• Recordings are still processing in Tech Pratham (wait 2-5 minutes)\n• No recording was made during the class\n• Recordings were already processed', { duration: 8000 });
         }
 
         if (data.totalSkipped > 0) {
@@ -572,7 +572,7 @@ We're working on fixing the direct integration.`;
       toast.error('❌ Failed to process recordings: ' + error.message);
       
       // Provide helpful troubleshooting info
-      toast.info('🛠️ Troubleshooting tips:\n• Wait 2-5 minutes after class ends\n• Ensure recording was started during class\n• Check BigBlueButton server status\n• Try "Check BBB Recordings" button for diagnostics', { duration: 10000 });
+      toast.info('🛠️ Troubleshooting tips:\n• Wait 2-5 minutes after class ends\n• Ensure recording was started during class\n• Check Tech Pratham server status\n• Try "Check BBB Recordings" button for diagnostics', { duration: 10000 });
     } finally {
       setProcessingRecordings(null);
     }
@@ -623,7 +623,7 @@ We're working on fixing the direct integration.`;
             Join Live Classes
           </h1>
           <p className="text-blue-100 mt-2">
-            Join your scheduled BigBlueButton classes and start teaching
+            Join your scheduled Tech Pratham classes and start teaching
           </p>
         </div>
 
@@ -897,329 +897,14 @@ We're working on fixing the direct integration.`;
                           </div>
                         )}
 
-                        {/* Manual Upload Button - Show for any class */}
-                        <Button
-                          onClick={() => {
-                            // Create a file input element
-                            const fileInput = document.createElement('input');
-                            fileInput.type = 'file';
-                            fileInput.accept = 'video/*';
-                            fileInput.onchange = async (e) => {
-                              const target = e.target as HTMLInputElement;
-                              const file = target.files?.[0];
-                              
-                              if (file) {
-                                try {
-                                  toast.info(`📤 Uploading ${file.name} to S3...`);
-                                  
-                                  const formData = new FormData();
-                                  formData.append('file', file);
-                                  formData.append('classId', classItem._id);
-                                  formData.append('title', `${classItem.moduleTitle} - Manual Upload`);
-                                  formData.append('description', 'Manually uploaded video recording');
-                                  formData.append('uploadedBy', trainerInfo?.name || 'Trainer');
-                                  
-                                  const uploadResponse = await fetch('/api/module-class/recordings', {
-                                    method: 'POST',
-                                    body: formData
-                                  });
-                                  
-                                  const uploadData = await uploadResponse.json();
-                                  
-                                  if (uploadData.success) {
-                                    toast.success('✅ Video uploaded successfully to S3!');
-                                    toast.info('🎥 Video is now available to students.');
-                                    
-                                    // Refresh the classes list
-                                    if (trainerInfo) {
-                                      fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                                    }
-                                  } else {
-                                    throw new Error(uploadData.error || 'Upload failed');
-                                  }
-                                } catch (error: any) {
-                                  toast.error('❌ Upload failed: ' + error.message);
-                                }
-                              }
-                            };
-                            fileInput.click();
-                          }}
-                          variant="outline"
-                          className="text-green-600 border-green-600 hover:bg-green-50"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload Video
-                        </Button>
+                        
+                        
 
-                        {/* End & Upload Button - Show when trainer has joined this class */}
-                        {joinedClasses.has(classItem._id) && statusInfo.status !== 'completed' && (
-                          <Button
-                            onClick={async () => {
-                              if (confirm('End this class and automatically upload the recording to S3?\n\nThis will:\n1. End the BigBlueButton meeting\n2. Wait for recording to process\n3. Download and upload to AWS S3\n4. Make video available to students')) {
-                                try {
-                                  setProcessingRecordings(classItem._id);
-
-                                  toast.info('🔚 Ending class and uploading recording...');
-
-                                  // First, clear all session tokens to prevent future duplicate joins
-                                  try {
-                                    const endSessionResponse = await fetch('/api/bbb/end-session', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({
-                                        classId: classItem._id,
-                                        trainerAction: 'end_session'
-                                      })
-                                    });
-                                    
-                                    const endSessionData = await endSessionResponse.json();
-                                    if (endSessionData.success) {
-                                      console.log('✅ Session tokens cleared successfully');
-                                      toast.success('🔐 Session tokens cleared - students can join fresh next time');
-                                    } else {
-                                      console.warn('⚠️ Failed to clear session tokens:', endSessionData.error);
-                                    }
-                                  } catch (sessionError) {
-                                    console.warn('⚠️ Session clearing failed:', sessionError);
-                                  }
-
-                                  // Use the working end-class API
-                                  const response = await fetch('/api/end-class', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      classId: classItem._id,
-                                      meetingId: activeMeeting?.meetingId || `class-${classItem._id}`,
-                                      moderatorPW: 'tp2024'
-                                    })
-                                  });
-
-                                  const data = await response.json();
-
-                                  if (data.success) {
-                                    if (data.recordingsProcessed > 0) {
-                                      toast.success(`🎉 Class ended and ${data.recordingsProcessed} recording(s) uploaded to S3!`);
-                                      toast.info(`📁 Recordings are now available to students in their course materials`);
-
-                                      // Show recording details
-                                      if (data.recordings && data.recordings.length > 0) {
-                                        console.log('📹 Uploaded recordings:', data.recordings);
-                                        const recordingTitles = data.recordings.map((r: any) => r.title).join(', ');
-                                        toast.info(`📹 Recordings: ${recordingTitles}`);
-                                      }
-                                    } else {
-                                      toast.success('✅ Class ended successfully!');
-                                      toast.warning('⚠️ No recordings found yet - they may still be processing');
-                                      toast.info('💡 Recording will automatically appear when ready, or use "Get Recordings" button in 2-5 minutes');
-                                    }
-
-                                    // Clear active meeting
-                                    localStorage.removeItem('activeBBBMeeting');
-                                    // Clear session flag
-                                    sessionStorage.removeItem(`meeting_started_${classItem._id}`);
-                                    setActiveMeeting(null);
-
-                                    // Mark session as ended - trainer can now rejoin if needed
-                                    setEndedSessions(prev => {
-                                      const newSet = new Set(prev);
-                                      newSet.add(classItem._id);
-                                      // Persist to localStorage
-                                      localStorage.setItem('endedBBBSessions', JSON.stringify([...newSet]));
-                                      return newSet;
-                                    });
-
-                                    // Remove from joined classes
-                                    setJoinedClasses(prev => {
-                                      const newSet = new Set(prev);
-                                      newSet.delete(classItem._id);
-                                      return newSet;
-                                    });
-
-                                  } else {
-                                    throw new Error(data.error || data.message);
-                                  }
-
-                                  // Refresh the classes list
-                                  if (trainerInfo) {
-                                    fetchScheduledClasses(trainerInfo._id || trainerInfo.trainerId);
-                                  }
-
-                                } catch (error: any) {
-                                  console.error('End & Upload error:', error);
-                                  toast.error('❌ Failed to end class and upload: ' + error.message);
-                                  toast.info('💡 Try using "Get Recordings" button in a few minutes');
-                                } finally {
-                                  setProcessingRecordings(null);
-                                }
-                              }
-                            }}
-                            disabled={processingRecordings === classItem._id}
-                            className="bg-orange-600 hover:bg-orange-700 text-white"
-                          >
-                            {processingRecordings === classItem._id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                End & Upload
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        
 
 
 
-                        {/* Check BBB Recordings Button - Show for completed classes */}
-                        {(statusInfo.status === 'completed' || statusInfo.status === 'expired') && (
-                          <Button
-                            onClick={async () => {
-                              try {
-                                toast.info('🔍 Checking BBB server for this class...');
-                                
-                                // First check BBB server configuration
-                                const configResponse = await fetch('/api/check-bbb-recording-config');
-                                const configData = await configResponse.json();
-                                
-                                // Then check specific recordings for this meeting
-                                const recordingsResponse = await fetch(`/api/debug-bbb-recordings`);
-                                const recordingsData = await recordingsResponse.json();
-                                
-                                console.log('Class BBB check:', { configData, recordingsData });
-                                
-                                if (configData.success && recordingsData.success) {
-                                  const hasRecordings = configData.recordings.total > 0;
-                                  const classRecordings = recordingsData.recordings.list.filter((rec: any) => 
-                                    rec.meetingId && rec.meetingId.includes(classItem._id)
-                                  );
-                                  
-                                  let info = `
-🔍 BBB Check for: ${classItem.moduleTitle}
-
-🔧 SERVER STATUS:
-• BBB Connection: ${configData.summary.bbbServerWorking ? '✅' : '❌'}
-• Recording Feature: ${configData.summary.canCreateRecordingMeetings ? '✅ Enabled' : '❌ Disabled'}
-• Total BBB Recordings: ${configData.recordings.total}
-
-📹 CLASS RECORDINGS:
-${classRecordings.length > 0 
-  ? classRecordings.map((rec: any) => `• ${rec.name} (${rec.state})`).join('\n')
-  : '❌ No recordings found for this class'}
-
-${!hasRecordings 
-  ? '\n💡 SOLUTION: Use "Upload Video" button to manually upload recordings'
-  : classRecordings.length > 0 
-  ? '\n✅ NEXT: Use "Get Recordings" to process these recordings'
-  : '\n⚠️ Recordings exist on server but not for this specific class'}`;
-                                
-                                  alert(info);
-                                  
-                                  if (classRecordings.length > 0) {
-                                    toast.success('🎉 Found recordings for this class!');
-                                  } else if (hasRecordings) {
-                                    toast.info('📹 BBB has recordings but none for this specific class.');
-                                  } else {
-                                    toast.warning('⚠️ No recordings found on BBB server. Use manual upload.');
-                                  }
-                                } else {
-                                  toast.error('❌ Cannot check BBB server. Use manual upload instead.');
-                                }
-                              } catch (error: any) {
-                                console.error('Class BBB check failed:', error);
-                                toast.error('❌ Check failed: ' + error.message);
-                              }
-                            }}
-                            variant="outline"
-                            className="text-purple-600 border-purple-600 hover:bg-purple-50"
-                          >
-                            <AlertCircle className="h-4 w-4 mr-2" />
-                            Check BBB
-                          </Button>
-                        )}
-
-                        {/* Recording Processing Button - Show for completed classes */}
-                        {(statusInfo.status === 'completed' || statusInfo.status === 'expired') && (
-                          <>
-                            <Button
-                              onClick={() => handleProcessRecordings(classItem)}
-                              disabled={processingRecordings === classItem._id}
-                              variant="outline"
-                              className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                            >
-                              {processingRecordings === classItem._id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Processing...
-                                </>
-                              ) : (
-                                <>
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Get Recordings
-                                </>
-                              )}
-                            </Button>
-
-                            {/* Download to Local Button */}
-                            <Button
-                              onClick={async () => {
-                                try {
-                                  toast.info('🔍 Finding working video URL from BBB...');
-
-                                  const meetingId = `class-${classItem._id}`;
-                                  const response = await fetch(`/api/test-bbb-video-download?meetingId=${meetingId}`);
-                                  const data = await response.json();
-
-                                  console.log('BBB Video Test Result:', data);
-
-                                  if (data.success && data.results.workingUrl) {
-                                    const workingUrl = data.results.workingUrl;
-                                    const sizeInMB = (data.results.workingUrlSize / 1024 / 1024).toFixed(2);
-
-                                    toast.info(`⬇️ Downloading video (${sizeInMB} MB)...`);
-
-                                    // Download the video file
-                                    const videoResponse = await fetch(workingUrl);
-                                    const videoBlob = await videoResponse.blob();
-
-                                    // Create download link
-                                    const downloadUrl = window.URL.createObjectURL(videoBlob);
-                                    const link = document.createElement('a');
-                                    link.href = downloadUrl;
-                                    link.download = `${classItem.moduleTitle || 'recording'}_${Date.now()}.mp4`;
-                                    document.body.appendChild(link);
-                                    link.click();
-                                    document.body.removeChild(link);
-                                    window.URL.revokeObjectURL(downloadUrl);
-
-                                    toast.success('✅ Video downloaded to local successfully!');
-                                    toast.info(`💾 File size: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`);
-                                  } else if (data.results.testedUrls && data.results.testedUrls.length > 0) {
-                                    // Show what was tested
-                                    const testedInfo = data.results.testedUrls.map((u: any) =>
-                                      `• ${u.type}: ${u.url} (${u.contentLength || 'failed'})`
-                                    ).join('\n');
-
-                                    toast.error('❌ No working video URL found');
-                                    alert(`Tested URLs:\n${testedInfo}\n\nYour BBB server may not have MP4 recording enabled.`);
-                                  } else {
-                                    toast.error('❌ No recordings found on BBB server');
-                                  }
-                                } catch (error: any) {
-                                  console.error('Download error:', error);
-                                  toast.error('❌ Download failed: ' + error.message);
-                                }
-                              }}
-                              variant="outline"
-                              className="text-green-600 border-green-600 hover:bg-green-50"
-                            >
-                              <Download className="h-4 w-4 mr-2" />
-                              Download Local
-                            </Button>
-                          </>
-                        )}
-
+                       
                         {/* Status Messages */}
                         {statusInfo.status === 'scheduled' && (
                           <p className="text-xs text-gray-500 text-right">

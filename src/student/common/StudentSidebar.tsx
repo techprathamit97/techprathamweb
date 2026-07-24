@@ -95,13 +95,14 @@ const StudentSidebar = () => {
   }, []);
 
   const menuItems = [
+    { icon: User, label: 'User Details', href: '/student/profile' },
     { icon: LayoutDashboard, label: 'Dashboard', href: '/student/dashboard' },
     { icon: BookOpen, label: 'Enrolled Courses', href: '/student/courses' },
 
     { icon: Users, label: 'My Batches & Trainers', href: '/student/my-batches' },
     { icon: Video, label: 'Join Class', href: '/student/classes' },
     { icon: VideoIcon, label: 'Class Recordings', href: '/student/recordings' },
-    { icon: User, label: 'User Details', href: '/student/profile' },
+    
     { icon: FileText, label: 'Invoices', href: '/student/invoices' },
     { icon: CheckCircle, label: 'Completed', href: '/student/completed' },
     { icon: Award, label: 'Certificates', href: '/student/certificates' },

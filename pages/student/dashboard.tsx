@@ -528,7 +528,7 @@ const StudentDashboard = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <Video className="h-4 w-4" />
-                          <span>BigBlueButton</span>
+                          <span>Tech Pratham LMS</span>
                         </div>
                       </div>
 

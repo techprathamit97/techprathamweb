@@ -105,8 +105,10 @@ const StudentCertificates = () => {
             {certificates.length === 0 ? (
               <div className="text-center py-12">
                 <Award className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">No certificates earned yet</p>
-                <p className="text-gray-400 text-sm mt-2">Complete your courses to earn certificates</p>
+                <p className="text-gray-500 text-lg font-medium">No Certificate Available</p>
+                <p className="text-gray-600 text-sm mt-2 max-w-md mx-auto">
+                  Complete your course to become eligible for the certificate. Once you finish all modules and assessments, the certificate will be automatically generated and available here.
+                </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

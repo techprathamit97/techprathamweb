@@ -1250,7 +1250,7 @@ const TrainerCourseModules = () => {
                               {classItem.bbbMeetingId && (
                                 <div className="text-sm text-green-600 mt-1 flex items-center gap-1">
                                   <Video className="h-4 w-4" />
-                                  BigBlueButton Live Class
+                                  Tech Pratham Live Class
                                 </div>
                               )}
                             </div>
@@ -1264,7 +1264,7 @@ const TrainerCourseModules = () => {
                                     try {
                                       const trainerName = trainerInfo?.name || trainerInfo?.trainerName || 'Trainer';
                                       
-                                      console.log('Joining via direct BBB API...');
+                                      console.log('Joining via direct Tech Pratham API...');
                                       
                                       const response = await fetch('/api/join-class', {
                                         method: 'POST',
@@ -1280,12 +1280,12 @@ const TrainerCourseModules = () => {
                                       console.log('Join response:', data);
 
                                       if (data.success && data.joinUrl) {
-                                        console.log('Opening direct BBB join URL:', data.joinUrl);
+                                        console.log('Opening direct Tech Pratham join URL:', data.joinUrl);
                                         
                                         // Open directly - bypasses Greenlight auth
                                         window.open(data.joinUrl, '_blank', 'width=1200,height=800');
                                         
-                                        toast.success(`Joining BigBlueButton: ${data.className}`);
+                                        toast.success(`Joining Tech Pratham: ${data.className}`);
                                         
                                         if (data.meetingCreated) {
                                           toast.info('Meeting created! You can now admit students.', { duration: 5000 });
@@ -1471,8 +1471,8 @@ const TrainerCourseModules = () => {
                   </select>
                 </div>
                 <div className="bg-blue-50 p-3 rounded-lg text-sm text-blue-700">
-                  <p className="font-medium">Using BigBlueButton</p>
-                  <p className="mt-1">A BigBlueButton meeting will be created automatically. You can join when the class starts. Recordings will be saved automatically.</p>
+                  <p className="font-medium">Using Tech Pratham</p>
+                  <p className="mt-1">A Tech Pratham meeting will be created automatically. You can join when the class starts. Recordings will be saved automatically.</p>
                 </div>
                 <Button
                   onClick={handleScheduleClass}

@@ -60,11 +60,11 @@ const TrainerRecordings = () => {
         setRecordings(data.recordings || []);
       } else {
         console.error('BBB API error:', data.error);
-        setError(data.error || 'Failed to fetch recordings from BigBlueButton');
+        setError(data.error || 'Failed to fetch recordings ');
       }
     } catch (err: any) {
       console.error('Error fetching BBB recordings:', err);
-      setError('Failed to load recordings from BigBlueButton server');
+      setError('Failed to load recordings from Tech Pratham server');
     } finally {
       setLoading(false);
     }
@@ -185,7 +185,7 @@ const TrainerRecordings = () => {
           <CardContent className="p-6">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="text-gray-600">Loading recordings from BigBlueButton...</div>
+                <div className="text-gray-600">Loading recordings from Tech Pratham LMS...</div>
               </div>
             ) : error ? (
               <div className="text-center py-8">
@@ -232,7 +232,7 @@ const TrainerRecordings = () => {
                     </div>
                   </div>
                   <p className="text-sm text-green-700 mt-2">
-                    These are your live class recordings from BigBlueButton. Click "Watch Recording" to view.
+                    These are your live class recordings from Tech Pratham LMS. Click "Watch Recording" to view.
                   </p>
                 </div>
 
@@ -344,7 +344,7 @@ const TrainerRecordings = () => {
               <div className="relative w-full aspect-video">
                 {videoLoading && (
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-white">Loading BigBlueButton recording...</div>
+                    <div className="text-white">Loading Tech Pratham LMS recording...</div>
                   </div>
                 )}
 
