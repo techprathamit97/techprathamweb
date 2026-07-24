@@ -136,7 +136,57 @@ export async function POST(request: NextRequest) {
       bbbModeratorJoinUrl: bbbModeratorJoinUrl,
     });
 
-    await moduleClass.save();
+    try {
+      await moduleClass.save();
+    } catch (error: any) {
+      // Handle duplicate key error (E11000)
+      if (error.code === 11000 && error.keyPattern && 
+          error.keyPattern.courseId && error.keyPattern.batchId && error.keyPattern.moduleIndex) {
+        
+        console.log('Duplicate class detected, updating existing class instead');
+        
+        // Find and update the existing class
+        const existingClass = await ModuleClass.findOne({
+          courseId,
+          batchId,
+          moduleIndex
+        });
+
+        if (existingClass) {
+          // Update the existing class with new scheduling details
+          existingClass.moduleTitle = moduleTitle || existingClass.moduleTitle;
+          existingClass.trainerId = trainerId;
+          existingClass.scheduledDate = new Date(scheduledDate);
+          existingClass.scheduledTime = scheduledTime;
+          existingClass.duration = duration || existingClass.duration;
+          existingClass.meetingLink = meetingLink || existingClass.meetingLink;
+          existingClass.status = 'scheduled';
+          existingClass.isLive = false;
+          existingClass.isCompleted = false;
+          existingClass.canJoin = false;
+          existingClass.updatedAt = new Date();
+
+          // Keep existing recordings if any, otherwise use transferred recordings
+          if (!existingClass.recordings || existingClass.recordings.length === 0) {
+            existingClass.recordings = previousRecordings;
+          }
+
+          await existingClass.save();
+
+          console.log('=== CLASS UPDATE SUCCESS ===');
+          console.log('Updated existing class:', existingClass._id);
+
+          return NextResponse.json({
+            success: true,
+            data: existingClass,
+            message: 'Updated existing class with new schedule details'
+          });
+        }
+      }
+      
+      // Re-throw the error if it's not a duplicate key error we can handle
+      throw error;
+    }
 
     // Update the roomId to use the actual MongoDB _id for uniqueness
     moduleClass.roomId = `class-${moduleClass._id}`;
