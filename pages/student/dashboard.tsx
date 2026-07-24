@@ -22,6 +22,7 @@ import {
   Video
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
 
 interface StudentData {
   _id: string;
@@ -226,6 +227,54 @@ const StudentDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [recordingModal, setRecordingModal] = useState<{ open: boolean; url: string; title: string }>({ open: false, url: '', title: '' });
   const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
+  
+  // Get student ID for FCM
+  const [studentId, setStudentId] = useState<string>('');
+  
+  // Initialize Firebase messaging
+  const { notification, clearNotification } = useFirebaseMessaging(studentId);
+
+  // Get student ID and initialize FCM
+  useEffect(() => {
+    const storedStudentData = localStorage.getItem('student');
+    if (storedStudentData) {
+      try {
+        const student = JSON.parse(storedStudentData);
+        setStudentId(student.studentId || student._id);
+      } catch (error) {
+        console.error('Error parsing student data:', error);
+      }
+    }
+  }, []);
+
+  // Handle incoming notifications
+  useEffect(() => {
+    if (notification) {
+      console.log('Received notification in dashboard:', notification);
+      
+      // Show toast notification
+      if (notification.notification?.title && notification.notification?.body) {
+        toast.success(
+          `📢 ${notification.notification.title}`,
+          {
+            description: notification.notification.body,
+            duration: 6000,
+            action: {
+              label: "View Classes",
+              onClick: () => router.push('/student/classes')
+            }
+          }
+        );
+        
+        // Auto-refresh dashboard data
+        if (studentId) {
+          fetchDashboardData(studentId);
+        }
+      }
+      
+      clearNotification();
+    }
+  }, [notification]);
 
   // Track which classes the student has joined - persist to localStorage
   const [joinedClasses, setJoinedClasses] = useState<Set<string>>(new Set());

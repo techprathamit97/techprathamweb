@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import StudentLayout from '@/src/student/common/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Video, Calendar, Clock, Users, Play, Circle, Clock3, FileVideo, X } from 'lucide-react';
+import { Video, Calendar, Clock, Users, Play, Circle, Clock3, FileVideo, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
 
 interface LiveClass {
   _id: string;
@@ -48,6 +49,78 @@ const StudentClasses = () => {
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [videoLoading, setVideoLoading] = useState(false);
   const [joiningClass, setJoiningClass] = useState<string | null>(null); // Track which class is being joined
+  
+  // Get student ID for FCM
+  const [studentId, setStudentId] = useState<string>('');
+  
+  // Initialize Firebase messaging
+  const { 
+    notification, 
+    clearNotification, 
+    registrationStatus, 
+    error: fcmError, 
+    clearError,
+    sendTestNotification 
+  } = useFirebaseMessaging(studentId);
+
+  // Get student ID from localStorage
+  useEffect(() => {
+    const studentData = localStorage.getItem('student');
+    if (studentData) {
+      try {
+        const student = JSON.parse(studentData);
+        setStudentId(student.studentId || student._id);
+      } catch (error) {
+        console.error('Error parsing student data:', error);
+      }
+    }
+  }, []);
+
+  // Handle incoming notifications
+  useEffect(() => {
+    if (notification) {
+      console.log('📱 Received notification in student classes:', notification);
+      
+      // Clear any previous error when we receive a notification
+      if (fcmError) {
+        clearError();
+      }
+      
+      // Add to in-app notification bell (this is also handled in the FCM hook)
+      if ((window as any).addInAppNotification && notification.notification) {
+        (window as any).addInAppNotification({
+          title: notification.notification.title || 'TechPratham LMS',
+          message: notification.notification.body || '',
+          type: notification.data?.type || 'info',
+          actionUrl: notification.data?.url || '/student/classes',
+          classId: notification.data?.classId,
+          meetingId: notification.data?.meetingId
+        });
+      }
+      
+      // Show a more detailed notification popup
+      if (notification.notification?.title && notification.notification?.body) {
+        const title = notification.notification.title;
+        const body = notification.notification.body;
+        const isClassNotification = notification.data?.type === 'class_started';
+        
+        const message = `${title}\n\n${body}${isClassNotification ? '\n\nWould you like to refresh the class list?' : ''}`;
+        
+        const shouldRefresh = confirm(message);
+        
+        if (shouldRefresh) {
+          fetchClasses(); // Refresh the class list
+          
+          // If it's a class started notification, switch to today tab
+          if (isClassNotification) {
+            setActiveTab('today');
+          }
+        }
+      }
+      
+      clearNotification();
+    }
+  }, [notification, fcmError, clearError]);
 
   // Track which classes the student has joined in current session - persist to localStorage
   const [joinedClasses, setJoinedClasses] = useState<Set<string>>(new Set());
@@ -457,7 +530,159 @@ const StudentClasses = () => {
             Live Classes
           </h1>
           <p className="text-red-100 mt-2">Join live sessions and access recordings</p>
+          
+          {/* FCM Status Indicator */}
+          {registrationStatus === 'success' && (
+            <div className="mt-3 flex items-center gap-2 text-green-100 text-sm">
+              <Circle className="w-3 h-3 fill-current" />
+              Push notifications enabled
+            </div>
+          )}
+          {registrationStatus === 'error' && fcmError && (
+            <div className="mt-3 flex items-center gap-2 text-yellow-100 text-sm">
+              <AlertCircle className="w-4 h-4" />
+              Notifications: {fcmError}
+              <button 
+                onClick={clearError}
+                className="ml-2 text-xs underline hover:no-underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
+          {registrationStatus === 'registering' && (
+            <div className="mt-3 flex items-center gap-2 text-blue-100 text-sm">
+              <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin"></div>
+              Setting up notifications...
+            </div>
+          )}
         </div>
+
+        {/* FCM Debug Panel - Show only if there are issues */}
+        {(registrationStatus === 'error' || registrationStatus === 'registering') && (
+          <Card className="border-yellow-200 bg-yellow-50">
+            <CardContent className="p-4">
+              <h3 className="font-medium text-yellow-800 mb-2">🔔 Push Notification Status</h3>
+              <div className="text-sm text-yellow-700 space-y-2">
+                <p><strong>Status:</strong> {registrationStatus}</p>
+                {fcmError && <p><strong>Error:</strong> {fcmError}</p>}
+                <p><strong>Student ID:</strong> {studentId || 'Not found'}</p>
+                
+                {fcmError?.includes('authentication credential') && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+                    <h4 className="font-medium text-blue-800 mb-1">🔧 Firebase Configuration Issue</h4>
+                    <p className="text-blue-700">
+                      Push notifications are not configured yet, but you'll still receive class updates through:
+                    </p>
+                    <ul className="text-blue-700 mt-1 ml-4 list-disc">
+                      <li>Automatic page refreshes when you visit this page</li>
+                      <li>Manual refresh to see new classes</li>
+                      <li>Browser notifications (when available)</li>
+                    </ul>
+                  </div>
+                )}
+                
+                <div className="flex gap-2 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        if (Notification.permission === 'granted') {
+                          new Notification('🧪 Test Notification', {
+                            body: 'This is a test browser notification for TechPratham LMS!',
+                            icon: '/favicon.ico',
+                            tag: 'test-notification'
+                          });
+                          alert('✅ Test browser notification shown!');
+                        } else {
+                          const permission = await Notification.requestPermission();
+                          if (permission === 'granted') {
+                            new Notification('🧪 Test Notification', {
+                              body: 'Browser notifications are now enabled for TechPratham LMS!',
+                              icon: '/favicon.ico',
+                              tag: 'test-notification'
+                            });
+                            alert('✅ Browser notification permission granted and test shown!');
+                          } else {
+                            alert('❌ Notification permission denied');
+                          }
+                        }
+                      } catch (error: unknown) {
+                        const message = error instanceof Error ? error.message : 'Unknown error';
+                        alert('❌ Browser notification failed: ' + message);
+                      }
+                    }}
+                  >
+                    🧪 Test Browser Notification
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      // Test in-app notification
+                      if ((window as any).addInAppNotification) {
+                        (window as any).addInAppNotification({
+                          title: '🎓 Test Class Started!',
+                          message: 'This is a test in-app notification. Check the bell icon in the navbar!',
+                          type: 'class_started',
+                          actionUrl: '/student/classes'
+                        });
+                        alert('✅ Test in-app notification added! Check the bell icon 🔔');
+                      } else {
+                        alert('❌ In-app notification system not ready. Please refresh the page.');
+                      }
+                    }}
+                  >
+                    🔔 Test Bell Notification
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      // Add multiple test notifications
+                      try {
+                        const response = await fetch('/api/seed-test-notifications', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ studentId: studentId })
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success && (window as any).addInAppNotification) {
+                          data.notifications.forEach((notif: any, index: number) => {
+                            setTimeout(() => {
+                              (window as any).addInAppNotification(notif);
+                            }, index * 500); // Stagger notifications
+                          });
+                          alert(`✅ Added ${data.count} test notifications! Check the bell 🔔`);
+                        } else {
+                          alert('❌ Failed to add test notifications');
+                        }
+                      } catch (error: unknown) {
+                        const message = error instanceof Error ? error.message : 'Unknown error';
+                        alert('❌ Error: ' + message);
+                      }
+                    }}
+                  >
+                    📚 Add Sample Notifications
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      if (confirm('This will reload the page to retry Firebase setup. Continue?')) {
+                        window.location.reload();
+                      }
+                    }}
+                  >
+                    🔄 Retry Setup
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">

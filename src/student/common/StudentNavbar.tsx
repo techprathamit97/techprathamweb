@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import NotificationBell from '@/components/ui/notification-bell';
 
 const StudentNavbar = () => {
   const [studentData, setStudentData] = useState<any>(null);
@@ -11,6 +12,17 @@ const StudentNavbar = () => {
       setStudentData(JSON.parse(storedData));
     }
   }, []);
+
+  const handleNotificationClick = (notification: any) => {
+    // Handle notification click - navigate to appropriate page
+    if (notification.actionUrl) {
+      if (notification.actionUrl.startsWith('/')) {
+        window.location.href = notification.actionUrl;
+      } else {
+        window.open(notification.actionUrl, '_blank');
+      }
+    }
+  };
 
   return (
     <div className="bg-white border-b border-gray-200 shadow-sm">
@@ -31,7 +43,10 @@ const StudentNavbar = () => {
           {/* Right Section */}
           <div className="flex items-center gap-4 ml-6">
             {/* Notifications */}
-           
+            <NotificationBell 
+              studentId={studentData?.studentId || studentData?._id}
+              onNotificationClick={handleNotificationClick}
+            />
 
             {/* User Profile */}
             <div className="flex items-center gap-3 pl-4 border-l border-gray-200">

@@ -12,7 +12,24 @@ const studentSchema = new mongoose.Schema({
   isActive: { type: Boolean, default: true }, // For login access
   isRestricted: { type: Boolean, default: false }, // For dashboard access
   profileImage: String,
-  batches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }]
+  batches: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Batch' }],
+  
+  // Firebase Cloud Messaging tokens for push notifications
+  fcmTokens: [{
+    token: { type: String },
+    deviceInfo: { type: String },
+    lastUsed: { type: Date, default: Date.now },
+    isActive: { type: Boolean, default: true }
+  }],
+  
+  // Notification preferences
+  notificationPreferences: {
+    classReminders: { type: Boolean, default: true },
+    classStarted: { type: Boolean, default: true },
+    classRescheduled: { type: Boolean, default: true },
+    assignments: { type: Boolean, default: true },
+    announcements: { type: Boolean, default: true }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.models.Student || mongoose.model('Student', studentSchema);

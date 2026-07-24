@@ -231,6 +231,28 @@ const LMSLiveClasses = () => {
     }
   };
 
+  const handleEndClass = async (classId: string) => {
+    if (!confirm('Are you sure you want to end this live class?')) return;
+
+    try {
+      const response = await fetch(`/api/lms/live-classes/${classId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'completed' })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Class ended successfully');
+        fetchClasses();
+      }
+    } catch (error) {
+      console.error('Error ending class:', error);
+      toast.error('Failed to end class');
+    }
+  };
+
   const handleDeleteClass = async (classId: string) => {
     if (!confirm('Are you sure you want to permanently delete this class?')) return;
 
@@ -313,143 +335,6 @@ const LMSLiveClasses = () => {
             </h1>
             <p className="text-gray-500 mt-1">Manage all live class sessions across batches</p>
           </div>
-          <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                Schedule Class
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Schedule New Live Class</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label>Title *</Label>
-                  <Input
-                    value={newClass.title}
-                    onChange={(e) => setNewClass({ ...newClass, title: e.target.value })}
-                    placeholder="Class title"
-                  />
-                </div>
-                <div>
-                  <Label>Description</Label>
-                  <Textarea
-                    value={newClass.description}
-                    onChange={(e) => setNewClass({ ...newClass, description: e.target.value })}
-                    placeholder="Class description"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Batch *</Label>
-                    <Select
-                      value={newClass.batchId}
-                      onValueChange={(value) => setNewClass({ ...newClass, batchId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select batch" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {batches.map(batch => (
-                          <SelectItem key={batch._id} value={batch._id}>{batch.batchName}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Trainer</Label>
-                    <Select
-                      value={newClass.trainerId}
-                      onValueChange={(value) => setNewClass({ ...newClass, trainerId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select trainer" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trainers.map(trainer => (
-                          <SelectItem key={trainer._id} value={trainer._id}>{trainer.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Date *</Label>
-                    <Input
-                      type="date"
-                      value={newClass.scheduledDate}
-                      onChange={(e) => setNewClass({ ...newClass, scheduledDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Time *</Label>
-                    <Input
-                      type="time"
-                      value={newClass.scheduledTime}
-                      onChange={(e) => setNewClass({ ...newClass, scheduledTime: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Duration (min)</Label>
-                    <Input
-                      type="number"
-                      value={newClass.duration}
-                      onChange={(e) => setNewClass({ ...newClass, duration: parseInt(e.target.value) })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Platform</Label>
-                    <Select
-                      value={newClass.platform}
-                      onValueChange={(value) => setNewClass({ ...newClass, platform: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="zoom">Zoom</SelectItem>
-                        <SelectItem value="googlemeet">Google Meet</SelectItem>
-                        <SelectItem value="jitsi">Jitsi</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label>Meeting Link</Label>
-                  <Input
-                    value={newClass.meetingLink}
-                    onChange={(e) => setNewClass({ ...newClass, meetingLink: e.target.value })}
-                    placeholder="https://..."
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Meeting ID</Label>
-                    <Input
-                      value={newClass.meetingId}
-                      onChange={(e) => setNewClass({ ...newClass, meetingId: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Password</Label>
-                    <Input
-                      value={newClass.meetingPassword}
-                      onChange={(e) => setNewClass({ ...newClass, meetingPassword: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancel</Button>
-                <Button onClick={handleCreateClass}>Create Class</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
 
         {/* Stats */}
@@ -583,6 +468,15 @@ const LMSLiveClasses = () => {
                             <Button variant="ghost" size="sm" onClick={() => handleViewDetails(cls)}>
                               <Eye className="w-4 h-4" />
                             </Button>
+                            {cls.status === 'live' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEndClass(cls._id)}
+                              >
+                                <XCircle className="w-4 h-4 text-red-500" />
+                              </Button>
+                            )}
                             {cls.status === 'scheduled' && (
                               <Button
                                 variant="ghost"

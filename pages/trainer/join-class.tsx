@@ -450,8 +450,110 @@ const TrainerJoinClass = () => {
 
         toast.success(`Joining Tech Pratham LMS: ${data.className}`);
 
+        // Update class status if trainer is joining
         if (data.meetingCreated) {
           toast.info('Meeting created successfully! You can now admit students.', { duration: 5000 });
+          
+          // Send push notifications to all students in the batch
+          try {
+            console.log('📱 Sending notifications to students in batch...');
+            console.log('🔍 Meeting created flag:', data.meetingCreated);
+            console.log('🔍 Class item:', classItem);
+            
+            // Get class data including batchId
+            const classResponse = await fetch(`/api/module-class?classId=${classItem._id}`);
+            const classData = await classResponse.json();
+            
+            console.log('📊 Class data for notifications:', classData);
+            
+            if (classData.success && classData.data) {
+              // Extract batchId from class data
+              const batchId = classData.data.batchId?._id || classData.data.batchId;
+              
+              console.log('🎯 Extracted batchId:', batchId);
+              console.log('🎯 Full batch object:', classData.data.batchId);
+              
+              if (batchId) {
+                console.log('📋 Sending notifications to batch:', batchId);
+                
+                const notificationPayload = {
+                  batchId: batchId,
+                  title: '🎓 Class Started!',
+                  body: `Your class "${data.className || classItem.moduleTitle}" has started. Join now!`,
+                  classId: classItem._id,
+                  meetingId: data.meetingId,
+                  type: 'class_started',
+                  actionUrl: '/student/classes'
+                };
+                
+                console.log('📤 Notification payload:', notificationPayload);
+                
+                const notificationResponse = await fetch('/api/fcm/send-notification', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(notificationPayload)
+                });
+
+                const notificationData = await notificationResponse.json();
+                console.log('📱 Notification API response:', notificationData);
+                
+                if (notificationData.success) {
+                  if (notificationData.isSimulated) {
+                    toast.info(`🧪 Notifications simulated: ${notificationData.sentCount} students (Firebase not configured)`, { duration: 4000 });
+                  } else {
+                    toast.success(`📱 Notifications sent to ${notificationData.sentCount} students!`, { duration: 4000 });
+                  }
+                  
+                  // Show additional details
+                  if (notificationData.totalStudents > 0) {
+                    toast.info(`👥 Batch has ${notificationData.totalStudents} total students, ${notificationData.totalTokens} FCM tokens active`, { duration: 3000 });
+                  }
+                  
+                  // If simulated, also try browser fallback for testing
+                  if (notificationData.isSimulated) {
+                    try {
+                      const fallbackResponse = await fetch('/api/fcm/send-browser-notification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(notificationPayload)
+                      });
+                      
+                      const fallbackData = await fallbackResponse.json();
+                      if (fallbackData.success) {
+                        console.log('📲 Browser fallback notification:', fallbackData);
+                        toast.info(`💻 Browser notification prepared for ${fallbackData.totalStudents} students in ${fallbackData.batchName}`, { duration: 3000 });
+                        
+                        // Show a browser notification to the trainer as demo
+                        if (Notification.permission === 'granted') {
+                          new Notification('🎓 Class Started (Demo)', {
+                            body: `Your class "${classItem.moduleTitle}" has started. This is how students would see the notification.`,
+                            icon: '/favicon.ico',
+                            tag: 'demo-notification'
+                          });
+                        }
+                      }
+                    } catch (fallbackError) {
+                      console.log('Browser fallback failed:', fallbackError);
+                    }
+                  }
+                } else {
+                  console.warn('❌ Failed to send notifications:', notificationData.error);
+                  toast.warning('Failed to send push notifications to students', { duration: 3000 });
+                }
+              } else {
+                console.warn('⚠️ No batchId found in class data');
+                console.warn('⚠️ Class data structure:', JSON.stringify(classData.data, null, 2));
+                toast.warning('Could not send notifications - batch ID not found', { duration: 3000 });
+              }
+            } else {
+              console.warn('⚠️ Failed to fetch class data for notifications:', classData);
+              toast.warning('Could not fetch class data for notifications', { duration: 3000 });
+            }
+          } catch (notificationError) {
+            console.error('💥 Error sending notifications:', notificationError);
+            toast.warning('Error occurred while sending notifications to students', { duration: 3000 });
+            // Don't show error to trainer - notifications are not critical for class functionality
+          }
         }
 
         setTimeout(() => {
@@ -640,14 +742,53 @@ We're working on fixing the direct integration.`;
 
         {/* Schedule New Class Button */}
         <div className="flex justify-between items-center">
-          
-          
           <Button
             onClick={openScheduleModal}
             className="bg-blue-600 hover:bg-blue-700"
           >
             <Plus className="h-4 w-4 mr-2" />
             Schedule New Class
+          </Button>
+          
+          {/* Debug notification button */}
+          <Button
+            onClick={async () => {
+              try {
+                const response = await fetch('/api/test-notifications');
+                const data = await response.json();
+                
+                if (data.success && data.batches.length > 0) {
+                  const firstBatch = data.batches[0];
+                  const testResponse = await fetch(`/api/test-notifications?testNotification=true&batchId=${firstBatch.batchId}`);
+                  const testResult = await testResponse.json();
+                  
+                  if (testResult.success) {
+                    toast.success(`🧪 Test notification sent to ${testResult.notificationResult.sentCount || 0} students!`);
+                    console.log('Test notification result:', testResult);
+                    
+                    // Also show a demo of what students see
+                    if (Notification.permission === 'granted') {
+                      new Notification('🎓 Demo: Class Started', {
+                        body: `This is how students see the notification for batch "${firstBatch.batchName}".`,
+                        icon: '/favicon.ico',
+                        tag: 'demo-notification'
+                      });
+                    }
+                  } else {
+                    toast.error('Failed to send test notification');
+                  }
+                } else {
+                  toast.warning('No batches found for testing notifications');
+                }
+              } catch (error) {
+                console.error('Test notification error:', error);
+                toast.error('Error testing notifications');
+              }
+            }}
+            variant="outline"
+            className="text-sm"
+          >
+            🧪 Test Notifications
           </Button>
         </div>
 

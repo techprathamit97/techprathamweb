@@ -70,21 +70,33 @@ export async function notifyBatchStudents(
 ) {
   await connectMongo();
 
-  // Get all students in the batch
-  const batch = await Batch.findById(batchId).lean();
+  // Get all students in the batch with their string studentId
+  const batch = await Batch.findById(batchId).populate('studentIds').lean();
   if (!batch) {
     console.log('Batch not found:', batchId);
     return;
   }
 
-  const studentIds = batch.studentIds?.map((id: any) => id.toString()) || [];
+  // Get the student objects to find their string studentId
+  const Student = require('@/models/Student');
+  const studentObjectIds = batch.studentIds?.map((id: any) => id._id || id) || [];
 
-  if (studentIds.length === 0) {
+  if (studentObjectIds.length === 0) {
     console.log('No students in batch:', batchId);
     return;
   }
 
-  const notifications = studentIds.map((studentId: string) => ({
+  // Fetch students to get their string studentId
+  const students = await Student.find({ _id: { $in: studentObjectIds } }).lean();
+  const studentStringIds = students.map((s: any) => s.studentId).filter(Boolean);
+
+  if (studentStringIds.length === 0) {
+    console.log('No string studentIds found for batch:', batchId);
+    return;
+  }
+
+  // Create notifications with string studentId (which is what the bell uses)
+  const notifications = studentStringIds.map((studentId: string) => ({
     studentId,
     batchId,
     title,
@@ -96,12 +108,15 @@ export async function notifyBatchStudents(
   await Notification.insertMany(notifications);
   console.log(`Created ${notifications.length} notifications for batch ${batchId}`);
 
+  // Send push notifications
   for (const notification of notifications) {
     await sendPushNotification(notification.studentId, 'student', {
       title: notification.title,
       message: notification.message,
       url: notification.actionUrl || '/student/notifications'
     });
+
+    console.log(`📱 Notification queued for student ${notification.studentId}: ${notification.title}`);
   }
 
   return notifications;
@@ -151,17 +166,22 @@ export async function notifyBatches(
 ) {
   await connectMongo();
 
-  // Get unique student IDs from all batches
-  const batches = await Batch.find({ _id: { $in: batchIds } }).lean();
-  const studentSet = new Set<string>();
+  // Get unique student IDs from all batches with string studentId
+  const batches = await Batch.find({ _id: { $in: batchIds } }).populate('studentIds').lean();
+
+  const Student = require('@/models/Student');
+  const studentObjectIds: any[] = [];
 
   batches.forEach((batch: any) => {
-    batch.studentIds?.forEach((id: any) => {
-      studentSet.add(id.toString());
+    batch.studentIds?.forEach((student: any) => {
+      studentObjectIds.push(student._id || student);
     });
   });
 
-  const studentIds = Array.from(studentSet);
+  // Get students to find their string studentIds
+  const students = await Student.find({ _id: { $in: studentObjectIds } }).lean();
+  const studentIds = students.map((s: any) => s.studentId).filter(Boolean);
+
   return notifyStudents(studentIds, title, message, type, params);
 }
 
