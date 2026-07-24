@@ -399,7 +399,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Only create meeting if it doesn't exist
     if (!meetingExists) {
+      // IMPORTANT: For students, don't create meetings - they should only join existing ones
+      if (userType === 'student') {
+        console.log('🚫 Student trying to join non-existent meeting - blocking');
+        return res.status(400).json({
+          success: false,
+          error: 'The class meeting has not been started yet. Please wait for your instructor to start the class before joining.',
+          meetingNotStarted: true,
+          userType: 'student',
+          message: 'Students can only join meetings that have been started by the trainer'
+        });
+      }
+      
       try {
+        console.log('Creating new meeting for trainer/moderator');
+        
         // Create meeting parameters
         const createParams = {
           meetingID: meetingId,
@@ -510,6 +524,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         redirect: 'true'
       };
 
+      console.log('=== JOIN URL GENERATION ===');
+      console.log('Meeting ID:', meetingId);
+      console.log('Full Name:', finalFullName);
+      console.log('Password:', password);
+      console.log('User Type:', userType);
+
       const sortedJoinKeys = Object.keys(joinParams).sort();
       
       // Use URL-encoded values for checksum
@@ -517,9 +537,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .map(key => `${key}=${encodeURIComponent(joinParams[key as keyof typeof joinParams])}`)
         .join('&');
 
-      const joinChecksum = generateBBBChecksum('join', joinParamsForChecksum, bbbApiSecret);
+      console.log('Join params for checksum:', joinParamsForChecksum);
 
-      return `${apiUrl}/join?${joinParamsForChecksum}&checksum=${joinChecksum}`;
+      const joinChecksum = generateBBBChecksum('join', joinParamsForChecksum, bbbApiSecret);
+      
+      console.log('Generated join checksum:', joinChecksum);
+
+      const joinUrl = `${apiUrl}/join?${joinParamsForChecksum}&checksum=${joinChecksum}`;
+      
+      console.log('Final join URL:', joinUrl);
+      console.log('=== END JOIN URL GENERATION ===');
+
+      return joinUrl;
     };
 
     // First, verify the meeting exists and is not forcibly ended before attempting join
