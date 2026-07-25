@@ -334,7 +334,7 @@ const TrainerSendEmail = () => {
                         <p className="text-sm font-medium text-gray-900 truncate">
                           {student.name}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">{student.email}</p>
+                        {/* <p className="text-xs text-gray-500 truncate">{student.email}</p> */}
                       </div>
                     </label>
                   ))}

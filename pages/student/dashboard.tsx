@@ -835,10 +835,7 @@ const StudentDashboard = () => {
                                   <p className="text-gray-600">Name</p>
                                   <p className="text-gray-900 font-medium">{batchInfo.trainer.name}</p>
                                 </div>
-                                <div>
-                                  <p className="text-gray-600">Trainer ID</p>
-                                  <p className="text-gray-900 font-medium">{batchInfo.trainer.trainerId}</p>
-                                </div>
+                              
                                 <div>
                                   <p className="text-gray-600">Experience</p>
                                   <p className="text-gray-900 font-medium">{batchInfo.trainer.experience}</p>
@@ -850,16 +847,8 @@ const StudentDashboard = () => {
                                     <span className="text-yellow-500">★</span>
                                   </div>
                                 </div>
-                                <div>
-                                  <p className="text-gray-600">Email</p>
-                                  <p className="text-gray-900 font-medium">{batchInfo.trainer.email}</p>
-                                </div>
-                                {batchInfo.trainer.phone && (
-                                  <div>
-                                    <p className="text-gray-600">Phone</p>
-                                    <p className="text-gray-900 font-medium">{batchInfo.trainer.phone}</p>
-                                  </div>
-                                )}
+                               
+                               
                               </div>
                               {batchInfo.trainer.bio && (
                                 <div className="mt-3">
@@ -927,10 +916,7 @@ const StudentDashboard = () => {
                           <p className="text-gray-600">Level</p>
                           <p className="text-gray-900 font-medium">{course.level}</p>
                         </div>
-                        <div>
-                          <p className="text-gray-600">Student ID</p>
-                          <p className="text-gray-900 font-medium">{course.studentId}</p>
-                        </div>
+                        
                       </div>
 
                       {/* Action Buttons */}

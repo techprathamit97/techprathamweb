@@ -185,10 +185,7 @@ const StudentProfile = () => {
                   <Label className="text-gray-700">Email Address</Label>
                   <Input value={profileData.studentInfo.email} disabled className="bg-gray-50" />
                 </div>
-                <div>
-                  <Label className="text-gray-700">Phone Number</Label>
-                  <Input value={profileData.studentInfo.phone} disabled className="bg-gray-50" />
-                </div>
+                
                 <div>
                   <Label className="text-gray-700">Member Since</Label>
                   <Input 
@@ -303,7 +300,7 @@ const StudentProfile = () => {
                       </div>
                       
                       <div className="text-sm text-gray-600 space-y-1">
-                        <p><span className="font-medium">Category:</span> {course.category}</p>
+                        {/* <p><span className="font-medium">Category:</span> {course.category}</p> */}
                         <p><span className="font-medium">Level:</span> {course.level}</p>
                         <p><span className="font-medium">Duration:</span> {course.duration}</p>
                         <p><span className="font-medium">Batch:</span> {course.batchId}</p>
@@ -330,8 +327,8 @@ const StudentProfile = () => {
                           <div className="bg-blue-50 p-2 rounded mt-2">
                             <p className="font-medium text-blue-800 text-xs mb-1">Trainer Details:</p>
                             <p><span className="font-medium">Name:</span> {course.trainer}</p>
-                            <p><span className="font-medium">Email:</span> {course.trainerEmail}</p>
-                            <p><span className="font-medium">Phone:</span> {course.trainerPhone}</p>
+                            {/* <p><span className="font-medium">Email:</span> {course.trainerEmail}</p> */}
+                            {/* <p><span className="font-medium">Phone:</span> {course.trainerPhone}</p> */}
                             <p><span className="font-medium">Experience:</span> {course.trainerExperience}</p>
                             <div className="flex items-center gap-1 mt-1">
                               <Star className="h-3 w-3 text-yellow-500 fill-current" />
@@ -403,8 +400,7 @@ const StudentProfile = () => {
                       <div className="flex items-start justify-between mb-2">
                         <div>
                           <h3 className="font-semibold text-gray-900">{trainer.name}</h3>
-                          <p className="text-sm text-gray-600">{trainer.email}</p>
-                          <p className="text-sm text-gray-600">{trainer.phone}</p>
+                          
                         </div>
                         <div className="flex items-center gap-1">
                           <Star className="h-4 w-4 text-yellow-500 fill-current" />
@@ -413,11 +409,11 @@ const StudentProfile = () => {
                       </div>
                       <div className="text-sm text-gray-600 space-y-1">
                         <p><span className="font-medium">Course:</span> {trainer.course}</p>
-                        <p><span className="font-medium">Category:</span> {trainer.courseCategory}</p>
-                        <p><span className="font-medium">Level:</span> {trainer.courseLevel}</p>
+                        {/* <p><span className="font-medium">Category:</span> {trainer.courseCategory}</p> */}
+                        {/* <p><span className="font-medium">Level:</span> {trainer.courseLevel}</p> */}
                         <p><span className="font-medium">Duration:</span> {trainer.courseDuration}</p>
                         <p><span className="font-medium">Experience:</span> {trainer.experience}</p>
-                        <p><span className="font-medium">Batch:</span> {trainer.batchId}</p>
+                        {/* <p><span className="font-medium">Batch:</span> {trainer.batchId}</p> */}
                         {trainer.profile && (
                           <p><span className="font-medium">Profile:</span> {trainer.profile}</p>
                         )}

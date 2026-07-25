@@ -279,22 +279,13 @@ const MyBatches = () => {
                         </h3>
                         <div className="space-y-2 text-sm">
                           <p><span className="font-medium">Name:</span> {batch.trainer.name}</p>
-                          <p className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {batch.trainer.email}
-                          </p>
-                          <p className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" />
-                            {batch.trainer.phone}
-                          </p>
+                         
                           <p><span className="font-medium">Experience:</span> {batch.trainer.experience}</p>
                           <div className="flex items-center gap-1">
                             <Star className="h-3 w-3 text-yellow-500 fill-current" />
                             <span className="font-medium">{batch.trainer.rating}</span>
                           </div>
-                          <p><span className="font-medium">Batches Handled:</span> {batch.trainer.batchesHandled}</p>
-                          <p><span className="font-medium">Students Handled:</span> {batch.trainer.totalStudentsHandled}</p>
-                        </div>
+                          </div>
                       </div>
 
                       {/* Progress & Payment */}
@@ -321,20 +312,7 @@ const MyBatches = () => {
                             </p>
                           </div>
 
-                          {/* Payment Info */}
-                          {batch.paymentInfo && (
-                            <div className="bg-gray-50 p-3 rounded">
-                              <p className="text-xs font-medium text-gray-800 mb-1">Payment Details:</p>
-                              <div className="space-y-1 text-xs">
-                                <p><span className="font-medium">Invoice:</span> {batch.paymentInfo.invoiceNumber}</p>
-                                <p><span className="font-medium">Total:</span> ₹{batch.paymentInfo.totalAmount.toLocaleString()}</p>
-                                <p><span className="font-medium">Paid:</span> ₹{batch.paymentInfo.paidAmount.toLocaleString()}</p>
-                                {batch.paymentInfo.pendingAmount > 0 && (
-                                  <p><span className="font-medium">Pending:</span> ₹{batch.paymentInfo.pendingAmount.toLocaleString()}</p>
-                                )}
-                              </div>
-                            </div>
-                          )}
+                          
 
                           {/* Quiz Scores */}
                           {batch.studentProgress.quizScores.length > 0 && (
@@ -358,15 +336,7 @@ const MyBatches = () => {
 
                     {/* Action Buttons */}
                     <div className="mt-6 flex gap-3">
-                      {batch.meetingLink && (
-                        <Button
-                          onClick={() => window.open(batch.meetingLink, '_blank')}
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Join Class
-                        </Button>
-                      )}
+                      
                       {batch.courseLink && (
                         <Button
                           variant="outline"

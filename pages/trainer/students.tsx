@@ -25,8 +25,7 @@ import { toast } from 'sonner';
 interface Student {
   studentId: string;
   name: string;
-  email: string;
-  phone: string;
+  
   course_title: string;
   course_desc: string;
   category: string;
@@ -138,8 +137,8 @@ const TrainerStudents = () => {
 
   const filteredStudents = studentsData?.students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         student.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         student.email.toLowerCase().includes(searchTerm.toLowerCase());
+                         student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+                         
     
     const matchesStatus = filterStatus === 'all' || 
                          (filterStatus === 'completed' && student.courseCompletion) ||
@@ -214,19 +213,7 @@ const TrainerStudents = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{studentsData.stats.totalRevenue.toLocaleString()}</p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+         
         </div>
 
         {/* Filters and Search */}
@@ -311,20 +298,7 @@ const TrainerStudents = () => {
                         {/* Student Info */}
                         <div className="space-y-2">
                           <h3 className="font-semibold text-gray-900">{student.name}</h3>
-                          <div className="text-sm text-gray-600 space-y-1">
-                            <p className="flex items-center gap-1">
-                              <Users className="h-3 w-3" />
-                              {student.studentId}
-                            </p>
-                            <p className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {student.email}
-                            </p>
-                            <p className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {student.phone}
-                            </p>
-                          </div>
+                          
                         </div>
 
                         {/* Course Info */}
@@ -332,8 +306,8 @@ const TrainerStudents = () => {
                           <h4 className="font-medium text-gray-900">Course Details</h4>
                           <div className="text-sm text-gray-600 space-y-1">
                             <p><span className="font-medium">Course:</span> {student.course_title}</p>
-                            <p><span className="font-medium">Category:</span> {student.category}</p>
-                            <p><span className="font-medium">Level:</span> {student.level}</p>
+                            {/* <p><span className="font-medium">Category:</span> {student.category}</p> */}
+                            {/* <p><span className="font-medium">Level:</span> {student.level}</p> */}
                             <p><span className="font-medium">Duration:</span> {student.duration}</p>
                           </div>
                         </div>
@@ -358,50 +332,10 @@ const TrainerStudents = () => {
                           </div>
                         </div>
 
-                        {/* Payment Info */}
-                        <div className="space-y-2">
-                          <h4 className="font-medium text-gray-900">Payment</h4>
-                          <div className="text-sm space-y-1">
-                            <p><span className="font-medium">Total:</span> ₹{student.totalAmount.toLocaleString()}</p>
-                            <p><span className="font-medium">Paid:</span> ₹{student.paidAmount.toLocaleString()}</p>
-                            {student.pendingAmount > 0 && (
-                              <p><span className="font-medium">Pending:</span> ₹{student.pendingAmount.toLocaleString()}</p>
-                            )}
-                            <Badge className={
-                              student.paymentStatus === 'paid' ? 'bg-green-100 text-green-700 border-green-200' :
-                              student.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' :
-                              'bg-red-100 text-red-700 border-red-200'
-                            }>
-                              {student.paymentStatus.toUpperCase()}
-                            </Badge>
-                          </div>
-                        </div>
+                      
                       </div>
 
-                      {/* Batches */}
-                      {student.batches.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <h4 className="font-medium text-gray-900 mb-2">Enrolled Batches</h4>
-                          <div className="flex flex-wrap gap-2">
-                            {student.batches.map((batch, index) => (
-                              <div key={index} className="bg-gray-100 rounded-lg p-2 text-sm">
-                                <p className="font-medium">{batch.batchId}</p>
-                                <p className="text-gray-600">{batch.status}</p>
-                                {batch.meetingLink && batch.status === 'ongoing' && (
-                                  <Button
-                                    size="sm"
-                                    className="mt-1 bg-green-600 hover:bg-green-700 text-white"
-                                    onClick={() => window.open(batch.meetingLink, '_blank')}
-                                  >
-                                    <ExternalLink className="h-3 w-3 mr-1" />
-                                    Join Class
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                    
                     </div>
                   ))}
                 </div>
@@ -460,12 +394,7 @@ const TrainerStudents = () => {
                                   <p className="text-gray-600 text-xs">{student.studentId}</p>
                                 </div>
                               </td>
-                              <td className="p-3">
-                                <div className="text-xs">
-                                  <p>{student.email}</p>
-                                  <p>{student.phone}</p>
-                                </div>
-                              </td>
+                             
                               <td className="p-3">
                                 <div className="flex items-center gap-2">
                                   <div className="w-16 bg-gray-200 rounded-full h-2">

@@ -277,10 +277,10 @@ const TrainerDashboard = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left text-gray-600 font-medium p-3">Student ID</th>
+                      {/* <th className="text-left text-gray-600 font-medium p-3">Student ID</th> */}
                       <th className="text-left text-gray-600 font-medium p-3">Name</th>
                       <th className="text-left text-gray-600 font-medium p-3">Course</th>
-                      <th className="text-left text-gray-600 font-medium p-3">Batch</th>
+                      {/* <th className="text-left text-gray-600 font-medium p-3">Batch</th> */}
                       <th className="text-left text-gray-600 font-medium p-3">Progress</th>
                       <th className="text-left text-gray-600 font-medium p-3">Status</th>
                     </tr>
@@ -288,15 +288,15 @@ const TrainerDashboard = () => {
                   <tbody>
                     {dashboardData.students.map((student) => (
                       <tr key={student.studentId} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="p-3 text-gray-900">{student.studentId}</td>
+                        {/* <td className="p-3 text-gray-900">{student.studentId}</td> */}
                         <td className="p-3">
                           <div>
                             <p className="text-gray-900 font-medium">{student.name}</p>
-                            <p className="text-gray-600 text-xs">{student.email}</p>
+                            {/* <p className="text-gray-600 text-xs">{student.email}</p> */}
                           </div>
                         </td>
                         <td className="p-3 text-gray-900">{student.course_title}</td>
-                        <td className="p-3 text-gray-900">{student.batchId}</td>
+                        {/* <td className="p-3 text-gray-900">{student.batchId}</td> */}
                         <td className="p-3">
                           <div className="flex items-center gap-2">
                             <div className="w-20 bg-gray-200 rounded-full h-2">

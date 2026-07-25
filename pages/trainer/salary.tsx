@@ -318,54 +318,7 @@ const TrainerSalary = () => {
           </Card>
         </div>
 
-        {/* Salary History */}
-        <Card className="border-gray-200 shadow-sm">
-          <CardHeader className="border-b border-gray-200">
-            <CardTitle className="text-gray-900 flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-green-600" />
-              Salary History
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left text-gray-600 font-medium p-3">Month</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Base Salary</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Bonus</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Deductions</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Net Salary</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Status</th>
-                    <th className="text-left text-gray-600 font-medium p-3">Paid Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {salaryData.salaryHistory.map((salary, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="p-3 text-gray-900 font-medium">{salary.month}</td>
-                      <td className="p-3 text-gray-900">₹{salary.baseSalary.toLocaleString()}</td>
-                      <td className="p-3 text-green-600">+₹{salary.performanceBonus.toLocaleString()}</td>
-                      <td className="p-3 text-red-600">-₹{salary.deductions.toLocaleString()}</td>
-                      <td className="p-3 text-gray-900 font-medium">₹{salary.netSalary.toLocaleString()}</td>
-                      <td className="p-3">
-                        <Badge className={
-                          salary.status === 'paid' ? 'bg-green-100 text-green-700 border-green-200' :
-                          'bg-orange-100 text-orange-700 border-orange-200'
-                        }>
-                          {salary.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-gray-600">
-                        {salary.paidDate ? new Date(salary.paidDate).toLocaleDateString() : '-'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+       
       </div>
     </TrainerLayout>
   );
