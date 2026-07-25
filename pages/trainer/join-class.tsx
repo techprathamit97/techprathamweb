@@ -34,6 +34,7 @@ interface ScheduledClass {
   bbbMeetingId?: string;
   bbbModeratorJoinUrl?: string;
   bbbJoinUrl?: string;
+  sessionToken?: string;
 }
 
 const TrainerJoinClass = () => {
@@ -54,6 +55,9 @@ const TrainerJoinClass = () => {
 
   // Track if trainer has explicitly ended a session (to hide Join button until new session)
   const [endedSessions, setEndedSessions] = useState<Set<string>>(new Set());
+
+  // Track saved join URLs for each class (for rejoin functionality)
+  const [savedJoinUrls, setSavedJoinUrls] = useState<Record<string, string>>({});
 
   // Schedule class modal state
   const [scheduleModal, setScheduleModal] = useState<{
@@ -253,7 +257,16 @@ const TrainerJoinClass = () => {
         });
 
         setScheduledClasses(allScheduledClasses);
-        console.log('Loaded scheduled classes:', allScheduledClasses);
+
+        // Extract saved join URLs for rejoin functionality
+        const joinUrls: Record<string, string> = {};
+        allScheduledClasses.forEach((cls) => {
+          if (cls.bbbModeratorJoinUrl) {
+            joinUrls[cls._id] = cls.bbbModeratorJoinUrl;
+          }
+        });
+        setSavedJoinUrls(joinUrls);
+        console.log('Saved join URLs for rejoin:', joinUrls);
       } else {
         console.error('Failed to fetch scheduled classes:', data);
         toast.error('Failed to load scheduled classes: ' + (data.error || 'Unknown error'));
@@ -300,8 +313,35 @@ const TrainerJoinClass = () => {
         if (res.ok && data.success && data.data && data.data.batches) {
           const batches = data.data.batches;
           console.log('Extracted batches:', batches);
-          setAvailableBatches(batches);
-          toast.success(`Loaded ${batches.length} batches`);
+
+          // Fetch students to get email addresses
+          try {
+            const studentsRes = await fetch('/api/lms/students');
+            const studentsData = await studentsRes.json();
+
+            if (studentsRes.ok && Array.isArray(studentsData)) {
+              // Attach students to each batch
+              const batchesWithStudents = batches.map((batch: any) => {
+                const batchStudentIds = batch.enrolled_students || [];
+                const batchStudents = studentsData.filter((student: any) =>
+                  batchStudentIds.includes(student._id)
+                );
+                return {
+                  ...batch,
+                  students: batchStudents
+                };
+              });
+              setAvailableBatches(batchesWithStudents);
+              toast.success(`Loaded ${batches.length} batches with ${studentsData.length} total students`);
+            } else {
+              setAvailableBatches(batches);
+              toast.success(`Loaded ${batches.length} batches`);
+            }
+          } catch (studentsError) {
+            console.error('Error fetching students:', studentsError);
+            setAvailableBatches(batches);
+            toast.success(`Loaded ${batches.length} batches`);
+          }
         } else {
           console.error('Failed to load batches:', data);
           toast.error('Failed to load batches: ' + (data.error || 'Unknown error'));
@@ -314,8 +354,33 @@ const TrainerJoinClass = () => {
           console.log('Alternative API response:', altData);
           
           if (altRes.ok && altData.data) {
-            setAvailableBatches(altData.data);
-            toast.success(`Loaded ${altData.data.length} batches from alternative API`);
+            // Fetch students to get email addresses for alternative API
+            try {
+              const studentsRes = await fetch('/api/lms/students');
+              const studentsData = await studentsRes.json();
+
+              if (studentsRes.ok && Array.isArray(studentsData)) {
+                const batchesWithStudents = altData.data.map((batch: any) => {
+                  const batchStudentIds = batch.studentIds || batch.students || [];
+                  const batchStudents = studentsData.filter((student: any) =>
+                    batchStudentIds.includes(student._id)
+                  );
+                  return {
+                    ...batch,
+                    students: batchStudents
+                  };
+                });
+                setAvailableBatches(batchesWithStudents);
+                toast.success(`Loaded ${altData.data.length} batches from alternative API`);
+              } else {
+                setAvailableBatches(altData.data);
+                toast.success(`Loaded ${altData.data.length} batches from alternative API`);
+              }
+            } catch (studentsError) {
+              console.error('Error fetching students for alt batches:', studentsError);
+              setAvailableBatches(altData.data);
+              toast.success(`Loaded ${altData.data.length} batches from alternative API`);
+            }
           } else {
             toast.error('No batches found. Please create a batch first.');
           }
@@ -379,6 +444,65 @@ const TrainerJoinClass = () => {
           toast.info(`Tech Pratham LMS Meeting ID: ${data.bbbMeetingId}`);
         }
         setScheduleModal({ open: false, loading: false });
+
+        // Send email notification to all students in the batch about the new class
+        try {
+          const selectedBatch = availableBatches.find(b => (b._id === scheduleForm.batchId || b.batchId === scheduleForm.batchId));
+          if (selectedBatch && selectedBatch.students && selectedBatch.students.length > 0) {
+            const studentEmails = selectedBatch.students.map((student: any) => student.email).filter(Boolean);
+
+            if (studentEmails.length > 0) {
+              const classDate = new Date(scheduleForm.scheduledDate).toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              });
+
+              const emailSubject = `📚 New Class Scheduled: ${scheduleForm.moduleTitle}`;
+              const emailMessage = `Dear Students,
+
+A new class has been scheduled for your batch "${selectedBatch.batchName || selectedBatch.batchName}".
+
+Class Details:
+- Subject: ${scheduleForm.moduleTitle}
+- Date: ${classDate}
+- Time: ${scheduleForm.scheduledTime}
+- Duration: ${scheduleForm.duration} minutes
+
+Please make sure to attend this class on time. The join link will be available 15 minutes before the class starts.
+
+Best regards,
+${trainerInfo?.name || trainerInfo?.trainerName || 'Trainer'}`;
+
+              const emailRes = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: studentEmails.join(', '),
+                  subject: emailSubject,
+                  message: emailMessage,
+                  batchId: scheduleForm.batchId
+                })
+              });
+
+              const emailData = await emailRes.json();
+
+              if (emailData.success) {
+                toast.success(`📧 Email sent to ${studentEmails.length} students about the new class!`);
+              } else {
+                console.warn('Failed to send email notifications:', emailData.error);
+                toast.warning('Class scheduled but failed to send email notifications');
+              }
+            } else {
+              console.log('No student emails found in batch');
+            }
+          }
+        } catch (emailError) {
+          console.error('Error sending class notification email:', emailError);
+          // Don't fail the class creation if email fails
+          toast.warning('Class scheduled but email notification failed');
+        }
 
         // Refresh scheduled classes
         if (trainerInfo) {
@@ -598,6 +722,128 @@ We're working on fixing the direct integration.`;
       }
       
       toast.error('BBB integration temporarily unavailable. Please use Greenlight directly.', { duration: 8000 });
+    } finally {
+      setJoiningClass(null);
+    }
+  };
+
+  // Handle rejoin using saved URL from database
+  const handleRejoinClass = async (classItem: ScheduledClass) => {
+    setJoiningClass(classItem._id);
+
+    try {
+      const trainerName = trainerInfo?.name || trainerInfo?.trainerName || 'Trainer';
+
+      console.log('Rejoining class via API...');
+
+      // Call the join-class API to get a fresh join URL (reuses existing meeting)
+      const response = await fetch('/api/join-class', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classId: classItem._id,
+          userName: trainerName,
+          userType: 'trainer'
+        })
+      });
+
+      const data = await response.json();
+      console.log('Rejoin response:', data);
+
+      if (data.success && data.joinUrl) {
+        // Store active meeting info
+        const meetingInfo = {
+          classId: classItem._id,
+          meetingId: data.meetingId || classItem.bbbMeetingId || `class-${classItem._id}`,
+          startedAt: Date.now(),
+          lastSeen: Date.now()
+        };
+        localStorage.setItem('activeBBBMeeting', JSON.stringify(meetingInfo));
+        setActiveMeeting(meetingInfo);
+
+        // Update saved URL with fresh token
+        if (data.joinUrl) {
+          setSavedJoinUrls(prev => ({
+            ...prev,
+            [classItem._id]: data.joinUrl
+          }));
+        }
+
+        // Open the fresh join URL
+        window.open(data.joinUrl, '_blank', 'width=1200,height=800');
+
+        // Mark as joined
+        setJoinedClasses(prev => new Set(prev).add(classItem._id));
+        sessionStorage.setItem(`meeting_started_${classItem._id}`, 'true');
+
+        toast.success('Rejoining class with saved session!');
+      } else {
+        throw new Error(data.error || 'Failed to rejoin');
+      }
+    } catch (error) {
+      console.error('Rejoin error:', error);
+      toast.error('Failed to rejoin class. Please use "Start Class" to create a new session.');
+    } finally {
+      setJoiningClass(null);
+    }
+  };
+
+  // Handle end session - ends the BBB meeting and clears session
+  const handleEndSession = async (classItem: ScheduledClass) => {
+    const confirmEnd = confirm('Are you sure you want to end this session? This will close the meeting for all participants.');
+
+    if (!confirmEnd) return;
+
+    setJoiningClass(classItem._id);
+
+    try {
+      console.log('Ending session for class:', classItem._id);
+
+      const response = await fetch('/api/bbb/end-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          classId: classItem._id,
+          trainerAction: 'end_session'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update local state
+        setJoinedClasses(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(classItem._id);
+          return newSet;
+        });
+
+        setEndedSessions(prev => new Set(prev).add(classItem._id));
+
+        // Clear from localStorage
+        localStorage.removeItem('activeBBBMeeting');
+        sessionStorage.removeItem(`meeting_started_${classItem._id}`);
+
+        // Clear saved URL
+        setSavedJoinUrls(prev => {
+          const newUrls = { ...prev };
+          delete newUrls[classItem._id];
+          return newUrls;
+        });
+
+        toast.success('Session ended successfully!');
+
+        // Refresh classes
+        if (trainerInfo) {
+          const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
+          fetchScheduledClasses(trainerIdToUse);
+        }
+      } else {
+        throw new Error(data.error || 'Failed to end session');
+      }
+    } catch (error) {
+      console.error('End session error:', error);
+      toast.error('Failed to end session');
     } finally {
       setJoiningClass(null);
     }
@@ -1036,6 +1282,49 @@ We're working on fixing the direct integration.`;
                             <CheckCircle className="h-4 w-4" />
                             <span>Class Started</span>
                           </div>
+                        )}
+
+                        {/* Rejoin Button - Show if class was joined but trainer wants to rejoin using saved URL */}
+                        {joinedClasses.has(classItem._id) && savedJoinUrls[classItem._id] && statusInfo.status !== 'completed' && (
+                          <Button
+                            onClick={() => handleRejoinClass(classItem)}
+                            disabled={joiningClass === classItem._id}
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            {joiningClass === classItem._id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Rejoining...
+                              </>
+                            ) : (
+                              <>
+                                <PlayCircle className="h-4 w-4 mr-2" />
+                                Rejoin Class
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {/* End Session Button - Show if class was joined and not ended */}
+                        {joinedClasses.has(classItem._id) && statusInfo.status !== 'completed' && (
+                          <Button
+                            onClick={() => handleEndSession(classItem)}
+                            disabled={joiningClass === classItem._id}
+                            variant="outline"
+                            className="border-red-500 text-red-600 hover:bg-red-50"
+                          >
+                            {joiningClass === classItem._id ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Ending...
+                              </>
+                            ) : (
+                              <>
+                                <X className="h-4 w-4 mr-2" />
+                                End Session
+                              </>
+                            )}
+                          </Button>
                         )}
 
                         

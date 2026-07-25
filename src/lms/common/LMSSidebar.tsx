@@ -20,10 +20,15 @@ import {
   Key,
   Video,
   DollarSign,
-  CreditCard
+  CreditCard,
+  X
 } from 'lucide-react';
 
-const LMSSidebar = () => {
+interface LMSSidebarProps {
+  onClose?: () => void;
+}
+
+const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
   const router = useRouter();
 
   const menuItems = [
@@ -59,7 +64,17 @@ const LMSSidebar = () => {
 
   return (
     <div className="bg-[#0F1419] h-screen w-72 flex flex-col items-center justify-start py-4 px-6 border-r border-gray-800 flex-shrink-0">
-      
+
+      {/* Mobile Close Button */}
+      <div className="lg:hidden w-full flex justify-end mb-2">
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
       {/* Logo */}
       <div className='w-auto flex flex-row gap-4 items-center justify-start mb-8'>
         <Link href={'/'} aria-label='Techpratham LMS'>

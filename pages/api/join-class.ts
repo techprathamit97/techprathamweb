@@ -507,9 +507,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Ensure we have a sessionToken value (may have been set earlier from mapping)
+    // For trainers, check if they have a saved sessionToken from previous join
     if (!sessionToken || typeof sessionToken !== 'string') {
-      sessionToken = Math.random().toString(36).substring(2, 10);
-      console.log('Generated fallback session token:', sessionToken);
+      // Check if trainer has a saved sessionToken for rejoin
+      if (userType === 'trainer' || userType === 'moderator') {
+        const existingClass = await ModuleClass.findById(classId) as any;
+        if (existingClass && existingClass.trainerSessionToken) {
+          sessionToken = existingClass.trainerSessionToken;
+          console.log('Reusing saved trainer sessionToken for rejoin:', sessionToken);
+        } else {
+          sessionToken = Math.random().toString(36).substring(2, 10);
+          console.log('Generated new session token for trainer:', sessionToken);
+        }
+      } else {
+        sessionToken = Math.random().toString(36).substring(2, 10);
+        console.log('Generated fallback session token:', sessionToken);
+      }
     }
 
     // Final full name used for the meeting join (ensures server and BBB use same token)
@@ -684,6 +697,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       } catch (tokenError) {
         console.log('Failed to track session token:', tokenError);
         // Don't fail the join if token tracking fails
+      }
+    }
+
+    // Save the trainer's sessionToken for rejoin capability
+    // Save the HTML5 client redirect URL format for easy rejoin
+    if ((userType === 'trainer' || userType === 'moderator') && sessionToken) {
+      try {
+        // Create HTML5 client redirect URL format
+        const html5ClientUrl = `https://class.techpratham.org/html5client/?sessionToken=${sessionToken}`;
+
+        await ModuleClass.findByIdAndUpdate(classId, {
+          bbbModeratorJoinUrl: html5ClientUrl,
+          trainerSessionToken: sessionToken // Save trainer's token for reuse
+        });
+        console.log('Saved trainer sessionToken for rejoin:', sessionToken);
+      } catch (saveError) {
+        console.log('Failed to save sessionToken:', saveError);
+        // Don't fail the join if saving fails
       }
     }
 

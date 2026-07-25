@@ -5,16 +5,28 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import NotificationBell from '@/components/notifications/NotificationBell';
 
-const LMSTopBar = () => {
+interface LMSTopBarProps {
+  onMenuClick?: () => void;
+}
+
+const LMSTopBar: React.FC<LMSTopBarProps> = ({ onMenuClick }) => {
   // Admin ID for notifications - using a fixed ID for LMS admin
   const adminId = 'lms-admin';
 
   return (
-    <div className="bg-[#0F1419] border-b border-gray-800 px-6 py-4 flex items-center justify-between w-full">
-      {/* Left Side - Search Bar */}
+    <div className="bg-[#0F1419] border-b border-gray-800 px-4 lg:px-6 py-4 flex items-center justify-between w-full">
+      {/* Left Side - Menu Button & Search */}
       <div className="flex items-center gap-4">
-        {/* Search Bar */}
-        <div className="relative">
+        {/* Mobile Menu Button */}
+        <button
+          onClick={onMenuClick}
+          className="lg:hidden p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+
+        {/* Search Bar - Hidden on mobile */}
+        <div className="hidden lg:block relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             placeholder="Search students, courses, batches..."

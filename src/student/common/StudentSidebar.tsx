@@ -14,7 +14,8 @@ import {
   Bell,
   LogOut,
   Users,
-  TrendingUp
+  TrendingUp,
+  X
 } from 'lucide-react';
 
 // Circular Progress Component
@@ -65,7 +66,11 @@ const CircularProgress = ({ percentage, size = 80, strokeWidth = 8 }: { percenta
   );
 };
 
-const StudentSidebar = () => {
+interface StudentSidebarProps {
+  onClose?: () => void;
+}
+
+const StudentSidebar: React.FC<StudentSidebarProps> = ({ onClose }) => {
   const router = useRouter();
   const [courseStats, setCourseStats] = useState<{
     totalCourses: number;
@@ -119,22 +124,34 @@ const StudentSidebar = () => {
   return (
     <div className="bg-white border-r border-gray-200 h-full w-64 flex flex-col shadow-sm">
 
+      {/* Mobile Close Button */}
+      {onClose && (
+        <div className="lg:hidden flex justify-end p-2">
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
       {/* Course Progress Circle */}
       {courseStats && (
-        <div className="p-4 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
-          <div className="flex items-center justify-between mb-3">
-            <div>
+        <div className="p-3 lg:p-4 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="text-center sm:text-left">
               <p className="text-xs font-medium text-gray-600">Course Progress</p>
-              <div className="flex items-center gap-3 mt-1">
-                <TrendingUp className="h-4 w-4 text-green-600" />
-                <span className="text-sm">
+              <div className="flex items-center justify-center sm:justify-start gap-2 lg:gap-3 mt-1">
+                <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
+                <span className="text-xs lg:text-sm">
                   <span className="font-bold text-green-600">{courseStats.completedCourses}</span>
                   <span className="text-gray-500">/{courseStats.totalCourses}</span>
-                  <span className="text-gray-500 text-xs ml-1">completed</span>
+                  <span className="text-gray-500 text-xs ml-1 hidden sm:inline">completed</span>
                 </span>
               </div>
             </div>
-            <CircularProgress percentage={courseStats.avgProgress} size={70} strokeWidth={6} />
+            <CircularProgress percentage={courseStats.avgProgress} size={60} strokeWidth={5} />
           </div>
         </div>
       )}

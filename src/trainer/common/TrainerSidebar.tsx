@@ -14,10 +14,15 @@ import {
   VideoIcon,
   DollarSign,
   LogOut,
-  BookOpen
+  BookOpen,
+  X
 } from 'lucide-react';
 
-const TrainerSidebar = () => {
+interface TrainerSidebarProps {
+  onClose?: () => void;
+}
+
+const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onClose }) => {
   const router = useRouter();
 
   const menuItems = [
@@ -44,8 +49,18 @@ const TrainerSidebar = () => {
 
   return (
     <div className="bg-white border-r border-gray-200 h-full w-64 flex flex-col shadow-sm">
+      {/* Mobile Close Button */}
+      <div className="lg:hidden w-full flex justify-end p-2">
+        <button
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
       {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-6 pt-0 lg:pt-6 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-800">Trainer Portal</h2>
         <p className="text-xs text-gray-500 mt-1">Learning Management System</p>
       </div>

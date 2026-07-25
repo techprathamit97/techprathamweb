@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { Search, LogOut } from 'lucide-react';
+import { Search, LogOut, Menu } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 
-const TrainerNavbar = () => {
+interface TrainerNavbarProps {
+  onMenuClick?: () => void;
+}
+
+const TrainerNavbar: React.FC<TrainerNavbarProps> = ({ onMenuClick }) => {
   const [trainerData, setTrainerData] = useState<any>(null);
   const router = useRouter();
 
@@ -25,10 +29,18 @@ const TrainerNavbar = () => {
 
   return (
     <div className="bg-white border-b border-gray-200 shadow-sm">
-      <div className="px-6 py-4">
-        <div className="flex items-center justify-between">
-          {/* Search Bar */}
-          <div className="flex-1 max-w-xl">
+      <div className="px-4 lg:px-6 py-4">
+        <div className="flex items-center justify-between gap-4">
+          {/* Mobile Menu Button */}
+          <button
+            onClick={onMenuClick}
+            className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg"
+          >
+            <Menu className="w-6 h-6" />
+          </button>
+
+          {/* Search Bar - Hidden on mobile */}
+          <div className="flex-1 max-w-xl hidden lg:block">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <input
@@ -40,12 +52,9 @@ const TrainerNavbar = () => {
           </div>
 
           {/* Right Section */}
-          <div className="flex items-center gap-4 ml-6">
-            {/* Notifications */}
-           
-
+          <div className="flex items-center gap-4">
             {/* User Profile */}
-            <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
+            <div className="flex items-center gap-3">
               <Avatar className="w-9 h-9">
                 <AvatarFallback className="bg-green-100 text-green-600 font-semibold">
                   {trainerData?.name?.split(' ').map((n: string) => n[0]).join('') || 'T'}
@@ -55,13 +64,13 @@ const TrainerNavbar = () => {
                 <p className="text-sm font-medium text-gray-900">{trainerData?.name || 'Trainer'}</p>
                 <p className="text-xs text-gray-500">{trainerData?.trainerId || ''}</p>
               </div>
-              
+
               {/* Logout Button */}
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleLogout}
-                className="ml-2 text-gray-600 hover:text-red-600 hover:bg-red-50"
+                className="text-gray-600 hover:text-red-600 hover:bg-red-50"
               >
                 <LogOut className="w-4 h-4" />
               </Button>
