@@ -5,21 +5,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  BookOpen, 
-  Calendar, 
+import {
+  User,
+  Mail,
+  Phone,
+  BookOpen,
+  Calendar,
   GraduationCap,
   Users,
   DollarSign,
   Star,
   Clock,
-  MapPin
+  MapPin,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
 interface StudentInfo {
   studentId: string;
@@ -107,6 +116,9 @@ const StudentProfile = () => {
   const router = useRouter();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
 
   useEffect(() => {
     const storedData = localStorage.getItem('student');
@@ -143,6 +155,37 @@ const StudentProfile = () => {
     }
   };
 
+  const sendPasswordResetEmail = async () => {
+    if (!resetEmail) {
+      toast.error('Please enter your email address');
+      return;
+    }
+
+    setIsSendingReset(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, type: 'student' })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        toast.success('Password reset link sent to your email!');
+        setIsChangePasswordOpen(false);
+        setResetEmail('');
+      } else {
+        toast.error(data.error || 'Failed to send reset email');
+      }
+    } catch (error: any) {
+      console.error('Send reset email error:', error);
+      toast.error(error.message || 'Something went wrong');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
   if (isLoading || !profileData) {
     return (
       <StudentLayout>
@@ -157,8 +200,52 @@ const StudentProfile = () => {
     <StudentLayout>
       <div className="p-6 space-y-6">
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
-          <h1 className="text-3xl font-bold">My Profile</h1>
-          <p className="text-blue-100 mt-2">Complete overview of your learning journey</p>
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold">My Profile</h1>
+              <p className="text-blue-100 mt-2">Complete overview of your learning journey</p>
+            </div>
+            {/* Change Password Button */}
+            <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="bg-white text-blue-600 hover:bg-blue-50 border-0">
+                  <Lock className="w-4 h-4 mr-2" />
+                  Change Password
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-white border-gray-200 max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-gray-900 flex items-center gap-2">
+                    <KeyRound className="h-5 w-5" />
+                    Change Password
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-gray-600 text-sm">
+                    Enter your email address and we'll send you a link to reset your password.
+                  </p>
+                  <div>
+                    <Label htmlFor="resetEmail" className="text-gray-700">Email Address</Label>
+                    <Input
+                      id="resetEmail"
+                      type="email"
+                      placeholder="Enter your registered email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  <Button
+                    onClick={sendPasswordResetEmail}
+                    disabled={isSendingReset || !resetEmail}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isSendingReset ? 'Sending...' : 'Send Reset Link'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Personal Information and Stats Row */}
