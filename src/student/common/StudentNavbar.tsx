@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { Search, Menu } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import NotificationBell from '@/components/ui/notification-bell';
+import Image from 'next/image';
+import { useRouter } from 'next/router';
 
 interface StudentNavbarProps {
   onMenuClick?: () => void;
@@ -9,6 +11,7 @@ interface StudentNavbarProps {
 
 const StudentNavbar: React.FC<StudentNavbarProps> = ({ onMenuClick }) => {
   const [studentData, setStudentData] = useState<any>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const storedData = localStorage.getItem('student');
@@ -32,6 +35,21 @@ const StudentNavbar: React.FC<StudentNavbarProps> = ({ onMenuClick }) => {
     <div className="bg-white border-b border-gray-200 shadow-sm">
       <div className="px-4 py-4 lg:px-6">
         <div className="flex items-center gap-4">
+          {/* Logo */}
+          <div
+            className="flex-shrink-0 cursor-pointer"
+            onClick={() => router.push('/student/dashboard')}
+          >
+            <Image
+              src="/navbar/lmslogo.png"
+              alt="TechPratham Logo"
+              width={140}
+              height={40}
+              className="h-16 w-auto"
+              priority
+            />
+          </div>
+
           {/* Mobile Menu Button */}
           <button
             onClick={onMenuClick}

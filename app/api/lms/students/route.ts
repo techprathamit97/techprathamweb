@@ -32,6 +32,7 @@ export async function GET() {
           email: student.email,
           phone: student.phone,
           isActive: student.isActive,
+          isRestricted: student.isRestricted || false,
           enrollmentDate: student.enrollmentDate,
           batches: batches.map((b: any) => ({
             batchId: b._id.toString(),

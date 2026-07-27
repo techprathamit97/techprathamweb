@@ -293,6 +293,27 @@ const StudentDashboard = () => {
     }
   }, []);
 
+  // Check if student is restricted
+  const checkStudentRestriction = async (studentId: string) => {
+    try {
+      const res = await fetch(`/api/lms/students/manage?studentId=${studentId}&action=check-restriction`);
+      const data = await res.json();
+
+      if (res.ok && data.isRestricted) {
+        // Student is restricted - force logout
+        localStorage.removeItem('student');
+        localStorage.removeItem('userSession');
+        toast.error('You are restricted from accessing the platform. Please contact admin for more information.');
+        router.push('/login');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking student restriction:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     // Check if student is logged in
     const storedData = localStorage.getItem('student');
@@ -301,15 +322,24 @@ const StudentDashboard = () => {
       return;
     }
 
-    try {
-      const student = JSON.parse(storedData);
-      setStudentData(student);
-      fetchDashboardData(student.studentId);
-    } catch (error) {
-      console.error('Error parsing student data:', error);
-      localStorage.removeItem('student');
-      router.push('/student/login');
-    }
+    const initDashboard = async () => {
+      try {
+        const student = JSON.parse(storedData);
+        setStudentData(student);
+
+        // Check if student is restricted before loading dashboard
+        const isRestricted = await checkStudentRestriction(student.studentId || student._id);
+        if (!isRestricted) {
+          fetchDashboardData(student.studentId);
+        }
+      } catch (error) {
+        console.error('Error parsing student data:', error);
+        localStorage.removeItem('student');
+        router.push('/student/login');
+      }
+    };
+
+    initDashboard();
   }, []);
 
   const handleLogout = () => {
@@ -427,19 +457,7 @@ const StudentDashboard = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Avg Progress</p>
-                  <p className="text-3xl font-bold text-gray-900">{dashboardData.stats.avgProgress}%</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          
         </div>
 
         {/* Stats Cards - Row 2 */}

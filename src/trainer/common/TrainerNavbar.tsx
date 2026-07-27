@@ -4,6 +4,7 @@ import { Search, LogOut, Menu } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import Image from 'next/image';
 
 
 interface TrainerNavbarProps {
@@ -31,6 +32,21 @@ const TrainerNavbar: React.FC<TrainerNavbarProps> = ({ onMenuClick }) => {
     <div className="bg-white border-b border-gray-200 shadow-sm">
       <div className="px-4 lg:px-6 py-4">
         <div className="flex items-center justify-between gap-4">
+          {/* Logo */}
+          <div
+            className="flex-shrink-0 cursor-pointer"
+            onClick={() => router.push('/trainer/dashboard')}
+          >
+            <Image
+              src="/navbar/lmslogo.png"
+              alt="TechPratham Logo"
+              width={140}
+              height={40}
+              className="h-16 w-auto"
+              priority
+            />
+          </div>
+
           {/* Mobile Menu Button */}
           <button
             onClick={onMenuClick}

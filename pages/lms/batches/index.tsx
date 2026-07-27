@@ -132,6 +132,11 @@ const BatchesManagement = () => {
 
   // Bulk actions state
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  // Restrict student dialog state
+  const [isRestrictDialogOpen, setIsRestrictDialogOpen] = useState(false);
+  const [restrictReason, setRestrictReason] = useState('');
+  const [studentToRestrict, setStudentToRestrict] = useState<{ id: string; name: string } | null>(null);
   
   const [newBatch, setNewBatch] = useState({
     batchName: '',
@@ -762,16 +767,31 @@ const BatchesManagement = () => {
   };
 
   // Student management functions
-  const handleRestrictStudent = async (studentId: string, studentName: string) => {
+  const openRestrictDialog = (studentId: string, studentName: string) => {
+    setStudentToRestrict({ id: studentId, name: studentName });
+    setRestrictReason('');
+    setIsRestrictDialogOpen(true);
+  };
+
+  const handleRestrictStudent = async () => {
+    if (!studentToRestrict) return;
+
     try {
       const res = await fetch('/api/lms/students/manage', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId, action: 'restrict' })
+        body: JSON.stringify({
+          studentId: studentToRestrict.id,
+          action: 'restrict',
+          reason: restrictReason
+        })
       });
 
       if (res.ok) {
-        toast.success(`${studentName} has been restricted from dashboard`);
+        toast.success(`${studentToRestrict.name} has been restricted from dashboard`);
+        setIsRestrictDialogOpen(false);
+        setStudentToRestrict(null);
+        setRestrictReason('');
         // Refresh batch students
         if (selectedBatch) {
           fetchBatchStudents(selectedBatch);
@@ -1414,7 +1434,7 @@ const BatchesManagement = () => {
                               <Button
                                 size="sm"
                                 className="h-7 text-xs bg-yellow-600 hover:bg-yellow-700 text-white border-0"
-                                onClick={() => handleRestrictStudent(student._id, student.name)}
+                                onClick={() => openRestrictDialog(student._id, student.name)}
                                 title="Restrict - block dashboard access"
                               >
                                 Restrict
@@ -1771,6 +1791,59 @@ const BatchesManagement = () => {
             </Button>
             <Button variant="manual" onClick={handleUpdateCertificate}>
               Save Changes
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restrict Student Dialog */}
+      <Dialog open={isRestrictDialogOpen} onOpenChange={setIsRestrictDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">
+              Restrict Student Access
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3 bg-yellow-600/20 border border-yellow-600 rounded-lg">
+              <p className="text-yellow-400 text-sm">
+                You are about to restrict <strong className="text-white">{studentToRestrict?.name}</strong> from accessing the student dashboard.
+              </p>
+            </div>
+
+            <div>
+              <Label className="text-white">Reason for restriction (optional)</Label>
+              <textarea
+                value={restrictReason}
+                onChange={(e) => setRestrictReason(e.target.value)}
+                placeholder="Enter reason for restriction..."
+                rows={3}
+                className="w-full mt-2 p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+
+            <p className="text-gray-400 text-sm">
+              The student will see this message when they try to log in: "You are restricted from accessing the platform. Please contact admin for more information."
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsRestrictDialogOpen(false);
+                setStudentToRestrict(null);
+                setRestrictReason('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-yellow-600 hover:bg-yellow-700 text-white border-0"
+              onClick={handleRestrictStudent}
+            >
+              Confirm Restriction
             </Button>
           </div>
         </DialogContent>

@@ -116,6 +116,36 @@ export async function POST(req: NextRequest) {
           { status: 401 }
         );
       }
+
+      // Check if student is restricted
+      if (student.isRestricted) {
+        console.log('❌ Student account is restricted');
+        const restrictMsg = student.restrictReason
+          ? `You are restricted from accessing the platform. Reason: ${student.restrictReason}. Please contact admin for more information.`
+          : 'You are restricted from accessing the platform. Please contact admin for more information.';
+        return NextResponse.json(
+          {
+            error: restrictMsg,
+            isRestricted: true
+          },
+          { status: 403 }
+        );
+      }
+
+      // Check if student has any enrolled batches (check both Student.batches and Batch.studentIds)
+      const Batch = require('@/models/Batch');
+      const studentBatches = await Batch.find({ studentIds: student._id });
+
+      if (!studentBatches || studentBatches.length === 0) {
+        console.log('❌ Student is not enrolled in any batch');
+        return NextResponse.json(
+          {
+            error: 'You are not enrolled in any batch yet. Please contact admin to enroll you before logging in.',
+            notEnrolled: true
+          },
+          { status: 403 }
+        );
+      }
       
       // Create user data using STUDENT COLLECTION data
       const userData = {

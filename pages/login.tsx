@@ -146,7 +146,24 @@ const RoleBasedLogin = () => {
           throw new Error('Invalid role or authentication response');
         }
       } else {
-        throw new Error(data.error || 'Login failed');
+        // Handle error responses - check for specific error types
+        console.log('Login error response:', data, 'Status:', res.status);
+
+        let errorMessage = '';
+        if (data.isRestricted === true) {
+          errorMessage = data.error || 'You are restricted from accessing the platform. Please contact admin for more information.';
+        } else if (data.notEnrolled) {
+          errorMessage = data.error || 'You are not enrolled in any batch yet. Please contact admin to enroll you before logging in.';
+        } else if (data.error) {
+          errorMessage = data.error;
+        } else {
+          errorMessage = 'Login failed. Please check your credentials and try again.';
+        }
+
+        // Show toast notification
+        toast.error(errorMessage);
+        setIsLoading(false);
+        return;
       }
     } catch (error: any) {
       console.error('Login error:', error);

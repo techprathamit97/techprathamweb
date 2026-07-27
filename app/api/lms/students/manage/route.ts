@@ -2,6 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
 const Student = require('@/models/Student');
 
+// GET - Check student restriction status
+export async function GET(req: NextRequest) {
+  try {
+    await connectMongo();
+
+    const { searchParams } = new URL(req.url);
+    const studentId = searchParams.get('studentId');
+
+    if (!studentId) {
+      return NextResponse.json(
+        { error: 'Student ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const student = await Student.findById(studentId);
+
+    if (!student) {
+      return NextResponse.json(
+        { error: 'Student not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      isRestricted: student.isRestricted || false,
+      isActive: student.isActive || false,
+      studentId: student._id
+    });
+  } catch (error: any) {
+    console.error('Check restriction error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Failed to check restriction status' },
+      { status: 500 }
+    );
+  }
+}
+
 // PUT - Restrict/Unrestrict student dashboard access
 export async function PUT(req: NextRequest) {
   try {
@@ -21,10 +59,18 @@ export async function PUT(req: NextRequest) {
 
     switch (action) {
       case 'restrict':
-        updateData = { isRestricted: true };
+        updateData = {
+          isRestricted: true,
+          restrictReason: data.reason || '',
+          restrictedAt: new Date()
+        };
         break;
       case 'unrestrict':
-        updateData = { isRestricted: false };
+        updateData = {
+          isRestricted: false,
+          restrictReason: '',
+          restrictedAt: null
+        };
         break;
       case 'deactivate':
         updateData = { isActive: false };
