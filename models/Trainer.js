@@ -12,7 +12,11 @@ const trainerSchema = new mongoose.Schema({
   experience: String,
   dateOfJoining: { type: Date, default: Date.now },
   isActive: { type: Boolean, default: true },
-  profileImage: String
+  profileImage: String,
+
+  // Password reset tokens
+  resetToken: String,
+  resetTokenExpiry: Date
 }, { timestamps: true });
 
 module.exports = mongoose.models.Trainer || mongoose.model('Trainer', trainerSchema);

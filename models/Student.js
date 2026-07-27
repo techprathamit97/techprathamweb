@@ -31,7 +31,11 @@ const studentSchema = new mongoose.Schema({
     classRescheduled: { type: Boolean, default: true },
     assignments: { type: Boolean, default: true },
     announcements: { type: Boolean, default: true }
-  }
+  },
+
+  // Password reset tokens
+  resetToken: String,
+  resetTokenExpiry: Date
 }, { timestamps: true });
 
 module.exports = mongoose.models.Student || mongoose.model('Student', studentSchema);
