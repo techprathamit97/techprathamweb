@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Send reset email
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&type=${userType}&email=${encodeURIComponent(userEmail)}`;
+    const resetUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&type=${userType}&email=${encodeURIComponent(userEmail)}`;
 
     // Log SMTP config for debugging (without password)
     console.log('SMTP Config:', {
