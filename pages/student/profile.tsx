@@ -118,7 +118,6 @@ const StudentProfile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
 
   useEffect(() => {
     const storedData = localStorage.getItem('student');
@@ -156,8 +155,9 @@ const StudentProfile = () => {
   };
 
   const sendPasswordResetEmail = async () => {
-    if (!resetEmail) {
-      toast.error('Please enter your email address');
+    const userEmail = profileData?.studentInfo?.email;
+    if (!userEmail) {
+      toast.error('Unable to get your email address');
       return;
     }
 
@@ -166,7 +166,7 @@ const StudentProfile = () => {
       const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: resetEmail, type: 'student' })
+        body: JSON.stringify({ email: userEmail, type: 'student' })
       });
 
       const data = await res.json();
@@ -174,7 +174,6 @@ const StudentProfile = () => {
       if (res.ok) {
         toast.success('Password reset link sent to your email!');
         setIsChangePasswordOpen(false);
-        setResetEmail('');
       } else {
         toast.error(data.error || 'Failed to send reset email');
       }
@@ -222,22 +221,15 @@ const StudentProfile = () => {
                 </DialogHeader>
                 <div className="space-y-4">
                   <p className="text-gray-600 text-sm">
-                    Enter your email address and we'll send you a link to reset your password.
+                    We'll send a password reset link to your registered email address.
                   </p>
-                  <div>
-                    <Label htmlFor="resetEmail" className="text-gray-700">Email Address</Label>
-                    <Input
-                      id="resetEmail"
-                      type="email"
-                      placeholder="Enter your registered email"
-                      value={resetEmail}
-                      onChange={(e) => setResetEmail(e.target.value)}
-                      className="mt-1"
-                    />
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-500">Send to:</p>
+                    <p className="font-medium text-gray-900">{profileData?.studentInfo?.email}</p>
                   </div>
                   <Button
                     onClick={sendPasswordResetEmail}
-                    disabled={isSendingReset || !resetEmail}
+                    disabled={isSendingReset}
                     className="w-full bg-blue-600 hover:bg-blue-700"
                   >
                     {isSendingReset ? 'Sending...' : 'Send Reset Link'}

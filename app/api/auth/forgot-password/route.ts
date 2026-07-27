@@ -4,15 +4,26 @@ const Student = require('@/models/Student');
 const Trainer = require('@/models/Trainer');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
-// Email configuration
-const SMTP_HOST = process.env.SMTP_HOST || 'smtp.gmail.com';
+// Email configuration from environment variables
+const SMTP_HOST = process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || '587');
-const SMTP_USER = process.env.SMTP_USER || 'techprathamit@gmail.com';
-const SMTP_PASS = process.env.SMTP_PASS || 'rgwnknbttxywgxip';
-const SMTP_FROM = process.env.SMTP_FROM || 'TechPratham <techprathamit@gmail.com>';
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const SMTP_FROM = process.env.SMTP_FROM || process.env.SMTP_USER;
 
-const transporter = require('nodemailer').createTransport({
+// Validate SMTP configuration
+if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+  console.error('SMTP configuration is missing:', {
+    host: SMTP_HOST,
+    user: SMTP_USER,
+    pass: SMTP_PASS ? '****' : 'missing',
+    from: SMTP_FROM
+  });
+}
+
+const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
   secure: false,
@@ -22,6 +33,15 @@ const transporter = require('nodemailer').createTransport({
   },
   tls: {
     rejectUnauthorized: false
+  }
+});
+
+// Verify SMTP connection on startup
+transporter.verify((error: any, success: any) => {
+  if (error) {
+    console.error('SMTP connection error:', error);
+  } else {
+    console.log('SMTP server is ready to take our messages');
   }
 });
 
@@ -86,6 +106,15 @@ export async function POST(req: NextRequest) {
     // Send reset email
     const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&type=${userType}&email=${encodeURIComponent(userEmail)}`;
 
+    // Log SMTP config for debugging (without password)
+    console.log('SMTP Config:', {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      user: SMTP_USER,
+      from: SMTP_FROM,
+      url: resetUrl
+    });
+
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center;">
@@ -130,9 +159,12 @@ export async function POST(req: NextRequest) {
       to: userEmail,
       subject: 'TechPratham - Password Reset Request',
       html: htmlContent
+    }).then(() => {
+      console.log('Password reset email sent successfully to:', userEmail);
+    }).catch((mailError: any) => {
+      console.error('Failed to send email:', mailError);
+      throw mailError;
     });
-
-    console.log('Password reset email sent to:', userEmail);
 
     return NextResponse.json({
       success: true,
@@ -146,4 +178,18 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+// GET - Check email configuration status
+export async function GET() {
+  const configured = !!SMTP_USER && !!SMTP_PASS && !!SMTP_HOST;
+
+  return NextResponse.json({
+    success: true,
+    configured,
+    service: 'Gmail SMTP',
+    host: SMTP_HOST || 'Not configured',
+    port: SMTP_PORT,
+    sender: configured ? SMTP_USER : 'Not configured'
+  });
 }
