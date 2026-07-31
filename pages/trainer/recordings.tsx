@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import TrainerLayout from '@/src/trainer/common/TrainerLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { VideoIcon, Calendar, User, PlayCircle, X, Clock, Users, Download } from 'lucide-react';
+import { VideoIcon, Calendar, PlayCircle, X, Clock, Users, Filter, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface BBBRecording {
   recordId: string;
@@ -23,15 +24,24 @@ interface BBBRecording {
   status: string;
 }
 
-// Group recordings by date
-interface GroupedRecordings {
-  date: string;
-  dateLabel: string;
+interface TrainerBatch {
+  _id: string;
+  batchName: string;
+  batchCode: string;
+  courseName: string;
+  studentCount: number;
+  timing: string;
+  startDate: string;
+  endDate: string;
   recordings: BBBRecording[];
 }
 
 const TrainerRecordings = () => {
   const [recordings, setRecordings] = useState<BBBRecording[]>([]);
+  const [batches, setBatches] = useState<TrainerBatch[]>([]);
+  const [selectedBatch, setSelectedBatch] = useState<string>('all');
+  const [hasMultipleBatches, setHasMultipleBatches] = useState(false);
+  const [trainerData, setTrainerData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRecording, setSelectedRecording] = useState<BBBRecording | null>(null);
@@ -40,31 +50,43 @@ const TrainerRecordings = () => {
   const [showUnpublished, setShowUnpublished] = useState(false);
 
   useEffect(() => {
-    fetchBBBRecordings();
+    // Get trainer data from localStorage
+    const storedData = localStorage.getItem('trainer');
+    if (storedData) {
+      const trainer = JSON.parse(storedData);
+      setTrainerData(trainer);
+      fetchTrainerBatchRecordings(trainer._id || trainer.trainerId);
+    } else {
+      setError('Trainer authentication required');
+      setLoading(false);
+    }
   }, []);
 
-  const fetchBBBRecordings = async () => {
+  const fetchTrainerBatchRecordings = async (trainerId: string) => {
     try {
-      console.log('=== FETCHING BBB RECORDINGS FOR TRAINERS ===');
+      console.log('=== FETCHING BATCH-WISE RECORDINGS FOR TRAINER ===', trainerId);
 
-      const response = await fetch('/api/view-all-bbb-recordings');
+      const response = await fetch(`/api/trainer-batch-recordings?trainerId=${trainerId}`);
       const data = await response.json();
 
-      console.log('BBB API Response:', data);
-      console.log('Success:', data.success);
-      console.log('Total recordings:', data.totalRecordings);
+      console.log('Trainer Batch Recordings API Response:', data);
 
       if (data.success) {
-        console.log('BBB Recordings:', data.recordings);
-        // Show all recordings to trainers (including unpublished)
-        setRecordings(data.recordings || []);
+        setBatches(data.batches || []);
+        setHasMultipleBatches(data.hasMultipleBatches || false);
+        
+        // Flatten all recordings from all batches
+        const allRecordings = (data.batches || []).flatMap((batch: TrainerBatch) => batch.recordings);
+        setRecordings(allRecordings);
+        
+        console.log(`Found ${data.totalBatches} batches with ${data.totalRecordings} recordings`);
       } else {
-        console.error('BBB API error:', data.error);
-        setError(data.error || 'Failed to fetch recordings ');
+        console.error('Batch recordings API error:', data.error);
+        setError(data.error || 'Failed to fetch batch recordings');
       }
     } catch (err: any) {
-      console.error('Error fetching BBB recordings:', err);
-      setError('Failed to load recordings from Tech Pratham server');
+      console.error('Error fetching batch recordings:', err);
+      setError('Failed to load batch recordings');
     } finally {
       setLoading(false);
     }
@@ -92,11 +114,21 @@ const TrainerRecordings = () => {
     });
   };
 
+  // Get current batch recordings based on selection
+  const currentRecordings = useMemo(() => {
+    if (selectedBatch === 'all') {
+      return recordings;
+    }
+    
+    const batch = batches.find(b => b._id === selectedBatch);
+    return batch?.recordings || [];
+  }, [recordings, batches, selectedBatch]);
+
   // Group recordings by day
   const groupedRecordings = useMemo(() => {
     const groups: Record<string, BBBRecording[]> = {};
 
-    recordings.forEach((recording) => {
+    currentRecordings.forEach((recording) => {
       let dateKey: string;
 
       if (recording.startTime && recording.startTime.match(/^\d+$/)) {
@@ -128,16 +160,16 @@ const TrainerRecordings = () => {
           return 0;
         })
       }));
-  }, [recordings]);
+  }, [currentRecordings]);
 
   // Filter recordings based on toggle
   const filteredRecordings = useMemo(() => {
     if (showUnpublished) {
-      return recordings;
+      return currentRecordings;
     }
     // Only show published recordings by default
-    return recordings.filter((rec) => rec.published && rec.state === 'published' && rec.videoUrl);
-  }, [recordings, showUnpublished]);
+    return currentRecordings.filter((rec) => rec.published && rec.state === 'published' && rec.videoUrl);
+  }, [currentRecordings, showUnpublished]);
 
   const handlePlayRecording = async (recording: BBBRecording) => {
     console.log('=== PLAYING BBB RECORDING ===');
@@ -161,16 +193,27 @@ const TrainerRecordings = () => {
     setVideoLoading(false);
   };
 
+  const handleRefresh = () => {
+    if (trainerData) {
+      setLoading(true);
+      fetchTrainerBatchRecordings(trainerData._id || trainerData.trainerId);
+    }
+  };
+
+  // Calculate stats
+  const totalRecordings = currentRecordings.length;
+  const publishedCount = currentRecordings.filter(r => r.published && r.state === 'published').length;
+  const unpublishedCount = currentRecordings.filter(r => !r.published || r.state !== 'published').length;
+
   const handleClosePlayer = () => {
     setSelectedRecording(null);
     setVideoUrl('');
     setVideoLoading(false);
   };
 
-  // Calculate stats
-  const totalRecordings = recordings.length;
-  const publishedCount = recordings.filter(r => r.published && r.state === 'published').length;
-  const unpublishedCount = recordings.filter(r => !r.published || r.state !== 'published').length;
+  const selectedBatchInfo = selectedBatch === 'all' 
+    ? null 
+    : batches.find(b => b._id === selectedBatch);
 
   return (
     <TrainerLayout>
@@ -190,7 +233,7 @@ const TrainerRecordings = () => {
             ) : error ? (
               <div className="text-center py-8">
                 <div className="text-red-600 mb-2">{error}</div>
-                <Button onClick={fetchBBBRecordings} variant="outline">
+                <Button onClick={handleRefresh} variant="outline">
                   Try Again
                 </Button>
               </div>
@@ -204,6 +247,103 @@ const TrainerRecordings = () => {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Batch Selection - Show when trainer has more than 2 batches */}
+                {batches.length > 2 ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-5 w-5 text-blue-600" />
+                        <span className="font-medium text-blue-900">Filter by Batch</span>
+                        <span className="text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
+                          {batches.length} batches available
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <Select value={selectedBatch} onValueChange={setSelectedBatch}>
+                          <SelectTrigger className="w-80">
+                            <SelectValue placeholder="Select a batch to filter recordings" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">
+                              <div className="flex items-center gap-2">
+                                <BookOpen className="h-4 w-4" />
+                                <div>
+                                  <div className="font-medium">All Batches</div>
+                                  <div className="text-xs text-gray-500">{recordings.length} total recordings</div>
+                                </div>
+                              </div>
+                            </SelectItem>
+                            {batches.map((batch) => (
+                              <SelectItem key={batch._id} value={batch._id}>
+                                <div className="flex items-center gap-2">
+                                  <div className="flex flex-col">
+                                    <span className="font-medium">{batch.batchName}</span>
+                                    <span className="text-xs text-gray-500">
+                                      {batch.courseName} • {batch.recordings.length} recordings
+                                    </span>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {selectedBatchInfo && (
+                      <div className="mt-4 p-4 bg-white rounded-lg border shadow-sm">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-900 text-lg">{selectedBatchInfo.batchName}</h4>
+                          <span className="text-xs bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+                            Selected Batch
+                          </span>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-4 text-sm text-gray-600">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <BookOpen className="h-4 w-4 text-blue-500" />
+                              <span><strong>Course:</strong> {selectedBatchInfo.courseName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-green-500" />
+                              <span><strong>Students:</strong> {selectedBatchInfo.studentCount}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-purple-500" />
+                              <span><strong>Timing:</strong> {selectedBatchInfo.timing || 'Not specified'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <VideoIcon className="h-4 w-4 text-red-500" />
+                              <span><strong>Recordings:</strong> {selectedBatchInfo.recordings.length}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : batches.length > 0 && (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-gray-500" />
+                      <span className="text-gray-700">
+                        You have {batches.length} batch{batches.length === 1 ? '' : 'es'}. 
+                        Batch filtering is available when you have more than 2 batches.
+                      </span>
+                    </div>
+                    {batches.length === 1 && (
+                      <div className="mt-3 p-3 bg-white rounded-lg border">
+                        <h4 className="font-semibold text-gray-900">{batches[0].batchName}</h4>
+                        <div className="text-sm text-gray-600 mt-1">
+                          <span><strong>Course:</strong> {batches[0].courseName} • </span>
+                          <span><strong>Students:</strong> {batches[0].studentCount} • </span>
+                          <span><strong>Recordings:</strong> {batches[0].recordings.length}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Stats and Controls */}
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center justify-between flex-wrap gap-4">
@@ -211,6 +351,11 @@ const TrainerRecordings = () => {
                       <VideoIcon className="h-5 w-5 text-green-600" />
                       <span className="font-medium text-green-900">
                         {totalRecordings} Recording{totalRecordings === 1 ? '' : 's'} Available
+                        {selectedBatch !== 'all' && selectedBatchInfo && (
+                          <span className="text-sm text-gray-600 ml-2">
+                            (from {selectedBatchInfo.batchName})
+                          </span>
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-sm">
@@ -232,7 +377,11 @@ const TrainerRecordings = () => {
                     </div>
                   </div>
                   <p className="text-sm text-green-700 mt-2">
-                    These are your live class recordings from Tech Pratham LMS. Click "Watch Recording" to view.
+                    These are your live class recordings from Tech Pratham LMS
+                    {selectedBatch !== 'all' && selectedBatchInfo && (
+                      <span> for {selectedBatchInfo.batchName}</span>
+                    )}
+                    . Click "Watch Recording" to view.
                   </p>
                 </div>
 
@@ -353,7 +502,7 @@ const TrainerRecordings = () => {
                   src={videoUrl}
                   className="w-full h-full"
                   allowFullScreen
-                  frameBorder="0"
+                  style={{ border: 0 }}
                   title={`Recording: ${selectedRecording.name}`}
                   onLoad={() => {
                     console.log('✅ BBB recording iframe loaded');
