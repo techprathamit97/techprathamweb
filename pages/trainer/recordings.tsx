@@ -36,12 +36,20 @@ interface TrainerBatch {
   recordings: BBBRecording[];
 }
 
+interface TrainerData {
+  _id: string;
+  trainerId: string;
+  name: string;
+  email: string;
+  id?: string; // Optional fallback ID
+}
+
 const TrainerRecordings = () => {
   const [recordings, setRecordings] = useState<BBBRecording[]>([]);
   const [batches, setBatches] = useState<TrainerBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>('all');
   const [hasMultipleBatches, setHasMultipleBatches] = useState(false);
-  const [trainerData, setTrainerData] = useState<any>(null);
+  const [trainerData, setTrainerData] = useState<TrainerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRecording, setSelectedRecording] = useState<BBBRecording | null>(null);
@@ -52,11 +60,36 @@ const TrainerRecordings = () => {
   useEffect(() => {
     // Get trainer data from localStorage
     const storedData = localStorage.getItem('trainer');
+    console.log('Stored trainer data:', storedData);
+    
     if (storedData) {
-      const trainer = JSON.parse(storedData);
-      setTrainerData(trainer);
-      fetchTrainerBatchRecordings(trainer._id || trainer.trainerId);
+      try {
+        const trainer = JSON.parse(storedData);
+        console.log('Parsed trainer data:', trainer);
+        console.log('Trainer ID fields:', {
+          _id: trainer._id,
+          trainerId: trainer.trainerId,
+          id: trainer.id
+        });
+        
+        setTrainerData(trainer);
+        const idToUse = trainer._id || trainer.trainerId || trainer.id;
+        
+        if (idToUse) {
+          console.log('Using trainer ID:', idToUse);
+          fetchTrainerBatchRecordings(idToUse);
+        } else {
+          console.error('No valid trainer ID found in stored data');
+          setError('Invalid trainer authentication data');
+          setLoading(false);
+        }
+      } catch (parseError) {
+        console.error('Error parsing trainer data:', parseError);
+        setError('Invalid trainer authentication data');
+        setLoading(false);
+      }
     } else {
+      console.error('No trainer data found in localStorage');
       setError('Trainer authentication required');
       setLoading(false);
     }
@@ -65,15 +98,24 @@ const TrainerRecordings = () => {
   const fetchTrainerBatchRecordings = async (trainerId: string) => {
     try {
       console.log('=== FETCHING BATCH-WISE RECORDINGS FOR TRAINER ===', trainerId);
+      console.log('Trainer ID type:', typeof trainerId);
+      console.log('Trainer ID value:', trainerId);
 
       const response = await fetch(`/api/trainer-batch-recordings?trainerId=${trainerId}`);
       const data = await response.json();
 
       console.log('Trainer Batch Recordings API Response:', data);
+      console.log('Response success:', data.success);
+      console.log('Response error:', data.error);
 
       if (data.success) {
         setBatches(data.batches || []);
         setHasMultipleBatches(data.hasMultipleBatches || false);
+        
+        // Update trainer data from API response if available
+        if (data.trainer) {
+          setTrainerData(data.trainer);
+        }
         
         // Flatten all recordings from all batches
         const allRecordings = (data.batches || []).flatMap((batch: TrainerBatch) => batch.recordings);
@@ -82,6 +124,7 @@ const TrainerRecordings = () => {
         console.log(`Found ${data.totalBatches} batches with ${data.totalRecordings} recordings`);
         console.log('Batches data:', data.batches);
         console.log('Batches length:', data.batches?.length);
+        console.log('All recordings flattened:', allRecordings.length);
         
         // Debug information
         if (data.debug) {
@@ -208,7 +251,19 @@ const TrainerRecordings = () => {
   const handleRefresh = () => {
     if (trainerData) {
       setLoading(true);
-      fetchTrainerBatchRecordings(trainerData._id || trainerData.trainerId);
+      setError(null);
+      const idToUse = trainerData._id || trainerData.trainerId || trainerData.id;
+      if (idToUse) {
+        console.log('Refreshing with trainer ID:', idToUse);
+        fetchTrainerBatchRecordings(idToUse);
+      } else {
+        console.error('No valid trainer ID for refresh');
+        setError('Invalid trainer authentication data');
+        setLoading(false);
+      }
+    } else {
+      console.error('No trainer data available for refresh');
+      setError('Trainer authentication required');
     }
   };
 
@@ -259,6 +314,21 @@ const TrainerRecordings = () => {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* Trainer Info */}
+                {trainerData && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-5 w-5 text-green-600" />
+                      <span className="font-medium text-green-900">
+                        Welcome, {trainerData.name}
+                      </span>
+                    </div>
+                    <p className="text-sm text-green-700 mt-1">
+                      Viewing recordings from your training batches and courses.
+                    </p>
+                  </div>
+                )}
+
                 {/* Batch Selection - Show when trainer has more than 1 batch */}
                 {batches.length > 1 ? (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

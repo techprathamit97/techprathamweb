@@ -46,21 +46,76 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     const { trainerId, batchId } = req.query;
 
+    console.log('📹 TRAINER BATCH RECORDINGS API CALLED');
+    console.log('Trainer ID:', trainerId);
+    console.log('Batch ID:', batchId);
+
     if (!trainerId) {
+      console.error('❌ No trainer ID provided');
       return res.status(400).json({ error: 'Trainer ID is required' });
     }
 
     console.log('📹 FETCHING BATCH-WISE RECORDINGS FOR TRAINER:', trainerId);
 
     await connectMongo();
+    console.log('✅ Connected to MongoDB');
+
+    // Handle trainer ID - it might be _id or need to find trainer by trainerId field
+    let actualTrainerId = trainerId;
+    
+    // Check if it's a valid ObjectId
+    const mongoose = require('mongoose');
+    
+    if (!mongoose.Types.ObjectId.isValid(trainerId)) {
+      console.log('📍 Trainer ID is not a valid ObjectId, trying to find trainer by trainerId field');
+      // Try to find trainer by trainerId field
+      const trainer = await Trainer.findOne({ trainerId: trainerId }).lean();
+      if (trainer) {
+        actualTrainerId = trainer._id;
+        console.log('✅ Found trainer by trainerId field:', actualTrainerId);
+      } else {
+        console.error('❌ No trainer found with trainerId:', trainerId);
+        return res.status(404).json({ error: 'Trainer not found' });
+      }
+    }
+
+    console.log('🎯 Using trainer ObjectId:', actualTrainerId);
 
     // Get trainer's batches
-    const trainerBatches = await Batch.find({ trainerId })
+    const trainerBatches = await Batch.find({ trainerId: actualTrainerId })
       .populate('courseId')
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`Found ${trainerBatches.length} batches for trainer`);
+    console.log(`✅ Found ${trainerBatches.length} batches for trainer ${actualTrainerId}`);
+
+    if (trainerBatches.length === 0) {
+      console.warn('⚠️ No batches found for this trainer');
+      
+      // Get trainer info for debug
+      const trainerInfo = await Trainer.findById(actualTrainerId).lean();
+      
+      return res.status(200).json({
+        success: true,
+        message: 'No batches found for this trainer',
+        totalBatches: 0,
+        totalRecordings: 0,
+        batches: [],
+        unmatchedRecordings: [],
+        hasMultipleBatches: false,
+        trainer: trainerInfo ? {
+          _id: trainerInfo._id,
+          trainerId: trainerInfo.trainerId || trainerInfo._id,
+          name: trainerInfo.name,
+          email: trainerInfo.email
+        } : null,
+        debug: {
+          originalRecordings: 0,
+          matchedRecordings: 0,
+          unmatchedCount: 0
+        }
+      });
+    }
 
     // Get all ModuleClass records for trainer's batches to get BBB meeting IDs
     const moduleClasses = await ModuleClass.find({
@@ -80,6 +135,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Get BBB recordings
+    console.log('🔗 Connecting to BBB API...');
     const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
     const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
 
@@ -87,10 +143,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const getRecordingsChecksum = generateBBBChecksum('getRecordings', getRecordingsParams, bbbApiSecret);
     const getRecordingsUrl = `${bbbServerUrl}/api/getRecordings?checksum=${getRecordingsChecksum}`;
 
+    console.log('📞 BBB API URL:', getRecordingsUrl);
+
     const recordingsResponse = await fetch(getRecordingsUrl);
     const recordingsXML = await recordingsResponse.text();
 
+    console.log('📊 BBB API Response length:', recordingsXML.length);
+    console.log('📊 BBB API Response preview:', recordingsXML.substring(0, 200));
+
     if (!recordingsXML.includes('<returncode>SUCCESS</returncode>')) {
+      console.error('❌ BBB API call failed');
+      console.log('Full BBB Response:', recordingsXML);
       return res.status(500).json({
         success: false,
         error: 'BBB API call failed',
@@ -226,11 +289,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    console.log(`Found ${allRecordings.length} total BBB recordings`);
+    console.log(`✅ Found ${allRecordings.length} total BBB recordings`);
+    
+    if (allRecordings.length === 0) {
+      console.warn('⚠️ No recordings found from BBB API');
+    }
     
     // Debug: Log first few recording names and meeting IDs
-    allRecordings.slice(0, 5).forEach((rec: any, index: number) => {
-      console.log(`Recording ${index + 1}: "${rec.name}" (Meeting ID: ${rec.meetingId})`);
+    allRecordings.slice(0, 3).forEach((rec: any, index: number) => {
+      console.log(`🎥 Recording ${index + 1}: "${rec.name}" (Meeting ID: ${rec.meetingId})`);
     });
 
     // Create a map of BBB meeting IDs to batch/module info for efficient matching
@@ -364,6 +431,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     });
 
+    // Get trainer info for response
+    const trainerInfo = await Trainer.findById(actualTrainerId).lean();
+
     return res.status(200).json({
       success: true,
       message: `Found ${finalTotalRecordings} recordings across ${trainerBatches.length} batches`,
@@ -372,6 +442,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       batches: batchesWithRecordings,
       unmatchedRecordings: finalUnmatchedRecordings, // Should be empty or very few now
       hasMultipleBatches: trainerBatches.length > 1,
+      trainer: trainerInfo ? {
+        _id: trainerInfo._id,
+        trainerId: trainerInfo.trainerId || trainerInfo._id,
+        name: trainerInfo.name,
+        email: trainerInfo.email
+      } : null,
       debug: {
         originalRecordings: allRecordings.length,
         matchedRecordings: finalTotalRecordings,
