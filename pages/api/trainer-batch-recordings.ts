@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
 const Batch = require("@/models/Batch");
 const Trainer = require("@/models/Trainer");
+const Course = require("@/models/Course");
 
 // Type definitions
 interface BatchType {
@@ -59,6 +60,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .lean();
 
     console.log(`Found ${trainerBatches.length} batches for trainer`);
+    
+    // Debug: Log batch information
+    trainerBatches.forEach((batch: BatchType, index: number) => {
+      console.log(`Batch ${index + 1}: ${batch.batchName} (Code: ${batch.batchCode}) - Course: ${batch.courseId?.title}`);
+    });
 
     // Get BBB recordings
     const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
@@ -207,6 +213,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    console.log(`Found ${allRecordings.length} total BBB recordings`);
+    
+    // Debug: Log first few recording names and meeting IDs
+    allRecordings.slice(0, 5).forEach((rec: any, index: number) => {
+      console.log(`Recording ${index + 1}: "${rec.name}" (Meeting ID: ${rec.meetingId})`);
+    });
+
     // Match recordings with batches (by batch name or code in meeting name/ID)
     const batchesWithRecordings = trainerBatches.map((batch: BatchType) => {
       const batchRecordings = allRecordings.filter((recording: any) => {
@@ -215,14 +228,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           batch.batchCode?.toLowerCase(),
           batch.batchName?.toLowerCase(),
           batch.courseId?.title?.toLowerCase(),
+          // Also try partial matches
+          batch.batchCode?.toLowerCase()?.replace(/[^a-z0-9]/g, ''),
+          batch.batchName?.toLowerCase()?.replace(/[^a-z0-9]/g, ''),
         ].filter(Boolean);
         
         const recordingName = recording.name?.toLowerCase() || '';
         const meetingId = recording.meetingId?.toLowerCase() || '';
         
+        // Clean versions for better matching
+        const cleanRecordingName = recordingName.replace(/[^a-z0-9]/g, '');
+        const cleanMeetingId = meetingId.replace(/[^a-z0-9]/g, '');
+        
         return searchTerms.some((term: string | undefined) => {
           if (!term) return false;
-          return recordingName.includes(term) || meetingId.includes(term);
+          const cleanTerm = term.replace(/[^a-z0-9]/g, '');
+          return (
+            recordingName.includes(term) || 
+            meetingId.includes(term) ||
+            cleanRecordingName.includes(cleanTerm) ||
+            cleanMeetingId.includes(cleanTerm)
+          );
         });
       });
 
@@ -242,6 +268,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           return 0;
         })
       };
+    });
+
+    // Debug: Log matching results
+    batchesWithRecordings.forEach((batch: ProcessedBatchType) => {
+      console.log(`Batch "${batch.batchName}" matched with ${batch.recordings.length} recordings`);
     });
 
     // If specific batch requested, return only that batch's recordings
