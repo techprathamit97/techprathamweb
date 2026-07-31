@@ -80,6 +80,8 @@ const TrainerRecordings = () => {
         setRecordings(allRecordings);
         
         console.log(`Found ${data.totalBatches} batches with ${data.totalRecordings} recordings`);
+        console.log('Batches data:', data.batches);
+        console.log('Batches length:', data.batches?.length);
       } else {
         console.error('Batch recordings API error:', data.error);
         setError(data.error || 'Failed to fetch batch recordings');
@@ -247,8 +249,8 @@ const TrainerRecordings = () => {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Batch Selection - Show when trainer has more than 2 batches */}
-                {batches.length > 2 ? (
+                {/* Batch Selection - Show when trainer has more than 1 batch */}
+                {batches.length > 1 ? (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-2">
@@ -328,7 +330,7 @@ const TrainerRecordings = () => {
                       <BookOpen className="h-5 w-5 text-gray-500" />
                       <span className="text-gray-700">
                         You have {batches.length} batch{batches.length === 1 ? '' : 'es'}. 
-                        Batch filtering is available when you have more than 2 batches.
+                        Batch filtering is available when you have more than 1 batch.
                       </span>
                     </div>
                     {batches.length === 1 && (
