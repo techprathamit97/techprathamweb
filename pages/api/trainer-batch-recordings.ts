@@ -4,6 +4,32 @@ import { connectMongo } from "@/utils/mongodb";
 const Batch = require("@/models/Batch");
 const Trainer = require("@/models/Trainer");
 
+// Type definitions
+interface BatchType {
+  _id: any;
+  batchName: string;
+  batchCode: string;
+  courseId?: {
+    title: string;
+  };
+  studentIds?: any[];
+  timing?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface ProcessedBatchType {
+  _id: string;
+  batchName: string;
+  batchCode: string;
+  courseName: string;
+  studentCount: number;
+  timing: string;
+  startDate: string;
+  endDate: string;
+  recordings: any[];
+}
+
 // Helper function to generate BBB API checksum
 function generateBBBChecksum(apiCall: string, params: string, secret: string): string {
   const stringToHash = apiCall + params + secret;
@@ -49,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({
         success: false,
         error: 'BBB API call failed',
-        batches: trainerBatches.map(batch => ({
+        batches: trainerBatches.map((batch: BatchType) => ({
           _id: batch._id.toString(),
           batchName: batch.batchName,
           batchCode: batch.batchCode,
@@ -182,8 +208,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Match recordings with batches (by batch name or code in meeting name/ID)
-    const batchesWithRecordings = trainerBatches.map(batch => {
-      const batchRecordings = allRecordings.filter(recording => {
+    const batchesWithRecordings = trainerBatches.map((batch: BatchType) => {
+      const batchRecordings = allRecordings.filter((recording: any) => {
         // Try to match by batch code, batch name, or course name in the recording name or meeting ID
         const searchTerms = [
           batch.batchCode?.toLowerCase(),
@@ -194,9 +220,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const recordingName = recording.name?.toLowerCase() || '';
         const meetingId = recording.meetingId?.toLowerCase() || '';
         
-        return searchTerms.some(term => 
-          recordingName.includes(term) || meetingId.includes(term)
-        );
+        return searchTerms.some((term: string | undefined) => {
+          if (!term) return false;
+          return recordingName.includes(term) || meetingId.includes(term);
+        });
       });
 
       return {
@@ -219,7 +246,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // If specific batch requested, return only that batch's recordings
     if (batchId) {
-      const selectedBatch = batchesWithRecordings.find(batch => batch._id === batchId);
+      const selectedBatch = batchesWithRecordings.find((batch: ProcessedBatchType) => batch._id === batchId);
       if (!selectedBatch) {
         return res.status(404).json({ error: 'Batch not found' });
       }
@@ -233,10 +260,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Return all batches with their recordings
-    const totalRecordings = batchesWithRecordings.reduce((sum, batch) => sum + batch.recordings.length, 0);
-    const unmatchedRecordings = allRecordings.filter(recording => {
-      return !batchesWithRecordings.some(batch => 
-        batch.recordings.some(batchRec => batchRec.recordId === recording.recordId)
+    const totalRecordings = batchesWithRecordings.reduce((sum: number, batch: ProcessedBatchType) => sum + batch.recordings.length, 0);
+    const unmatchedRecordings = allRecordings.filter((recording: any) => {
+      return !batchesWithRecordings.some((batch: ProcessedBatchType) => 
+        batch.recordings.some((batchRec: any) => batchRec.recordId === recording.recordId)
       );
     });
 
