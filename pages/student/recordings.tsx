@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo,useRef } from 'react';
 import StudentLayout from '@/src/student/common/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { VideoIcon, Calendar, User, PlayCircle, X, Clock, Users } from 'lucide-react';
+import { VideoIcon, Calendar, User, PlayCircle, X, Clock, Users, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface BBBRecording {
@@ -37,6 +37,8 @@ const StudentRecordings = () => {
   const [selectedRecording, setSelectedRecording] = useState<BBBRecording | null>(null);
   const [videoUrl, setVideoUrl] = useState<string>('');
   const [videoLoading, setVideoLoading] = useState(false);
+  const [isPlayerFullscreen, setIsPlayerFullscreen] = useState(false);
+  const playerContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchBBBRecordings();
@@ -132,6 +134,41 @@ const StudentRecordings = () => {
       }));
   }, [recordings]);
 
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsPlayerFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const enterPlayerFullscreen = async () => {
+    const element = playerContainerRef.current;
+    if (!element) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+      await element.requestFullscreen();
+      setIsPlayerFullscreen(true);
+    } catch (error) {
+      console.error('Unable to open fullscreen recording player:', error);
+    }
+  };
+
+  const exitPlayerFullscreen = async () => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch (error) {
+        console.error('Unable to close fullscreen recording player:', error);
+      }
+    }
+    setIsPlayerFullscreen(false);
+  };
+
   const handlePlayRecording = async (recording: BBBRecording) => {
     console.log('=== PLAYING BBB RECORDING ===');
     console.log('Recording:', recording);
@@ -143,6 +180,12 @@ const StudentRecordings = () => {
     // For BBB recordings, we have the direct URL
     if (recording.videoUrl) {
       setVideoUrl(recording.videoUrl);
+      setTimeout(() => {
+        const shouldAutoFullscreen = window.innerWidth < 768;
+        if (shouldAutoFullscreen) {
+          enterPlayerFullscreen();
+        }
+      }, 250);
     } else {
       console.error('No video URL available for this recording');
       alert('Video URL not available for this recording');
@@ -152,7 +195,8 @@ const StudentRecordings = () => {
     setVideoLoading(false);
   };
 
-  const handleClosePlayer = () => {
+  const handleClosePlayer = async () => {
+    await exitPlayerFullscreen();
     setSelectedRecording(null);
     setVideoUrl('');
     setVideoLoading(false);
@@ -270,19 +314,32 @@ const StudentRecordings = () => {
 
       {/* BBB Video Player Modal */}
       {selectedRecording && videoUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
-          <div className="relative w-full max-w-6xl mx-4">
-            <button
-              onClick={handleClosePlayer}
-              className="absolute -top-12 right-0 text-white hover:text-gray-300 p-2 z-20"
-            >
-              <X className="w-8 h-8" />
-            </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-0 sm:p-3">
+          <div
+            ref={playerContainerRef}
+            className={`relative flex flex-col ${isPlayerFullscreen ? 'w-screen h-screen' : 'w-full h-[90vh] max-w-7xl'}`}
+          >
+            <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+              <button
+                onClick={enterPlayerFullscreen}
+                className="rounded-full bg-black/70 p-2 text-white hover:bg-black/90"
+                aria-label="Toggle fullscreen"
+              >
+                {isPlayerFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+              </button>
+              <button
+                onClick={handleClosePlayer}
+                className="rounded-full bg-black/70 p-2 text-white hover:bg-black/90"
+                aria-label="Close recording"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-            <div className="bg-black rounded-lg overflow-hidden">
-              <div className="relative w-full aspect-video">
+            <div className="flex-1 bg-black rounded-none sm:rounded-lg overflow-hidden">
+              <div className="relative w-full h-full">
                 {videoLoading && (
-                  <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/70">
                     <div className="text-white">Loading Tech Pratham LMS recording...</div>
                   </div>
                 )}
@@ -291,6 +348,7 @@ const StudentRecordings = () => {
                 <iframe
                   src={videoUrl}
                   className="w-full h-full"
+                  allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen
                   frameBorder="0"
                   title={`Recording: ${selectedRecording.name}`}
@@ -302,9 +360,9 @@ const StudentRecordings = () => {
               </div>
             </div>
 
-            <div className="mt-4 text-white">
+            <div className="bg-black/90 px-4 py-3 text-white border-t border-white/10">
               <h3 className="text-lg font-semibold">{selectedRecording.name}</h3>
-              <div className="flex gap-4 text-sm text-gray-300 mt-2">
+              <div className="flex flex-wrap gap-4 text-sm text-gray-300 mt-2">
                 <span>{selectedRecording.dateText}</span>
                 <span>Duration: {selectedRecording.durationText}</span>
                 <span>{selectedRecording.participants} participants</span>
