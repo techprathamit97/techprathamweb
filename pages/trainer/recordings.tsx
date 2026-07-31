@@ -82,6 +82,16 @@ const TrainerRecordings = () => {
         console.log(`Found ${data.totalBatches} batches with ${data.totalRecordings} recordings`);
         console.log('Batches data:', data.batches);
         console.log('Batches length:', data.batches?.length);
+        
+        // Debug information
+        if (data.debug) {
+          console.log('🔍 Debug Info:', data.debug);
+          console.log('📊 Recordings per batch:', data.batches?.map((b: any) => `${b.batchName}: ${b.recordings.length}`));
+        }
+        
+        if (data.unmatchedRecordings && data.unmatchedRecordings.length > 0) {
+          console.warn(`⚠️ ${data.unmatchedRecordings.length} recordings could not be matched to any batch`);
+        }
       } else {
         console.error('Batch recordings API error:', data.error);
         setError(data.error || 'Failed to fetch batch recordings');

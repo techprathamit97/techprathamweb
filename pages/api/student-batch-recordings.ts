@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
 const Batch = require("@/models/Batch");
-const Trainer = require("@/models/Trainer");
+const Student = require("@/models/Student");
 const Course = require("@/models/Course");
 const ModuleClass = require("@/models/ModuleClass");
 
@@ -44,39 +44,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { trainerId, batchId } = req.query;
+    const { studentId } = req.query;
 
-    if (!trainerId) {
-      return res.status(400).json({ error: 'Trainer ID is required' });
+    if (!studentId) {
+      return res.status(400).json({ error: 'Student ID is required' });
     }
 
-    console.log('📹 FETCHING BATCH-WISE RECORDINGS FOR TRAINER:', trainerId);
+    console.log('📹 FETCHING BATCH-WISE RECORDINGS FOR STUDENT:', studentId);
 
     await connectMongo();
 
-    // Get trainer's batches
-    const trainerBatches = await Batch.find({ trainerId })
+    // Find student
+    const mongoose = require('mongoose');
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(studentId);
+
+    let student;
+    if (isValidObjectId) {
+      student = await Student.findById(studentId).lean();
+    } else {
+      student = await Student.findOne({ studentId: studentId }).lean();
+    }
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Get batches where this student is enrolled
+    const studentBatches = await Batch.find({
+      studentIds: student._id
+    })
       .populate('courseId')
       .sort({ createdAt: -1 })
       .lean();
 
-    console.log(`Found ${trainerBatches.length} batches for trainer`);
+    console.log(`Found ${studentBatches.length} batches for student`);
 
-    // Get all ModuleClass records for trainer's batches to get BBB meeting IDs
+    // Get all ModuleClass records for student's batches to get BBB meeting IDs
     const moduleClasses = await ModuleClass.find({
-      batchId: { $in: trainerBatches.map((batch: BatchType) => batch._id) }
+      batchId: { $in: studentBatches.map((batch: BatchType) => batch._id) }
     })
       .populate('courseId')
       .populate('batchId')
       .sort({ scheduledDate: -1 })
       .lean();
 
-    console.log(`Found ${moduleClasses.length} module classes for trainer's batches`);
+    console.log(`Found ${moduleClasses.length} module classes for student's batches`);
     
     // Debug: Log batch and module class information
-    trainerBatches.forEach((batch: BatchType, index: number) => {
+    studentBatches.forEach((batch: BatchType, index: number) => {
       const batchModules = moduleClasses.filter((mod: any) => mod.batchId._id.toString() === batch._id.toString());
-      console.log(`Trainer Batch ${index + 1}: ${batch.batchName} (Code: ${batch.batchCode}) - Course: ${batch.courseId?.title} - ${batchModules.length} classes`);
+      console.log(`Student Batch ${index + 1}: ${batch.batchName} (Code: ${batch.batchCode}) - Course: ${batch.courseId?.title} - ${batchModules.length} classes`);
     });
 
     // Get BBB recordings
@@ -94,7 +111,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(500).json({
         success: false,
         error: 'BBB API call failed',
-        batches: trainerBatches.map((batch: BatchType) => ({
+        batches: studentBatches.map((batch: BatchType) => ({
           _id: batch._id.toString(),
           batchName: batch.batchName,
           batchCode: batch.batchCode,
@@ -113,7 +130,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (recordingMatches) {
       for (const recordingMatch of recordingMatches) {
         try {
-          // Parse recording data
+          // Parse recording data (same logic as trainer API)
           const recordIdCDATA = recordingMatch.match(/<recordID><!\[CDATA\[(.*?)\]\]><\/recordID>/);
           const recordIdRegular = recordingMatch.match(/<recordID>(.*?)<\/recordID>/);
           const recordId = recordIdCDATA?.[1] || recordIdRegular?.[1];
@@ -140,6 +157,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const participants = participantsMatch?.[1];
           const size = sizeMatch?.[1];
 
+          // Only include published recordings for students
+          if (!published || state !== 'published') {
+            continue;
+          }
+
           // Get playback URLs
           const playbackMatches = recordingMatch.match(/<playback>([\s\S]*?)<\/playback>/);
           let videoUrl = null;
@@ -158,6 +180,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 previewUrl = imageMatch?.[1];
               }
             }
+          }
+
+          // Skip recordings without video URL
+          if (!videoUrl) {
+            continue;
           }
 
           // Calculate duration
@@ -226,7 +253,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    console.log(`Found ${allRecordings.length} total BBB recordings`);
+    console.log(`Found ${allRecordings.length} total published BBB recordings`);
     
     // Debug: Log first few recording names and meeting IDs
     allRecordings.slice(0, 5).forEach((rec: any, index: number) => {
@@ -251,8 +278,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     console.log(`Created mapping for ${Object.keys(meetingIdToBatch).length} BBB meeting IDs`);
 
-    // Match recordings with trainer's batches using exact BBB meeting ID matching
-    const batchesWithRecordings = trainerBatches.map((batch: BatchType) => {
+    // Match recordings with student's batches using exact BBB meeting ID matching
+    const batchesWithRecordings = studentBatches.map((batch: BatchType) => {
       const batchRecordings = allRecordings.filter((recording: any) => {
         // First, try exact BBB meeting ID match
         if (recording.meetingId && meetingIdToBatch[recording.meetingId]) {
@@ -310,7 +337,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Debug: Log matching results
     batchesWithRecordings.forEach((batch: ProcessedBatchType) => {
-      console.log(`Batch "${batch.batchName}" matched with ${batch.recordings.length} recordings`);
+      console.log(`Student batch "${batch.batchName}" matched with ${batch.recordings.length} recordings`);
     });
 
     // Calculate total matched recordings
@@ -321,31 +348,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       );
     });
 
-    console.log(`Total recordings: ${allRecordings.length}, Matched: ${totalMatchedRecordings}, Unmatched: ${unmatchedRecordings.length}`);
+    console.log(`Total recordings: ${allRecordings.length}, Matched to student batches: ${totalMatchedRecordings}, Unmatched: ${unmatchedRecordings.length}`);
 
-    // If we have many unmatched recordings, distribute them among batches or assign to first batch
-    if (unmatchedRecordings.length > 0 && batchesWithRecordings.length > 0) {
-      console.log(`⚠️ Distributing ${unmatchedRecordings.length} unmatched recordings to first batch: "${batchesWithRecordings[0].batchName}"`);
-      
-      // Add unmatched recordings to the first batch (or you could distribute evenly)
-      batchesWithRecordings[0].recordings = [
-        ...batchesWithRecordings[0].recordings,
-        ...unmatchedRecordings.sort((a, b) => {
-          if (a.startTime && b.startTime) {
-            return parseInt(b.startTime) - parseInt(a.startTime);
-          }
-          return 0;
-        })
-      ];
-      
-      console.log(`First batch now has ${batchesWithRecordings[0].recordings.length} recordings`);
+    // Note: For student recordings, we DON'T auto-assign unmatched recordings
+    // Students should only see recordings from their enrolled batches/classes
+    if (unmatchedRecordings.length > 0) {
+      console.log(`ℹ️ ${unmatchedRecordings.length} recordings not matched to any of student's enrolled batches (this is expected)`);
     }
 
     // If specific batch requested, return only that batch's recordings
+    const { batchId } = req.query;
     if (batchId) {
       const selectedBatch = batchesWithRecordings.find((batch: ProcessedBatchType) => batch._id === batchId);
       if (!selectedBatch) {
-        return res.status(404).json({ error: 'Batch not found' });
+        return res.status(404).json({ error: 'Batch not found or student not enrolled' });
       }
       
       return res.status(200).json({
@@ -356,7 +372,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // Return all batches with their recordings
+    // Return student's batches with their recordings
     const finalTotalRecordings = batchesWithRecordings.reduce((sum: number, batch: ProcessedBatchType) => sum + batch.recordings.length, 0);
     const finalUnmatchedRecordings = allRecordings.filter((recording: any) => {
       return !batchesWithRecordings.some((batch: ProcessedBatchType) => 
@@ -366,21 +382,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     return res.status(200).json({
       success: true,
-      message: `Found ${finalTotalRecordings} recordings across ${trainerBatches.length} batches`,
-      totalBatches: trainerBatches.length,
+      message: `Found ${finalTotalRecordings} recordings across ${studentBatches.length} enrolled batches`,
+      totalBatches: studentBatches.length,
       totalRecordings: finalTotalRecordings,
       batches: batchesWithRecordings,
-      unmatchedRecordings: finalUnmatchedRecordings, // Should be empty or very few now
-      hasMultipleBatches: trainerBatches.length > 1,
+      unmatchedRecordings: finalUnmatchedRecordings,
+      hasMultipleBatches: studentBatches.length > 1,
+      student: {
+        _id: student._id,
+        studentId: student.studentId || student._id,
+        name: student.name,
+        email: student.email
+      },
       debug: {
         originalRecordings: allRecordings.length,
         matchedRecordings: finalTotalRecordings,
-        unmatchedCount: finalUnmatchedRecordings.length
+        unmatchedCount: finalUnmatchedRecordings.length,
+        enrolledBatches: studentBatches.length
       }
     });
 
   } catch (error: any) {
-    console.error('❌ Error fetching batch recordings:', error);
+    console.error('❌ Error fetching student batch recordings:', error);
     return res.status(500).json({
       success: false,
       error: error.message
