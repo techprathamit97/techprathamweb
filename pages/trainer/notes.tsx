@@ -145,7 +145,7 @@ const TrainerNotes = () => {
   // Load Quill styles
   useEffect(() => {
     import('react-quill/dist/quill.snow.css');
-    import('../../styles/quill-custom.css');
+    // Remove custom CSS import to fix module error
   }, []);
 
   useEffect(() => {

@@ -68,7 +68,7 @@ const StudentNotes = () => {
 
   // Load custom styles for note content
   useEffect(() => {
-    import('../../styles/quill-custom.css');
+    // Remove CSS import to fix module error
   }, []);
 
   useEffect(() => {
