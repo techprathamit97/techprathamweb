@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import TrainerLayout from '@/src/trainer/common/TrainerLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { VideoIcon, Calendar, PlayCircle, X, Clock, Users, Filter, BookOpen } from 'lucide-react';
+import { VideoIcon, Calendar, PlayCircle, X, Clock, Users, Filter, BookOpen, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -48,7 +48,6 @@ const TrainerRecordings = () => {
   const [recordings, setRecordings] = useState<BBBRecording[]>([]);
   const [batches, setBatches] = useState<TrainerBatch[]>([]);
   const [selectedBatch, setSelectedBatch] = useState<string>('all');
-  const [hasMultipleBatches, setHasMultipleBatches] = useState(false);
   const [trainerData, setTrainerData] = useState<TrainerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +109,6 @@ const TrainerRecordings = () => {
 
       if (data.success) {
         setBatches(data.batches || []);
-        setHasMultipleBatches(data.hasMultipleBatches || false);
         
         // Update trainer data from API response if available
         if (data.trainer) {
@@ -456,6 +454,14 @@ const TrainerRecordings = () => {
                         />
                         <span className="text-gray-700">Show unpublished</span>
                       </label>
+                      <Button
+                        onClick={() => window.open('/trainer/notes', '_blank')}
+                        className="flex items-center gap-2 ml-2"
+                        variant="outline"
+                      >
+                        <FileText className="h-4 w-4" />
+                        Add Note
+                      </Button>
                     </div>
                   </div>
                   <p className="text-sm text-green-700 mt-2">
@@ -463,7 +469,7 @@ const TrainerRecordings = () => {
                     {selectedBatch !== 'all' && selectedBatchInfo && (
                       <span> for {selectedBatchInfo.batchName}</span>
                     )}
-                    . Click "Watch Recording" to view.
+                    . Click "Watch Recording" to view or "Add Note" to create training notes.
                   </p>
                 </div>
 

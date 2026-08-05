@@ -1,0 +1,108 @@
+/* Custom Quill Editor Styles */
+.ql-container {
+  font-family: inherit;
+}
+
+.ql-editor {
+  min-height: 200px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ql-editor h1, .ql-editor h2, .ql-editor h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.ql-editor ul, .ql-editor ol {
+  margin-left: 1.5em;
+}
+
+.ql-editor a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.ql-editor a:hover {
+  color: #1d4ed8;
+}
+
+/* Toolbar styling */
+.ql-toolbar {
+  border-top: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: none;
+}
+
+.ql-container {
+  border-bottom: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  border-top: none;
+}
+
+/* Content display styles for students */
+.note-content {
+  font-family: inherit;
+}
+
+.note-content h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: #1f2937;
+}
+
+.note-content h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  color: #1f2937;
+}
+
+.note-content h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+}
+
+.note-content p {
+  margin-bottom: 1rem;
+  line-height: 1.6;
+}
+
+.note-content ul, .note-content ol {
+  margin-bottom: 1rem;
+  margin-left: 1.5rem;
+}
+
+.note-content li {
+  margin-bottom: 0.25rem;
+}
+
+.note-content a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.note-content a:hover {
+  color: #1d4ed8;
+}
+
+.note-content strong {
+  font-weight: 600;
+}
+
+.note-content em {
+  font-style: italic;
+}
+
+.note-content u {
+  text-decoration: underline;
+}
+
+.note-content s {
+  text-decoration: line-through;
+}

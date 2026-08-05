@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import StudentLayout from '@/src/student/common/StudentLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { VideoIcon, Calendar, PlayCircle, X, Clock, Users, Maximize2, Minimize2, Filter, BookOpen } from 'lucide-react';
+import { VideoIcon, Calendar, PlayCircle, X, Clock, Users, Maximize2, Minimize2, Filter, BookOpen, FileText, Download, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 
 interface BBBRecording {
   recordId: string;
@@ -34,6 +35,42 @@ interface StudentBatch {
   startDate: string;
   endDate: string;
   recordings: BBBRecording[];
+}
+
+interface StudentNote {
+  _id: string;
+  title: string;
+  description: string;
+  noteType: 'text' | 'pdf';
+  textContent: Array<{
+    title: string;
+    content: string;
+    order: number;
+  }>;
+  pdfFile?: {
+    url: string;
+    fileName: string;
+    fileSize: number;
+    uploadedAt: string;
+  };
+  moduleIndex?: number;
+  moduleTitle?: string;
+  publishedAt: string;
+  viewCount: number;
+  trainer: {
+    name: string;
+    email: string;
+  };
+  batches: Array<{
+    _id: string;
+    batchName: string;
+    batchCode: string;
+  }>;
+  courses: Array<{
+    _id: string;
+    title: string;
+  }>;
+  tags: string[];
 }
 
 interface StudentData {
@@ -409,23 +446,35 @@ const StudentRecordings = () => {
 
                 {/* Recording Stats */}
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2">
-                    <VideoIcon className="h-5 w-5 text-green-600" />
-                    <span className="font-medium text-green-900">
-                      {currentRecordings.length} Recording{currentRecordings.length === 1 ? '' : 's'} Available
-                      {selectedBatch !== 'all' && selectedBatchInfo && (
-                        <span className="text-sm text-gray-600 ml-2">
-                          (from {selectedBatchInfo.batchName})
-                        </span>
-                      )}
-                    </span>
+                  <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div className="flex items-center gap-2">
+                      <VideoIcon className="h-5 w-5 text-green-600" />
+                      <span className="font-medium text-green-900">
+                        {currentRecordings.length} Recording{currentRecordings.length === 1 ? '' : 's'} Available
+                        {selectedBatch !== 'all' && selectedBatchInfo && (
+                          <span className="text-sm text-gray-600 ml-2">
+                            (from {selectedBatchInfo.batchName})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Button
+                        onClick={() => window.open('/student/notes', '_blank')}
+                        className="flex items-center gap-2"
+                        variant="outline"
+                      >
+                        <FileText className="h-4 w-4" />
+                        View Notes
+                      </Button>
+                    </div>
                   </div>
                   <p className="text-sm text-green-700 mt-1">
                     These are your live class recordings from Tech Pratham LMS
                     {selectedBatch !== 'all' && selectedBatchInfo && (
                       <span> for {selectedBatchInfo.batchName}</span>
                     )}
-                    . Click "Watch Recording" to view.
+                    . Click "Watch Recording" to view or "View Notes" to see training notes.
                   </p>
                 </div>
 
