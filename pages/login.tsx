@@ -214,17 +214,8 @@ const RoleBasedLogin = () => {
             })}
           </div>
 
-          {/* Quick Setup Links */}
-          <div className="mt-8 text-center space-y-2">
-            <p className="text-gray-400 text-sm">Need admin access?</p>
-            <Button 
-              variant="outline" 
-              className="border-gray-600 text-gray-300 hover:bg-gray-800"
-              onClick={() => router.push('/setup-admin')}
-            >
-              Setup Admin User
-            </Button>
-          </div>
+     
+         
         </div>
       </div>
     );
