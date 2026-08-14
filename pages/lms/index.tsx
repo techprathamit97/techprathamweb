@@ -355,6 +355,11 @@ const LMSDashboard = () => {
                     Generate Reports
                   </button>
                 </Link>
+                <Link href="/lms/recordings">
+                  <button className="w-full p-3 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    Manage Recordings
+                  </button>
+                </Link>
               </div>
             </CardContent>
           </Card>

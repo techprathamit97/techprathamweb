@@ -115,39 +115,100 @@ const StudentRecordings = () => {
 
   const fetchStudentBatchRecordings = async (studentId: string) => {
     try {
-      console.log('=== FETCHING STUDENT BATCH-WISE RECORDINGS ===', studentId);
+      console.log('🎬 FETCHING STUDENT BATCH-WISE RECORDINGS FOR:', studentId);
 
+      // Use the SAME API as the profile page to get batch data - this works correctly!
+      const profileRes = await fetch(`/api/student/profile?studentId=${studentId}`);
+      const profileData = await profileRes.json();
+      
+      console.log('Profile API response success:', profileData.success);
+      console.log('Has batches from profile:', !!profileData.data?.batches?.length);
+
+      // Get recordings from the recordings API (for actual recording data)
       const response = await fetch(`/api/student-batch-recordings?studentId=${studentId}`);
-      const data = await response.json();
+      const recordingsData = await response.json();
+      console.log('Recordings API response success:', recordingsData.success);
 
-      console.log('Student Batch Recordings API Response:', data);
-
-      if (data.success) {
-        setBatches(data.batches || []);
-        setStudentData(data.student || null);
+      if (recordingsData.success && recordingsData.batches && recordingsData.batches.length > 0) {
+        // Best case - recordings API found batches with recordings
+        setBatches(recordingsData.batches || []);
+        setStudentData(recordingsData.student || null);
         
-        // Flatten all recordings from all enrolled batches
-        const allRecordings = (data.batches || []).flatMap((batch: StudentBatch) => batch.recordings);
+        const allRecordings = (recordingsData.batches || []).flatMap((batch: StudentBatch) => batch.recordings);
         setRecordings(allRecordings);
         
-        console.log(`Student enrolled in ${data.totalBatches} batches with ${data.totalRecordings} recordings`);
-        console.log('Student batches:', data.batches);
+        console.log(`✅ Found recordings via recordings API: ${recordingsData.totalBatches} batches with ${recordingsData.totalRecordings} recordings`);
+      } else if (profileRes.ok && profileData.success && profileData.data) {
+        // Use profile API for batch structure (same as profile page shows)
+        console.log('⚠️ No recordings found, but using SAME batch data as profile page');
         
-        // Debug information
-        if (data.debug) {
-          console.log('🔍 Debug Info:', data.debug);
-          console.log('📊 Recordings per batch:', data.batches?.map((b: any) => `${b.batchName}: ${b.recordings.length}`));
+        const profileBatchData = profileData.data;
+        
+        // PRIORITY 1: Use the same batch data as shown in profile page
+        if (profileBatchData.batches && profileBatchData.batches.length > 0) {
+          console.log(`✅ Found ${profileBatchData.batches.length} batches from profile API (same as shown in /student/profile)`);
+          
+          const profileBatches: StudentBatch[] = profileBatchData.batches.map((batch: any) => ({
+            _id: batch.batchId.toString(),
+            batchName: batch.batchName || batch.courseTitle || 'Course Batch',
+            batchCode: batch.batchId.substring(0, 8).toUpperCase(),
+            courseName: batch.courseTitle || 'Course',
+            studentCount: batch.enrolledStudents || 1,
+            timing: batch.schedule?.timing || 'TBD',
+            startDate: batch.schedule?.startDate || '',
+            endDate: batch.schedule?.endDate || '',
+            recordings: [] // Empty initially, but shows student is enrolled
+          }));
+          
+          setBatches(profileBatches);
+          setRecordings([]);
+          setStudentData(profileBatchData.studentInfo || { 
+            _id: studentId, 
+            studentId: studentId, 
+            name: profileBatchData.studentInfo?.name || 'Student', 
+            email: profileBatchData.studentInfo?.email || '' 
+          });
+          
+          console.log('✅ Using batches from profile API for recordings (same as profile page):', profileBatches);
         }
-        
-        if (data.unmatchedRecordings && data.unmatchedRecordings.length > 0) {
-          console.warn(`⚠️ ${data.unmatchedRecordings.length} recordings could not be matched to student's batches`);
+        // PRIORITY 2: Fallback to courses
+        else if (profileBatchData.courses && profileBatchData.courses.length > 0) {
+          console.log(`✅ Found ${profileBatchData.courses.length} courses from profile API, converting to batches`);
+          
+          const courseBatches: StudentBatch[] = profileBatchData.courses.map((course: any) => ({
+            _id: course.batchId.toString(),
+            batchName: `${course.title} Batch`,
+            batchCode: course.batchId.substring(0, 8).toUpperCase(),
+            courseName: course.title,
+            studentCount: 1,
+            timing: course.schedule?.timing || 'TBD',
+            startDate: course.schedule?.startDate || '',
+            endDate: course.schedule?.endDate || '',
+            recordings: []
+          }));
+          
+          setBatches(courseBatches);
+          setRecordings([]);
+          setStudentData(profileBatchData.studentInfo || { 
+            _id: studentId, 
+            studentId: studentId, 
+            name: profileBatchData.studentInfo?.name || 'Student', 
+            email: profileBatchData.studentInfo?.email || '' 
+          });
+          
+          console.log('✅ Using courses from profile API for recordings:', courseBatches);
+        } else {
+          // No enrollment found
+          console.error('❌ No batches or courses found in profile API');
+          setError('No enrolled courses found. Please contact your administrator.');
         }
       } else {
-        console.error('Student batch recordings API error:', data.error);
-        setError(data.error || 'Failed to fetch batch recordings');
+        // Both APIs failed
+        console.error('❌ Both recordings and profile APIs failed');
+        setError('Unable to load course information. Please try again.');
       }
     } catch (err: any) {
-      console.error('Error fetching student batch recordings:', err);
+      console.error('❌ Error fetching student batch recordings:', err);
       setError('Failed to load recordings from your enrolled courses');
     } finally {
       setLoading(false);
@@ -330,9 +391,25 @@ const StudentRecordings = () => {
               <div className="text-center py-8">
                 <VideoIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">No published recordings available yet.</p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Recordings will appear here after your classes are completed and processed.
-                </p>
+                {batches.length > 0 ? (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">
+                      <strong>Good news!</strong> You are enrolled in {batches.length} course{batches.length !== 1 ? 's' : ''}:
+                    </p>
+                    <ul className="mt-2 text-sm text-blue-600">
+                      {batches.map((batch, index) => (
+                        <li key={batch._id}>• {batch.batchName} ({batch.courseName})</li>
+                      ))}
+                    </ul>
+                    <p className="text-xs text-blue-600 mt-3">
+                      Recordings will appear here after your live classes are completed and processed by your instructor.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Recordings will appear here after your classes are completed and processed.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-6">
@@ -440,6 +517,11 @@ const StudentRecordings = () => {
                         <span><strong>Classmates:</strong> {batches[0].studentCount} • </span>
                         <span><strong>Recordings:</strong> {batches[0].recordings.length}</span>
                       </div>
+                      {batches[0]._id === 'virtual-batch-recordings' && (
+                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700">
+                          <strong>Note:</strong> Course enrollment detected. Recordings will appear as classes are completed.
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}

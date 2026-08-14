@@ -13,6 +13,9 @@ export async function GET(request: NextRequest) {
     const trainerId = searchParams.get('trainerId');
     const batchId = searchParams.get('batchId');
     const status = searchParams.get('status');
+    const date = searchParams.get('date');
+    const scheduledDate = searchParams.get('scheduledDate');
+    const scheduledTime = searchParams.get('scheduledTime');
 
     // If classId is provided, return single class
     if (classId) {
@@ -41,6 +44,11 @@ export async function GET(request: NextRequest) {
     if (trainerId) query.trainerId = trainerId;
     if (batchId) query.batchId = batchId;
     if (status) query.status = status;
+    if (date) query.scheduledDate = date;
+    if (scheduledDate) query.scheduledDate = scheduledDate;
+    if (scheduledTime) query.scheduledTime = scheduledTime;
+
+    console.log('Module class query:', JSON.stringify(query, null, 2));
 
     const classes = await ModuleClass.find(query)
       .populate('batchId', 'batchName')
@@ -214,7 +222,7 @@ export async function PUT(request: NextRequest) {
     await connectMongo();
 
     const body = await request.json();
-    const { classId, notifyStudents, ...updates } = body;
+    const { classId, notifyStudents, createNext, ...updates } = body;
 
     if (!classId) {
       return NextResponse.json({
@@ -224,7 +232,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Get original class for comparison
-    const originalClass = await ModuleClass.findById(classId);
+    const originalClass = await ModuleClass.findById(classId).populate('batchId');
 
     // Handle class completion - expire meeting and set completion flags
     if (updates.status === 'completed') {
@@ -240,13 +248,39 @@ export async function PUT(request: NextRequest) {
       classId,
       { ...updates, updatedAt: new Date() },
       { new: true }
-    );
+    ).populate('batchId');
 
     if (!moduleClass) {
       return NextResponse.json({
         success: false,
         error: 'Class not found'
       }, { status: 404 });
+    }
+
+    let nextClassCreated = null;
+
+    // AUTO-CREATE NEXT CLASS when current class is completed - DISABLED PER USER REQUEST
+    // User prefers virtual classes based on batch timing instead of pre-created database classes
+    if (false && updates.status === 'completed' && createNext !== false) {
+      console.log(`🎯 Class ${moduleClass.moduleTitle} completed - creating next class`);
+      
+      try {
+        const nextClassRes = await fetch(`${new URL(request.url).origin}/api/module-class/create-next`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ batchId: moduleClass.batchId })
+        });
+        
+        if (nextClassRes.ok) {
+          const nextClassData = await nextClassRes.json();
+          if (nextClassData.success) {
+            nextClassCreated = nextClassData.data;
+            console.log(`✅ Auto-created next class: ${nextClassCreated.moduleTitle}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error creating next class:', error);
+      }
     }
 
     // Send notifications if class was rescheduled
@@ -282,7 +316,8 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: moduleClass
+      data: moduleClass,
+      nextClass: nextClassCreated
     });
   } catch (error: any) {
     console.error('Error updating module class:', error);

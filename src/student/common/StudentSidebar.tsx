@@ -103,11 +103,11 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ onClose }) => {
     { icon: User, label: 'User Details', href: '/student/profile' },
     { icon: LayoutDashboard, label: 'Dashboard', href: '/student/dashboard' },
     { icon: BookOpen, label: 'Enrolled Courses', href: '/student/courses' },
-
+    { icon: Users, label: 'Learning Hub', href: '/student/batch-management' },
     { icon: Users, label: 'My Batches & Trainers', href: '/student/my-batches' },
-    { icon: Video, label: 'Join Class', href: '/student/classes' },
+    // { icon: Video, label: 'Join Class (Legacy)', href: '/student/classes' },
     { icon: VideoIcon, label: 'Class Recordings', href: '/student/recordings' },
-    
+    { icon: FileText, label: 'Study Notes', href: '/student/notes' },
     { icon: FileText, label: 'Invoices', href: '/student/invoices' },
     { icon: CheckCircle, label: 'Completed', href: '/student/completed' },
     { icon: Award, label: 'Certificates', href: '/student/certificates' },

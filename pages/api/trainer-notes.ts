@@ -55,7 +55,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     } else if (req.method === 'POST') {
       // Create new note
-      const { trainerId, title, description, noteType, textContent, batchIds, moduleIndex, moduleTitle, tags, pdfFile } = req.body;
+      const { trainerId, title, description, noteType, textContent, batchIds, moduleIndex, moduleTitle, tags, pdfFile, isPublished } = req.body;
 
       if (!trainerId || !title || !noteType) {
         return res.status(400).json({ error: 'Trainer ID, title, and note type are required' });
@@ -86,6 +86,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         courseIds = [...new Set(batches.map((batch: any) => batch.courseId._id))];
       }
 
+      // Default to published so students can see the note immediately.
+      // Trainers can explicitly save as a draft by sending isPublished: false.
+      const shouldPublish = isPublished !== false;
+
       const noteData: any = {
         trainerId: actualTrainerId,
         title,
@@ -96,7 +100,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         moduleIndex: moduleIndex || null,
         moduleTitle: moduleTitle || '',
         tags: tags || [],
-        isPublished: false
+        isPublished: shouldPublish,
+        publishedAt: shouldPublish ? new Date() : null
       };
 
       if (noteType === 'text' && textContent) {

@@ -211,6 +211,8 @@ export async function GET(req: NextRequest) {
         status: cls.status,
         canJoin: canJoin,
         isLive: isLive,
+        // Include batchId for filtering
+        batchId: cls.batchId?.toString(),
         // BigBlueButton fields
         bbbMeetingId: cls.bbbMeetingId,
         bbbJoinUrl: bbbJoinUrl

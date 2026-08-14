@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 
 interface BatchData {
   batchId: string;
+  batchName: string;
   courseTitle: string;
   courseLink: string;
   status: string;
@@ -227,7 +228,7 @@ const MyBatches = () => {
                       <div>
                         <CardTitle className="text-gray-900 flex items-center gap-2">
                           <BookOpen className="h-5 w-5 text-blue-600" />
-                          {batch.courseTitle}
+                          {batch.batchName}
                         </CardTitle>
                         <p className="text-sm text-gray-600 mt-1">Batch ID: {batch.batchId}</p>
                       </div>

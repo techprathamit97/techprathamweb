@@ -12,13 +12,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   try {
     await connectMongo();
 
-    const { studentId } = req.query;
+    const { studentId, batchId } = req.query;
 
     if (!studentId) {
       return res.status(400).json({ error: 'Student ID is required' });
     }
 
-    console.log('📚 FETCHING STUDENT NOTES:', studentId);
+    console.log('📚 FETCHING STUDENT NOTES:', studentId, 'for batch:', batchId);
 
     // Handle student ID - might need to find by studentId field
     let actualStudentId = studentId;
@@ -39,28 +39,75 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Get batches where this student is enrolled
-    const studentBatches = await Batch.find({
-      studentIds: actualStudentId
-    }).lean();
+    // Resolve which batches to pull notes for.
+    // Enrollment is treated as a soft signal: if the batch exists we still scope
+    // notes to it, because a missing studentIds entry used to produce a silent
+    // "0 notes" that was indistinguishable from "trainer added nothing".
+    let targetBatchIds: any[] = [];
+    let enrollmentMatched = true;
 
-    const batchIds = studentBatches.map((batch: any) => batch._id);
+    if (batchId) {
+      const specificBatch = await Batch.findById(batchId).lean();
 
-    console.log(`Student enrolled in ${batchIds.length} batches`);
+      if (!specificBatch) {
+        return res.status(404).json({ success: false, error: 'Batch not found' });
+      }
 
-    if (batchIds.length === 0) {
+      enrollmentMatched = (specificBatch.studentIds || []).some(
+        (id: any) => String(id) === String(actualStudentId)
+      );
+
+      if (!enrollmentMatched) {
+        console.warn(
+          `⚠️ Student ${actualStudentId} is not in batch ${batchId}.studentIds - ` +
+          `serving batch notes anyway and flagging enrollment`
+        );
+      }
+
+      targetBatchIds = [specificBatch._id];
+    } else {
+      const studentBatches = await Batch.find({
+        studentIds: actualStudentId
+      }).lean();
+
+      targetBatchIds = studentBatches.map((batch: any) => batch._id);
+    }
+
+    console.log(`Searching notes for ${targetBatchIds.length} batch(es)`);
+
+    if (targetBatchIds.length === 0) {
       return res.status(200).json({
         success: true,
         notes: [],
         totalNotes: 0,
-        message: 'Student not enrolled in any batches'
+        message: 'Student not enrolled in any batches',
+        diagnostics: {
+          enrollmentMatched: false,
+          notesForBatch: 0,
+          publishedNotes: 0,
+          draftNotes: 0
+        }
       });
     }
 
-    // Find published notes that are assigned to student's batches
+    // Count everything assigned to these batches regardless of publish state, so
+    // the UI can distinguish "nothing created" from "created but still a draft".
+    const allBatchNotes = await TrainerNote.find({
+      batchIds: { $in: targetBatchIds }
+    }).select('_id isPublished title').lean();
+
+    const draftCount = allBatchNotes.filter((n: any) => !n.isPublished).length;
+    const publishedCount = allBatchNotes.length - draftCount;
+
+    console.log(
+      `📊 Notes for batch scope: ${allBatchNotes.length} total, ` +
+      `${publishedCount} published, ${draftCount} draft`
+    );
+
+    // Find published notes that are assigned to target batch(es)
     const studentNotes = await TrainerNote.find({
       isPublished: true,
-      batchIds: { $in: batchIds }
+      batchIds: { $in: targetBatchIds }
     })
       .populate('trainerId', 'name email')
       .populate('batchIds', 'batchName batchCode')
@@ -68,7 +115,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .sort({ publishedAt: -1, createdAt: -1 })
       .lean();
 
-    console.log(`Found ${studentNotes.length} published notes for student`);
+    console.log(`Found ${studentNotes.length} published notes for student${batchId ? ' in batch ' + batchId : ''}`);
 
     // Track student view for each note (if not already viewed)
     for (const note of studentNotes) {
@@ -130,7 +177,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name: student.name,
         email: student.email
       },
-      enrolledBatches: batchIds.length
+      enrolledBatches: targetBatchIds.length,
+      batchSpecific: !!batchId,
+      // Explains an empty list instead of leaving the UI guessing
+      diagnostics: {
+        enrollmentMatched,
+        notesForBatch: allBatchNotes.length,
+        publishedNotes: publishedCount,
+        draftNotes: draftCount
+      }
     });
 
   } catch (error: any) {

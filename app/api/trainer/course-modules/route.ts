@@ -119,12 +119,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Get all module classes for these batches
+    // Get all module classes for these batches, sorted ascending by date/time
     const batchIds = batches.map((b: any) => b._id);
     const allClasses = await ModuleClass.find({
       batchId: { $in: batchIds },
       status: { $ne: 'cancelled' }
-    }).sort({ scheduledDate: -1, scheduledTime: -1 }).lean();
+    }).sort({ scheduledDate: 1, scheduledTime: 1 }).lean();
 
     // Separate completed classes (with recordings) and scheduled classes
     const completedModules: any[] = [];

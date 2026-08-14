@@ -23,6 +23,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { sanitizeNoteHtml } from '@/utils/sanitizeHtml';
 
 // Import ReactQuill dynamically to avoid SSR issues
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -112,6 +113,7 @@ interface NoteFormData {
   moduleIndex?: number;
   moduleTitle?: string;
   tags: string[];
+  isPublished: boolean;
   pdfFile?: {
     url: string;
     fileName: string;
@@ -139,6 +141,7 @@ const TrainerNotes = () => {
     moduleIndex: undefined,
     moduleTitle: '',
     tags: [],
+    isPublished: true,
     pdfFile: undefined
   });
 
@@ -327,6 +330,7 @@ const TrainerNotes = () => {
       moduleIndex: undefined,
       moduleTitle: '',
       tags: [],
+      isPublished: true,
       pdfFile: undefined
     });
   };
@@ -364,6 +368,7 @@ const TrainerNotes = () => {
       moduleIndex: note.moduleIndex,
       moduleTitle: note.moduleTitle || '',
       tags: note.tags,
+      isPublished: note.isPublished,
       pdfFile: note.pdfFile
     });
     setShowNoteForm(true);
@@ -797,6 +802,32 @@ const TrainerNotes = () => {
                   </div>
                 </div>
               )}
+              {/* Visibility */}
+              <div className="border-t border-gray-200 pt-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Student Visibility
+                </label>
+                <div className="flex items-start space-x-3 p-4 border rounded-lg bg-blue-50 border-blue-200">
+                  <input
+                    type="checkbox"
+                    id="note-publish"
+                    checked={noteForm.isPublished}
+                    onChange={(e) => setNoteForm({ ...noteForm, isPublished: e.target.checked })}
+                    className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="note-publish" className="flex-1 text-sm cursor-pointer">
+                    <div className="font-medium text-blue-900">
+                      Publish to students immediately
+                    </div>
+                    <div className="text-xs text-blue-700 mt-1">
+                      {noteForm.isPublished
+                        ? 'Students in the selected batches will see this note right away in their batch management page.'
+                        : 'This note will be saved as a draft. Students will NOT see it until you publish it.'}
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div className="flex items-center gap-3 pt-6 border-t border-gray-200">
                 <Button 
@@ -922,9 +953,11 @@ const TrainerNotes = () => {
                                 <div 
                                   className="note-content prose-sm"
                                   dangerouslySetInnerHTML={{ 
-                                    __html: note.textContent[0].content.length > 150 
-                                      ? note.textContent[0].content.substring(0, 150) + '...' 
-                                      : note.textContent[0].content 
+                                    __html: sanitizeNoteHtml(
+                                      note.textContent[0].content.length > 150 
+                                        ? note.textContent[0].content.substring(0, 150) + '...' 
+                                        : note.textContent[0].content
+                                    )
                                   }}
                                 />
                               </div>

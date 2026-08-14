@@ -8,9 +8,21 @@ const batchSchema = new mongoose.Schema({
   studentIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }],
   startDate: Date,
   endDate: Date,
-  timing: String,
+  timing: String, // Display format like "9:00 AM to 5:00 PM"
+  // New timing fields for automatic class generation
+  startTime: { type: String, default: '09:00' }, // 24-hour format
+  endTime: { type: String, default: '17:00' }, // 24-hour format
+  classFrequency: { 
+    type: String, 
+    enum: ['daily', 'weekly', 'custom'], 
+    default: 'daily' 
+  },
+  classDuration: { type: Number, default: 60 }, // Duration in minutes
+  daysOfWeek: [{ 
+    type: String, 
+    enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+  }],
   capacity: { type: Number, default: 30 },
-  meetingLink: String,
   description: String,
   status: String,
   // Course progress - set by trainer for all students at once

@@ -81,6 +81,9 @@ interface Batch {
   capacity: number;
   studentIds: string[];
   studentCount?: number;
+  classFrequency?: string;
+  classDuration?: number;
+  daysOfWeek?: string[];
   status: 'upcoming' | 'ongoing' | 'completed';
   meetingLink?: string;
   description?: string;
@@ -138,6 +141,28 @@ const BatchesManagement = () => {
   const [restrictReason, setRestrictReason] = useState('');
   const [studentToRestrict, setStudentToRestrict] = useState<{ id: string; name: string } | null>(null);
   
+  // Edit batch modal state
+  const [editBatchDialog, setEditBatchDialog] = useState<{
+    open: boolean;
+    loading: boolean;
+    batch: Batch | null;
+  }>({ open: false, loading: false, batch: null });
+  const [editBatchForm, setEditBatchForm] = useState({
+    batchName: '',
+    courseId: '',
+    trainerId: '',
+    startDate: '',
+    endDate: '',
+    timing: '',
+    startTime: '09:00',
+    endTime: '17:00',
+    classFrequency: 'daily',
+    classDuration: 60,
+    daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+    capacity: 30,
+    description: ''
+  });
+
   const [newBatch, setNewBatch] = useState({
     batchName: '',
     courseId: '',
@@ -145,8 +170,12 @@ const BatchesManagement = () => {
     startDate: '',
     endDate: '',
     timing: '',
+    startTime: '09:00',
+    endTime: '17:00',
+    classFrequency: 'daily',
+    classDuration: 60,
+    daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
     capacity: 30,
-    meetingLink: '',
     description: ''
   });
 
@@ -172,17 +201,20 @@ const BatchesManagement = () => {
       const data = await res.json();
       
       if (res.ok) {
+        const responseData: Batch[] = Array.isArray(data) ? data : [];
+
         // Update batch statuses based on dates
-        const batchesWithUpdatedStatus = Array.isArray(data) ? data.map(batch => ({
+        const batchesWithUpdatedStatus: Batch[] = responseData.map((batch: Batch) => ({
           ...batch,
           status: getBatchStatus(batch)
-        })) : [];
+        }));
         
         setBatches(batchesWithUpdatedStatus);
         
         // Update batch statuses in database if needed
         batchesWithUpdatedStatus.forEach(async (batch) => {
-          if (batch.status !== data.find((b: Batch) => b._id === batch._id)?.status) {
+          const originalBatch = responseData.find((b: Batch) => b._id === batch._id);
+          if (batch.status !== originalBatch?.status) {
             await updateBatchStatus(batch._id, batch.status);
           }
         });
@@ -212,10 +244,14 @@ const BatchesManagement = () => {
 
   const updateBatchStatus = async (batchId: string, status: string) => {
     try {
+      // For status updates, we'll use a simpler PATCH that doesn't require full validation
       await fetch(`/api/lms/batches/${batchId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ 
+          statusOnly: true,
+          status: status 
+        })
       });
     } catch (error) {
       console.error('Failed to update batch status:', error);
@@ -700,24 +736,201 @@ const BatchesManagement = () => {
     }
   };
 
+  // Open edit batch dialog
+  const openEditBatchDialog = (batch: Batch) => {
+    console.log('Opening edit dialog for batch:', batch);
+    console.log('Batch courseId:', batch.courseId, typeof batch.courseId);
+    console.log('Batch trainerId:', batch.trainerId, typeof batch.trainerId);
+    console.log('Available courses:', courses.map(c => ({ _id: c._id, title: c.title })));
+    console.log('Available trainers:', trainers.map(t => ({ _id: t._id, name: t.name })));
+    
+    // Extract time from timing string if it exists (e.g., "9:00 AM to 5:00 PM")
+    let startTime = '09:00';
+    let endTime = '17:00';
+    
+    if (batch.timing) {
+      try {
+        // Parse timing string like "9:00 AM to 5:00 PM"
+        const timeParts = batch.timing.split(' to ');
+        if (timeParts.length === 2) {
+          const startPart = timeParts[0].trim();
+          const endPart = timeParts[1].trim();
+          
+          // Convert 12-hour format to 24-hour format
+          const convertTo24Hour = (timeStr: string) => {
+            const [time, period] = timeStr.split(' ');
+            let [hours, minutes] = time.split(':');
+            let hour = parseInt(hours);
+            
+            if (period && period.toUpperCase() === 'PM' && hour !== 12) {
+              hour += 12;
+            } else if (period && period.toUpperCase() === 'AM' && hour === 12) {
+              hour = 0;
+            }
+            
+            return `${hour.toString().padStart(2, '0')}:${minutes || '00'}`;
+          };
+          
+          startTime = convertTo24Hour(startPart);
+          endTime = convertTo24Hour(endPart);
+        }
+      } catch (error) {
+        console.warn('Error parsing timing string:', batch.timing, error);
+      }
+    }
+
+    // Extract the correct IDs - handle both string IDs and populated objects
+    const courseId = typeof batch.courseId === 'string' ? batch.courseId : (batch.courseId && typeof batch.courseId === 'object' ? (batch.courseId as any)._id || '' : '');
+    const trainerId = typeof batch.trainerId === 'string' ? batch.trainerId : (batch.trainerId && typeof batch.trainerId === 'object' ? (batch.trainerId as any)._id || '' : '');
+
+    const formData = {
+      batchName: batch.batchName || '',
+      courseId: courseId,
+      trainerId: trainerId,
+      startDate: batch.startDate ? new Date(batch.startDate).toISOString().split('T')[0] : '',
+      endDate: batch.endDate ? new Date(batch.endDate).toISOString().split('T')[0] : '',
+      timing: batch.timing || '',
+      startTime: startTime,
+      endTime: endTime,
+      classFrequency: batch.classFrequency || 'daily',
+      classDuration: batch.classDuration || 60,
+      daysOfWeek: batch.daysOfWeek || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      capacity: batch.capacity || 30,
+      description: batch.description || ''
+    };
+
+    console.log('Setting edit form data:', formData);
+    console.log('Course match check:', courses.find(c => c._id === courseId));
+    console.log('Trainer match check:', trainers.find(t => t._id === trainerId));
+    
+    // Set form data first, then open dialog - this ensures state is set before render
+    setEditBatchForm(formData);
+    
+    // Use setTimeout to ensure state update is processed before opening dialog
+    setTimeout(() => {
+      setEditBatchDialog({ open: true, loading: false, batch });
+    }, 10);
+  };
+
+  // Update batch function
+  const handleUpdateBatch = async () => {
+    if (!editBatchDialog.batch) return;
+
+    // Validate required fields
+    if (!editBatchForm.batchName || !editBatchForm.courseId || !editBatchForm.trainerId || !editBatchForm.startDate || !editBatchForm.endDate) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setEditBatchDialog(prev => ({ ...prev, loading: true }));
+
+    try {
+      // Format timing string from time selections
+      const formatTime = (time: string) => {
+        const [hours, minutes] = time.split(':');
+        const hour12 = parseInt(hours) > 12 ? parseInt(hours) - 12 : parseInt(hours);
+        const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
+        return `${hour12 === 0 ? 12 : hour12}:${minutes} ${ampm}`;
+      };
+
+      const timingString = `${formatTime(editBatchForm.startTime)} to ${formatTime(editBatchForm.endTime)}`;
+
+      const updateData = {
+        batchName: editBatchForm.batchName,
+        courseId: editBatchForm.courseId,
+        trainerId: editBatchForm.trainerId,
+        startDate: new Date(editBatchForm.startDate),
+        endDate: new Date(editBatchForm.endDate),
+        timing: timingString,
+        startTime: editBatchForm.startTime,
+        endTime: editBatchForm.endTime,
+        classFrequency: editBatchForm.classFrequency,
+        classDuration: editBatchForm.classDuration,
+        daysOfWeek: editBatchForm.daysOfWeek,
+        capacity: editBatchForm.capacity,
+        description: editBatchForm.description
+      };
+
+      const res = await fetch(`/api/lms/batches/${editBatchDialog.batch._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      const responseData = await res.json();
+
+      if (res.ok) {
+        toast.success('Batch updated successfully');
+        setEditBatchDialog({ open: false, loading: false, batch: null });
+        fetchBatches(); // Refresh batches list
+      } else {
+        throw new Error(responseData.error || responseData.message || 'Failed to update batch');
+      }
+    } catch (error: any) {
+      console.error('Failed to update batch:', error);
+      toast.error(error.message || 'Failed to update batch');
+      setEditBatchDialog(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  // Delete batch function
+  const handleDeleteBatch = async (batch: Batch) => {
+    if (!confirm(`Are you sure you want to delete the batch "${batch.batchName}"? This action cannot be undone and will affect ${batch.studentIds?.length || 0} enrolled students.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/lms/batches/${batch._id}`, {
+        method: 'DELETE'
+      });
+
+      const responseData = await res.json();
+
+      if (res.ok) {
+        toast.success('Batch deleted successfully');
+        fetchBatches(); // Refresh batches list
+      } else {
+        throw new Error(responseData.error || responseData.message || 'Failed to delete batch');
+      }
+    } catch (error: any) {
+      console.error('Failed to delete batch:', error);
+      toast.error(error.message || 'Failed to delete batch');
+    }
+  };
+
   const handleCreateBatch = async () => {
     // Validate required fields
-    if (!newBatch.batchName || !newBatch.courseId || !newBatch.trainerId || !newBatch.startDate || !newBatch.endDate || !newBatch.timing) {
+    if (!newBatch.batchName || !newBatch.courseId || !newBatch.trainerId || !newBatch.startDate || !newBatch.endDate || !newBatch.startTime || !newBatch.endTime) {
       toast.error('Please fill in all required fields');
       return;
     }
 
     try {
+      // Format timing string from time selections
+      const formatTime = (time: string) => {
+        const [hours, minutes] = time.split(':');
+        const hour12 = parseInt(hours) > 12 ? parseInt(hours) - 12 : parseInt(hours);
+        const ampm = parseInt(hours) >= 12 ? 'PM' : 'AM';
+        return `${hour12 === 0 ? 12 : hour12}:${minutes} ${ampm}`;
+      };
+
+      const timingString = `${formatTime(newBatch.startTime)} to ${formatTime(newBatch.endTime)}`;
+
       const batchData = {
         batchName: newBatch.batchName,
         courseId: newBatch.courseId,
         trainerId: newBatch.trainerId,
         startDate: new Date(newBatch.startDate),
         endDate: new Date(newBatch.endDate),
-        timing: newBatch.timing,
+        timing: timingString,
+        startTime: newBatch.startTime,
+        endTime: newBatch.endTime,
+        classFrequency: newBatch.classFrequency,
+        classDuration: newBatch.classDuration,
+        daysOfWeek: newBatch.daysOfWeek,
         capacity: newBatch.capacity,
-        meetingLink: newBatch.meetingLink,
-        description: newBatch.description
+        description: newBatch.description,
+        autoGenerateClasses: true // Flag to generate classes automatically
       };
 
       const res = await fetch('/api/lms/batches', {
@@ -730,6 +943,9 @@ const BatchesManagement = () => {
 
       if (res.ok) {
         toast.success('Batch created successfully');
+        if (responseData.generatedClassesCount) {
+          toast.info(`${responseData.generatedClassesCount} classes auto-generated for this batch`);
+        }
         setIsCreateDialogOpen(false);
         fetchBatches();
         // Reset form
@@ -740,8 +956,12 @@ const BatchesManagement = () => {
           startDate: '',
           endDate: '',
           timing: '',
+          startTime: '09:00',
+          endTime: '17:00',
+          classFrequency: 'daily',
+          classDuration: 60,
+          daysOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
           capacity: 30,
-          meetingLink: '',
           description: ''
         });
       } else {
@@ -1027,29 +1247,114 @@ const BatchesManagement = () => {
                 </div>
 
                 <div>
-                  <Label className="text-white">Timing *</Label>
-                  <Input
-                    placeholder="e.g., 10:00 AM - 12:00 PM"
-                    value={newBatch.timing}
-                    onChange={(e) => setNewBatch(prev => ({
-                      ...prev,
-                      timing: e.target.value
-                    }))}
-                    className="bg-gray-700 border-gray-600 text-white"
-                  />
-                </div>
+                  <Label className="text-white">Class Schedule *</Label>
+                  <div className="space-y-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-gray-300">Start Time *</Label>
+                        <Input
+                          type="time"
+                          value={newBatch.startTime}
+                          onChange={(e) => setNewBatch(prev => ({
+                            ...prev,
+                            startTime: e.target.value
+                          }))}
+                          className="bg-gray-600 border-gray-500 text-white mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm text-gray-300">End Time *</Label>
+                        <Input
+                          type="time"
+                          value={newBatch.endTime}
+                          onChange={(e) => setNewBatch(prev => ({
+                            ...prev,
+                            endTime: e.target.value
+                          }))}
+                          className="bg-gray-600 border-gray-500 text-white mt-1"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-gray-300">Class Frequency</Label>
+                        <Select 
+                          value={newBatch.classFrequency} 
+                          onValueChange={(value) => {
+                            setNewBatch(prev => ({
+                              ...prev,
+                              classFrequency: value
+                            }));
+                          }}
+                        >
+                          <SelectTrigger className="bg-gray-600 border-gray-500 text-white mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-gray-600 border-gray-500">
+                            <SelectItem value="daily">Daily (Mon-Fri)</SelectItem>
+                            <SelectItem value="weekly">Weekly (Custom Days)</SelectItem>
+                            <SelectItem value="custom">Custom Schedule</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-gray-300">Class Duration (minutes)</Label>
+                        <Input
+                          type="number"
+                          min="30"
+                          max="180"
+                          step="15"
+                          value={newBatch.classDuration}
+                          onChange={(e) => setNewBatch(prev => ({
+                            ...prev,
+                            classDuration: parseInt(e.target.value) || 60
+                          }))}
+                          className="bg-gray-600 border-gray-500 text-white mt-1"
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <Label className="text-white">Meeting Link</Label>
-                  <Input
-                    placeholder="Zoom/Meet link"
-                    value={newBatch.meetingLink}
-                    onChange={(e) => setNewBatch(prev => ({
-                      ...prev,
-                      meetingLink: e.target.value
-                    }))}
-                    className="bg-gray-700 border-gray-600 text-white"
-                  />
+                    {newBatch.classFrequency === 'weekly' && (
+                      <div>
+                        <Label className="text-sm text-gray-300">Days of Week</Label>
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                            <div key={day} className="flex items-center space-x-2">
+                              <Checkbox
+                                id={day}
+                                checked={newBatch.daysOfWeek.includes(day)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setNewBatch(prev => ({
+                                      ...prev,
+                                      daysOfWeek: [...prev.daysOfWeek, day]
+                                    }));
+                                  } else {
+                                    setNewBatch(prev => ({
+                                      ...prev,
+                                      daysOfWeek: prev.daysOfWeek.filter(d => d !== day)
+                                    }));
+                                  }
+                                }}
+                                className="border-gray-500"
+                              />
+                              <Label
+                                htmlFor={day}
+                                className="text-xs text-gray-300 cursor-pointer"
+                              >
+                                {day.slice(0, 3)}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="text-xs text-gray-400">
+                      Classes will be automatically generated based on this schedule from start date to end date.
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1063,7 +1368,7 @@ const BatchesManagement = () => {
                 <Button 
                   variant="manual" 
                   onClick={handleCreateBatch}
-                  disabled={!newBatch.batchName || !newBatch.courseId || !newBatch.trainerId}
+                  disabled={!newBatch.batchName || !newBatch.courseId || !newBatch.trainerId || !newBatch.startDate || !newBatch.endDate || !newBatch.startTime || !newBatch.endTime}
                 >
                   Create Batch
                 </Button>
@@ -1142,7 +1447,7 @@ const BatchesManagement = () => {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-white text-lg">{batch.course_title}</CardTitle>
+                        <CardTitle className="text-white text-lg">{batch.batchName}</CardTitle>
                         <p className="text-gray-400 text-sm">{batch.batchId}</p>
                       </div>
                       <Badge className={getStatusColor(batch.status)}>
@@ -1231,9 +1536,23 @@ const BatchesManagement = () => {
                         <Mail className="h-3 w-3" />
                         Send Email to All
                       </Button>
-                      <Button size="sm" variant="outline" className="flex items-center gap-1">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex items-center gap-1"
+                        onClick={() => openEditBatchDialog(batch)}
+                      >
                         <Edit className="h-3 w-3" />
-                        Edit
+                        Edit Batch
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex items-center gap-1 border-red-500 text-red-600 hover:bg-red-50"
+                        onClick={() => handleDeleteBatch(batch)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete
                       </Button>
                       <Button
                         size="sm"
@@ -1844,6 +2163,283 @@ const BatchesManagement = () => {
               onClick={handleRestrictStudent}
             >
               Confirm Restriction
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Batch Dialog */}
+      <Dialog open={editBatchDialog.open} onOpenChange={(open) => setEditBatchDialog(prev => ({ ...prev, open }))}>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-white">Edit Batch: {editBatchDialog.batch?.batchName}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-white">Batch Name *</Label>
+                <Input
+                  placeholder="e.g., Java Batch 1"
+                  value={editBatchForm.batchName}
+                  onChange={(e) => setEditBatchForm(prev => ({ ...prev, batchName: e.target.value }))}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-white">Course *</Label>
+                <Select 
+                  key={`course-${editBatchDialog.batch?._id}-${editBatchForm.courseId}`}
+                  value={editBatchForm.courseId} 
+                  onValueChange={(value) => {
+                    console.log('Course selection changed:', value);
+                    setEditBatchForm(prev => ({
+                      ...prev,
+                      courseId: value
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    {courses.map((course: any) => (
+                      <SelectItem key={course._id} value={course._id}>
+                        {course.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-white">Capacity</Label>
+                <Input
+                  type="number"
+                  value={editBatchForm.capacity}
+                  onChange={(e) => setEditBatchForm(prev => ({
+                    ...prev,
+                    capacity: parseInt(e.target.value) || 30
+                  }))}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-white">Trainer Name *</Label>
+                <Select 
+                  key={`trainer-${editBatchDialog.batch?._id}-${editBatchForm.trainerId}`}
+                  value={editBatchForm.trainerId} 
+                  onValueChange={(value) => {
+                    console.log('Trainer selection changed:', value);
+                    setEditBatchForm(prev => ({
+                      ...prev,
+                      trainerId: value
+                    }));
+                  }}
+                >
+                  <SelectTrigger className="bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Select trainer" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    {trainers.map((trainer: any) => (
+                      <SelectItem key={trainer._id} value={trainer._id}>
+                        {trainer.name} - {trainer.experience} (ID: {trainer.trainerId})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <Label className="text-white">Trainer Email</Label>
+                <Input
+                  type="email"
+                  value={
+                    editBatchForm.trainerId 
+                      ? trainers.find((t: any) => t._id === editBatchForm.trainerId)?.email || ''
+                      : ''
+                  }
+                  readOnly
+                  className="bg-gray-700 border-gray-600 text-white cursor-not-allowed"
+                  placeholder="Auto-filled from trainer selection"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-white">Start Date *</Label>
+                <Input
+                  type="date"
+                  value={editBatchForm.startDate}
+                  onChange={(e) => setEditBatchForm(prev => ({
+                    ...prev,
+                    startDate: e.target.value
+                  }))}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+              
+              <div>
+                <Label className="text-white">End Date *</Label>
+                <Input
+                  type="date"
+                  value={editBatchForm.endDate}
+                  onChange={(e) => setEditBatchForm(prev => ({
+                    ...prev,
+                    endDate: e.target.value
+                  }))}
+                  className="bg-gray-700 border-gray-600 text-white"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-white">Class Schedule *</Label>
+              <div className="space-y-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-gray-300">Start Time *</Label>
+                    <Input
+                      type="time"
+                      value={editBatchForm.startTime}
+                      onChange={(e) => setEditBatchForm(prev => ({
+                        ...prev,
+                        startTime: e.target.value
+                      }))}
+                      className="bg-gray-600 border-gray-500 text-white mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-300">End Time *</Label>
+                    <Input
+                      type="time"
+                      value={editBatchForm.endTime}
+                      onChange={(e) => setEditBatchForm(prev => ({
+                        ...prev,
+                        endTime: e.target.value
+                      }))}
+                      className="bg-gray-600 border-gray-500 text-white mt-1"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm text-gray-300">Class Frequency</Label>
+                    <Select 
+                      value={editBatchForm.classFrequency} 
+                      onValueChange={(value) => {
+                        setEditBatchForm(prev => ({
+                          ...prev,
+                          classFrequency: value
+                        }));
+                      }}
+                    >
+                      <SelectTrigger className="bg-gray-600 border-gray-500 text-white mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-600 border-gray-500">
+                        <SelectItem value="daily">Daily (Mon-Fri)</SelectItem>
+                        <SelectItem value="weekly">Weekly (Custom Days)</SelectItem>
+                        <SelectItem value="custom">Custom Schedule</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm text-gray-300">Class Duration (minutes)</Label>
+                    <Input
+                      type="number"
+                      min="30"
+                      max="180"
+                      step="15"
+                      value={editBatchForm.classDuration}
+                      onChange={(e) => setEditBatchForm(prev => ({
+                        ...prev,
+                        classDuration: parseInt(e.target.value) || 60
+                      }))}
+                      className="bg-gray-600 border-gray-500 text-white mt-1"
+                    />
+                  </div>
+                </div>
+
+                {editBatchForm.classFrequency === 'weekly' && (
+                  <div>
+                    <Label className="text-sm text-gray-300">Days of Week</Label>
+                    <div className="grid grid-cols-3 gap-2 mt-2">
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                        <div key={day} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`edit-${day}`}
+                            checked={editBatchForm.daysOfWeek.includes(day)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setEditBatchForm(prev => ({
+                                  ...prev,
+                                  daysOfWeek: [...prev.daysOfWeek, day]
+                                }));
+                              } else {
+                                setEditBatchForm(prev => ({
+                                  ...prev,
+                                  daysOfWeek: prev.daysOfWeek.filter(d => d !== day)
+                                }));
+                              }
+                            }}
+                            className="border-gray-500"
+                          />
+                          <Label
+                            htmlFor={`edit-${day}`}
+                            className="text-xs text-gray-300 cursor-pointer"
+                          >
+                            {day.slice(0, 3)}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-xs text-gray-400">
+                  Updating the schedule will affect existing classes.
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-white">Description</Label>
+              <textarea
+                placeholder="Batch description..."
+                value={editBatchForm.description}
+                onChange={(e) => setEditBatchForm(prev => ({
+                  ...prev,
+                  description: e.target.value
+                }))}
+                rows={3}
+                className="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button 
+              variant="outline" 
+              onClick={() => setEditBatchDialog({ open: false, loading: false, batch: null })}
+              disabled={editBatchDialog.loading}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="manual" 
+              onClick={handleUpdateBatch}
+              disabled={editBatchDialog.loading || !editBatchForm.batchName || !editBatchForm.courseId || !editBatchForm.trainerId || !editBatchForm.startDate || !editBatchForm.endDate}
+            >
+              {editBatchDialog.loading ? 'Updating...' : 'Update Batch'}
             </Button>
           </div>
         </DialogContent>

@@ -37,13 +37,120 @@ function generateBBBChecksum(apiCall: string, params: string, secret: string): s
   return crypto.createHash('sha1').update(stringToHash, 'utf8').digest('hex');
 }
 
+// Helper function to cleanup stale "live" classes and detect ended sessions
+async function cleanupStaleClasses() {
+  console.log('🧹 CLEANUP: Checking for stale live classes and ended sessions');
+  
+  try {
+    const bbbServerUrl = process.env.BIGBLUEBUTTON_SERVER_URL;
+    const bbbApiSecret = process.env.BIGBLUEBUTTON_API_SECRET;
+    
+    if (!bbbServerUrl || !bbbApiSecret) {
+      console.log('🧹 CLEANUP: BBB config not available, skipping cleanup');
+      return;
+    }
+    
+    // Find all classes marked as live
+    const liveClasses = await ModuleClass.find({
+      status: 'live',
+      isLive: true,
+      bbbMeetingId: { $exists: true, $ne: null }
+    });
+    
+    console.log(`🧹 CLEANUP: Found ${liveClasses.length} classes marked as live`);
+    
+    if (liveClasses.length === 0) return;
+    
+    const normalizedServerUrl = bbbServerUrl.replace(/\/$/, '');
+    const apiUrl = normalizedServerUrl.endsWith('/api') ? normalizedServerUrl : `${normalizedServerUrl}/api`;
+    
+    let cleanedUp = 0;
+    
+    for (const cls of liveClasses) {
+      try {
+        // Check if meeting is still active on BBB
+        const getMeetingInfoParams = `meetingID=${encodeURIComponent(cls.bbbMeetingId)}`;
+        const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
+        const getMeetingInfoUrl = `${apiUrl}/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
+        
+        const response = await fetch(getMeetingInfoUrl);
+        const xml = await response.text();
+        
+        console.log(`🧹 CLEANUP: Checking meeting ${cls.bbbMeetingId} - Status: ${response.status}`);
+        
+        // If meeting doesn't exist, has ended, or was forcibly ended, mark class as completed
+        if (xml.includes('notFound') || xml.includes('No such meeting') || 
+            xml.includes('<ended>true</ended>') || xml.includes('meetingForciblyEnded') ||
+            xml.includes('hasBeenForciblyEnded>true') || xml.includes('forciblyEnded')) {
+          
+          console.log(`🧹 CLEANUP: Meeting ${cls.bbbMeetingId} ended (forcibly or naturally), marking class as completed`);
+          
+          // Mark class as completed and clear live flags
+          await ModuleClass.findByIdAndUpdate(cls._id, {
+            status: 'completed',
+            isLive: false,
+            actualEndTime: new Date(),
+            // Clear session tokens to prevent join issues
+            $unset: { 
+              joinedSessionTokens: 1,
+              studentSessionTokens: 1 
+            }
+          });
+          
+          console.log(`✅ CLEANUP: Class ${cls.moduleTitle} marked as completed`);
+          cleanedUp++;
+        } else if (xml.includes('<returncode>SUCCESS</returncode>')) {
+          // Meeting exists and is active - check if it actually has participants
+          const participantCount = xml.match(/<participantCount>(\d+)<\/participantCount>/);
+          const moderatorCount = xml.match(/<moderatorCount>(\d+)<\/moderatorCount>/);
+          
+          const participants = participantCount ? parseInt(participantCount[1]) : 0;
+          const moderators = moderatorCount ? parseInt(moderatorCount[1]) : 0;
+          
+          console.log(`🧹 CLEANUP: Meeting ${cls.bbbMeetingId} active with ${participants} participants, ${moderators} moderators`);
+          
+          // If no moderators (trainers) left in meeting, mark as completed
+          if (moderators === 0 && participants === 0) {
+            console.log(`🧹 CLEANUP: Meeting ${cls.bbbMeetingId} has no participants, marking as completed`);
+            
+            await ModuleClass.findByIdAndUpdate(cls._id, {
+              status: 'completed',
+              isLive: false,
+              actualEndTime: new Date(),
+              $unset: { 
+                joinedSessionTokens: 1,
+                studentSessionTokens: 1 
+              }
+            });
+            
+            cleanedUp++;
+          }
+        }
+      } catch (error) {
+        console.log(`🧹 CLEANUP: Error checking meeting ${cls.bbbMeetingId}:`, error);
+      }
+    }
+    
+    if (cleanedUp > 0) {
+      console.log(`🧹 CLEANUP: Cleaned up ${cleanedUp} ended/stale live classes`);
+    }
+  } catch (error) {
+    console.error('🧹 CLEANUP: Error during cleanup:', error);
+  }
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { classId, userName, userType, sessionToken: incomingSessionToken, studentId } = req.body;
+    await connectMongo();
+    
+    // Run comprehensive cleanup before processing any join request
+    await cleanupStaleClasses();
+
+    let { classId, userName, userType, sessionToken: incomingSessionToken, studentId, forceRejoin } = req.body;
     let sessionToken = incomingSessionToken;
 
     console.log('=== DIRECT BBB API JOIN ===');
@@ -51,6 +158,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('User Name:', userName);
     console.log('User Type:', userType);
     console.log('Session Token:', sessionToken);
+    console.log('Force Rejoin:', forceRejoin);
 
     if (!classId || !userName || !userType) {
       return res.status(400).json({
@@ -60,8 +168,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Rate limiting check to prevent rapid multiple joins
+    // Skip rate limiting for forceRejoin requests to allow immediate rejoining
     const userId = studentId || userName;
-    if (isRateLimited(userId, classId)) {
+    if (!forceRejoin && isRateLimited(userId, classId)) {
       console.log('🚫 RATE LIMITED: Too many join attempts');
       return res.status(429).json({
         success: false,
@@ -69,11 +178,119 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         rateLimited: true,
         message: 'Rate limit exceeded - please wait before retrying'
       });
+    } else if (forceRejoin) {
+      console.log('✅ FORCE REJOIN: Skipping rate limit check for rejoin request');
     }
 
     await connectMongo();
+    
+    // Clean up stale "live" classes before processing join request
+    await cleanupStaleClasses();
 
-    // Get class details
+    // Check if this is a timing-based class (virtual class)
+    if (classId.startsWith('timing-')) {
+      console.log('🎯 TIMING-BASED CLASS DETECTED');
+      
+      // Extract batch ID and date from timing-based class ID
+      // Format: timing-{batchId}-{dateISO}
+      const timingMatch = classId.match(/^timing-([a-f0-9]{24})-(.+)$/);
+      if (!timingMatch) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid timing-based class ID format'
+        });
+      }
+      
+      const [, batchId, dateISO] = timingMatch;
+      console.log('Extracted batch ID:', batchId);
+      console.log('Extracted date:', dateISO);
+      
+      // Parse the date to get scheduledDate and scheduledTime
+      const classDateTime = new Date(dateISO);
+      const scheduledDate = classDateTime.toISOString().split('T')[0];
+      const scheduledTime = `${classDateTime.getHours().toString().padStart(2, '0')}:${classDateTime.getMinutes().toString().padStart(2, '0')}`;
+      
+      console.log('Parsed scheduledDate:', scheduledDate);
+      console.log('Parsed scheduledTime:', scheduledTime);
+      
+      // Check if a real class already exists for this batch and time
+      const existingClass = await ModuleClass.findOne({
+        batchId: batchId,
+        scheduledDate: scheduledDate,
+        scheduledTime: scheduledTime
+      });
+      
+      if (existingClass) {
+        console.log('✅ Found existing real class:', existingClass._id);
+        // Use the existing class ID and continue with normal flow
+        req.body.classId = existingClass._id.toString();
+        classId = existingClass._id.toString();
+      } else {
+        console.log('🚫 No real class exists for this timing-based class');
+        
+        // Students CANNOT create classes - only trainers can
+        if (userType === 'student') {
+          console.log('🚫 Student trying to join non-existent timing-based class - BLOCKED');
+          return res.status(400).json({
+            success: false,
+            error: 'The class meeting has not been started yet. Please wait for your trainer to start the class before joining.',
+            meetingNotStarted: true,
+            userType: 'student',
+            timingBased: true,
+            message: 'Students can only join meetings that have been started by the trainer'
+          });
+        }
+        
+        // Only trainers can create real classes from timing-based ones
+        console.log('🆕 Trainer creating new real class from timing-based class');
+        
+        // Get batch information to determine course details
+        const Batch = require('@/models/Batch');
+        const batch = await Batch.findById(batchId).populate('trainerId').lean();
+        if (!batch) {
+          return res.status(404).json({
+            success: false,
+            error: 'Batch not found for timing-based class'
+          });
+        }
+        
+        console.log('Found batch:', batch.batchName);
+        
+        // Create a new real class in the database
+        // Generate proper class sequence number by counting existing classes
+        const existingClassCount = await ModuleClass.countDocuments({
+          batchId: batchId,
+          status: { $ne: 'cancelled' } // Don't count cancelled classes
+        });
+        
+        const classNumber = existingClassCount + 1;
+        const batchDisplayName = batch.batchName || batch.courseTitle || 'Class';
+        
+        const newClass = new ModuleClass({
+          courseId: batchId, // Use batch ID as course reference for simplicity
+          batchId: batchId,
+          trainerId: batch.trainerId?._id || batch.trainerId,
+          moduleTitle: `${batchDisplayName} - Class ${classNumber}`,
+          moduleIndex: classNumber,
+          scheduledDate: scheduledDate,
+          scheduledTime: scheduledTime,
+          duration: 60,
+          status: 'scheduled',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          timingBased: true // Mark as created from timing
+        });
+        
+        await newClass.save();
+        console.log('✅ Created new real class:', newClass._id);
+        
+        // Update the classId to use the new real class
+        req.body.classId = newClass._id.toString();
+        classId = newClass._id.toString();
+      }
+    }
+
+    // Get class details (now guaranteed to be a real class)
     const moduleClass = await ModuleClass.findById(classId);
     if (!moduleClass) {
       return res.status(404).json({
@@ -86,8 +303,29 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('Class status:', moduleClass.status);
     console.log('Stored bbbMeetingId:', moduleClass.bbbMeetingId);
 
+    // If class is completed, clear old session tokens to allow rejoining
+    if (moduleClass.status === 'completed') {
+      console.log('🧹 Class is completed - clearing old session tokens');
+      await ModuleClass.findByIdAndUpdate(classId, {
+        $unset: { 
+          joinedSessionTokens: 1,
+          studentSessionTokens: 1 
+        }
+      });
+      console.log('✅ Cleared session tokens for completed class');
+      
+      // Refresh the moduleClass object
+      const refreshedClass = await ModuleClass.findById(classId);
+      if (refreshedClass) {
+        Object.assign(moduleClass, refreshedClass.toObject());
+      }
+    }
+
     // Generate meeting ID early to check for duplicates
     let meetingId = moduleClass.bbbMeetingId || `class-${classId}`;
+    let meetingExists = false;
+    let meetingEnded = false;
+    let actualMeetingId: string | null = null;
 
     // Check if there's a stored meeting in the database
     const storedMeetingId = moduleClass.bbbMeetingId;
@@ -108,6 +346,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           console.log('Checking for existing session token mapping...');
           console.log('Incoming sessionToken:', sessionToken);
           console.log('Student ID:', studentId);
+          console.log('Force Rejoin:', forceRejoin);
           
           // Find existing token mapping for this student
           if (moduleClass.studentSessionTokens && moduleClass.studentSessionTokens.length > 0) {
@@ -116,21 +355,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
             
             if (mapping && mapping.sessionToken) {
-              // STRICT ENFORCEMENT: Always use the database token for consistency
-              if (sessionToken && sessionToken !== mapping.sessionToken) {
-                console.log(`⚠️ ENFORCING DATABASE TOKEN! Client: ${sessionToken}, Database: ${mapping.sessionToken}`);
-                console.log('Client must use the authoritative database token');
-                return res.status(400).json({
-                  success: false,
-                  error: `Session token mismatch. You must use the assigned token: ${mapping.sessionToken}`,
-                  correctSessionToken: mapping.sessionToken,
-                  clientProvidedToken: sessionToken,
-                  enforcedToken: true,
-                  message: 'Please refresh the page and try again with the correct session token'
-                });
+              // If forceRejoin is true, generate a NEW session token instead of reusing the old one
+              if (forceRejoin) {
+                console.log('🔄 FORCE REJOIN: Generating new session token instead of reusing database token');
+                const newSessionToken = Math.random().toString(36).substring(2, 10);
+                console.log('Generated new session token for rejoin:', newSessionToken);
+                
+                // Update the student's token mapping with the new token
+                await ModuleClass.findOneAndUpdate(
+                  { _id: classId, 'studentSessionTokens.studentId': studentId },
+                  { $set: { 'studentSessionTokens.$.sessionToken': newSessionToken } }
+                );
+                
+                sessionToken = newSessionToken;
+                console.log('✅ Updated student session token mapping for rejoin:', sessionToken);
+              } else {
+                // Normal flow - check for token mismatch and use existing token
+                if (sessionToken && sessionToken !== mapping.sessionToken) {
+                  console.log(`⚠️ ENFORCING DATABASE TOKEN! Client: ${sessionToken}, Database: ${mapping.sessionToken}`);
+                  console.log('Client must use the authoritative database token');
+                  return res.status(400).json({
+                    success: false,
+                    error: `Session token mismatch. You must use the assigned token: ${mapping.sessionToken}`,
+                    correctSessionToken: mapping.sessionToken,
+                    clientProvidedToken: sessionToken,
+                    enforcedToken: true,
+                    message: 'Please refresh the page and try again with the correct session token'
+                  });
+                }
+                sessionToken = mapping.sessionToken;
+                console.log('✅ Using existing session token from database:', sessionToken);
               }
-              sessionToken = mapping.sessionToken;
-              console.log('✅ Using existing session token from database:', sessionToken);
             } else {
               console.log('No existing token mapping found for student:', studentId);
             }
@@ -139,8 +394,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           }
           
           // CRITICAL CHECK: If sessionToken is in joinedSessionTokens, this student has already joined
-          if (sessionToken && moduleClass.joinedSessionTokens && moduleClass.joinedSessionTokens.includes(sessionToken)) {
+          // Skip this check if forceRejoin is true since we already generated a new token
+          if (!forceRejoin && sessionToken && moduleClass.joinedSessionTokens && moduleClass.joinedSessionTokens.includes(sessionToken)) {
             console.log('🚫 BLOCKED: Session token already in joinedSessionTokens');
+            
+            // Before showing duplicate error, check if meeting still exists on BBB server
+            // This prevents showing "already joined" when trainer has actually left
+            try {
+              const bbbServerUrl = process.env.BIGBLUEBUTTON_SERVER_URL;
+              const bbbApiSecret = process.env.BIGBLUEBUTTON_API_SECRET;
+              
+              if (bbbServerUrl && bbbApiSecret && moduleClass.bbbMeetingId) {
+                const normalizedServerUrl = bbbServerUrl.replace(/\/$/, '');
+                const apiUrl = normalizedServerUrl.endsWith('/api') ? normalizedServerUrl : `${normalizedServerUrl}/api`;
+                
+                const getMeetingInfoParams = `meetingID=${encodeURIComponent(moduleClass.bbbMeetingId)}`;
+                const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
+                const getMeetingInfoUrl = `${apiUrl}/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
+                
+                const meetingCheckResponse = await fetch(getMeetingInfoUrl);
+                const meetingCheckXML = await meetingCheckResponse.text();
+                
+                if (meetingCheckXML.includes('notFound') || meetingCheckXML.includes('No such meeting')) {
+                  console.log('🎯 Meeting no longer exists - trainer has left');
+                  return res.status(400).json({
+                    success: false,
+                    error: 'The trainer has left the meeting or it has ended. Please wait for your trainer to start a new class session.',
+                    meetingNotStarted: true,
+                    userType: 'student',
+                    trainerLeft: true,
+                    meetingEnded: true,
+                    message: 'Meeting no longer exists - trainer must restart'
+                  });
+                }
+              }
+            } catch (meetingCheckError) {
+              console.log('Error checking meeting existence:', meetingCheckError);
+            }
+            
             return res.status(400).json({
               success: false,
               error: `Your session token "${sessionToken}" has already joined this meeting. You cannot join multiple times.`,
@@ -149,6 +440,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               sessionToken: sessionToken,
               message: 'Session token already used for this meeting'
             });
+          } else if (forceRejoin) {
+            console.log('✅ FORCE REJOIN: Skipping duplicate check due to new session token');
           }
         }
 
@@ -297,24 +590,108 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     // Update class status if trainer is joining
     if (userType === 'trainer' || userType === 'moderator') {
-      await ModuleClass.findByIdAndUpdate(classId, {
-        status: 'live',
-        isLive: true,
-        actualStartTime: new Date(),
-        bbbMeetingId: meetingId,
-        bbbAttendeePassword: attendeePassword,
-        bbbModeratorPassword: moderatorPassword
-      });
-      console.log('Updated class status to live');
+      
+      // CRITICAL: Before creating/updating class, ensure only ONE live class per batch
+      console.log('🎯 TRAINER JOIN: Ensuring single live class per batch');
+      
+      try {
+        // Find any OTHER live classes for this batch and mark them as completed
+        const otherLiveClasses = await ModuleClass.find({
+          batchId: moduleClass.batchId,
+          status: 'live',
+          isLive: true,
+          _id: { $ne: classId } // Exclude current class
+        });
+        
+        console.log(`🎯 Found ${otherLiveClasses.length} other live classes for batch ${moduleClass.batchId}`);
+        
+        if (otherLiveClasses.length > 0) {
+          for (const otherClass of otherLiveClasses) {
+            console.log(`🔄 Marking previous live class as completed: ${otherClass.moduleTitle}`);
+            
+            await ModuleClass.findByIdAndUpdate(otherClass._id, {
+              status: 'completed',
+              isLive: false,
+              actualEndTime: new Date(),
+              // Clear session tokens to prevent join issues
+              $unset: { 
+                joinedSessionTokens: 1,
+                studentSessionTokens: 1 
+              }
+            });
+          }
+          
+          console.log(`✅ Cleaned up ${otherLiveClasses.length} previous live classes`);
+        }
+        
+        // ADDITIONAL: Check if current class is ALREADY live - if so, don't create new meeting
+        if (moduleClass.status === 'live' && moduleClass.isLive && moduleClass.bbbMeetingId) {
+          console.log('🎯 TRAINER REJOIN: Current class is already live, reusing existing meeting');
+          meetingId = moduleClass.bbbMeetingId;
+          
+          // Verify the existing meeting is still active on BBB
+          try {
+            const getMeetingInfoParams = `meetingID=${encodeURIComponent(meetingId)}`;
+            const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
+            const getMeetingInfoUrl = `${apiUrl}/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
+            
+            const verifyResponse = await fetch(getMeetingInfoUrl);
+            const verifyXML = await verifyResponse.text();
+            
+            if (verifyXML.includes('<returncode>SUCCESS</returncode>') && 
+                !verifyXML.includes('<ended>true</ended>') &&
+                !verifyXML.includes('meetingForciblyEnded')) {
+              
+              console.log('✅ TRAINER REJOIN: Existing meeting is still active, allowing rejoin');
+              meetingExists = true;
+              
+              // Skip the normal meeting creation flow - just prepare join URL
+              // Continue to join URL generation at the end
+            } else {
+              console.log('⚠️ TRAINER REJOIN: Existing meeting has ended, will create new one');
+              meetingExists = false;
+              // Clear the ended meeting ID
+              await ModuleClass.findByIdAndUpdate(classId, {
+                bbbMeetingId: null
+              });
+              meetingId = `class-${classId}`;
+            }
+          } catch (verifyError) {
+            console.log('⚠️ Error verifying existing meeting, will create new one:', verifyError);
+            meetingExists = false;
+            meetingId = `class-${classId}`;
+          }
+        } else {
+          // Update current class as the ONLY live class for this batch
+          await ModuleClass.findByIdAndUpdate(classId, {
+            status: 'live',
+            isLive: true,
+            actualStartTime: new Date(),
+            bbbMeetingId: meetingId,
+            bbbAttendeePassword: attendeePassword,
+            bbbModeratorPassword: moderatorPassword
+          });
+          console.log('✅ Updated current class as the single live class for batch');
+        }
+      } catch (cleanupError) {
+        console.log('⚠️ Error cleaning up previous live classes:', cleanupError);
+        
+        // Continue with normal flow even if cleanup fails
+        await ModuleClass.findByIdAndUpdate(classId, {
+          status: 'live',
+          isLive: true,
+          actualStartTime: new Date(),
+          bbbMeetingId: meetingId,
+          bbbAttendeePassword: attendeePassword,
+          bbbModeratorPassword: moderatorPassword
+        });
+      }
     }
 
     // Initialize meeting creation flag
     let meetingCreated = false;
 
     // Enhanced meeting existence check - get meeting info to verify it's the same meeting
-    let meetingExists = false;
-    let meetingEnded = false;
-    let actualMeetingId = null;
 
     try {
       // Check if meeting is running and get its info
@@ -402,13 +779,281 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // IMPORTANT: For students, don't create meetings - they should only join existing ones
       if (userType === 'student') {
         console.log('🚫 Student trying to join non-existent meeting - blocking');
-        return res.status(400).json({
-          success: false,
-          error: 'The class meeting has not been started yet. Please wait for your instructor to start the class before joining.',
-          meetingNotStarted: true,
-          userType: 'student',
-          message: 'Students can only join meetings that have been started by the trainer'
-        });
+        
+        // ENHANCED: Check if trainer might be in a different meeting by scanning all active meetings
+        let trainerFound = false;
+        let activeMeetingId = null;
+        
+        try {
+          console.log('🔍 Checking if trainer is in any other active meeting...');
+          
+          // Get all meetings on the BBB server to see if trainer is in a different one
+          const getMeetingsParams = '';
+          const getMeetingsChecksum = generateBBBChecksum('getMeetings', getMeetingsParams, bbbApiSecret);
+          const getMeetingsUrl = `${apiUrl}/getMeetings?checksum=${getMeetingsChecksum}`;
+          
+          console.log('🔍 Calling getMeetings API:', getMeetingsUrl);
+          
+          const meetingsResponse = await fetch(getMeetingsUrl);
+          const meetingsXML = await meetingsResponse.text();
+          
+          console.log('🔍 Active meetings response status:', meetingsResponse.status);
+          console.log('🔍 Active meetings XML (first 1000 chars):', meetingsXML.substring(0, 1000));
+          
+          if (meetingsXML.includes('<returncode>SUCCESS</returncode>') && meetingsXML.includes('<meetings>')) {
+            console.log('✅ Got successful meetings response');
+            
+            // Extract all meeting IDs and their participants
+            const meetingMatches = meetingsXML.match(/<meeting>(.*?)<\/meeting>/gs) || [];
+            console.log(`🔍 Found ${meetingMatches.length} active meetings`);
+            
+            // Get the batch information for the class student is trying to join
+            const studentBatchId = moduleClass.batchId;
+            console.log('🔍 Student trying to join batch:', studentBatchId);
+            
+            for (let i = 0; i < meetingMatches.length; i++) {
+              const meetingMatch = meetingMatches[i];
+              console.log(`🔍 Checking meeting ${i + 1}:`, meetingMatch.substring(0, 300));
+              
+              // Check if this meeting has moderators (trainers)
+              if (meetingMatch.includes('<role>MODERATOR</role>')) {
+                console.log(`✅ Meeting ${i + 1} has moderators`);
+                
+                // Extract meeting ID
+                const meetingIdMatch = meetingMatch.match(/<meetingID><!\[CDATA\[(.*?)\]\]><\/meetingID>/);
+                if (meetingIdMatch) {
+                  const foundMeetingId = meetingIdMatch[1];
+                  console.log(`🔍 Found meeting ID: ${foundMeetingId}`);
+                  
+                  // Try to find the class in database that corresponds to this meeting
+                  try {
+                    console.log('🔍 Looking for database class with meeting ID:', foundMeetingId);
+                    const foundClass = await ModuleClass.findOne({ bbbMeetingId: foundMeetingId }).lean();
+                    
+                    if (foundClass) {
+                      console.log('🔍 Found database class:', {
+                        classId: foundClass._id,
+                        batchId: foundClass.batchId,
+                        moduleTitle: foundClass.moduleTitle,
+                        meetingId: foundClass.bbbMeetingId
+                      });
+                      
+                      // Check if this class belongs to the same batch as student's class
+                      if (String(foundClass.batchId) === String(studentBatchId)) {
+                        activeMeetingId = foundMeetingId;
+                        trainerFound = true;
+                        console.log('🎯 Found trainer in same batch meeting:', activeMeetingId);
+                        console.log('🎯 Batch match confirmed:', { 
+                          studentBatch: studentBatchId, 
+                          trainerBatch: foundClass.batchId 
+                        });
+                        break;
+                      } else {
+                        console.log('❌ Different batch - Student:', studentBatchId, 'Trainer:', foundClass.batchId);
+                      }
+                    } else {
+                      console.log('❌ No database class found for meeting:', foundMeetingId);
+                      
+                      // FALLBACK: If no database record found, try to match by meeting name pattern
+                      const meetingNameMatch = meetingMatch.match(/<meetingName><!\[CDATA\[(.*?)\]\]><\/meetingName>/);
+                      const meetingName = meetingNameMatch ? meetingNameMatch[1] : '';
+                      console.log('🔍 Fallback: Checking meeting name for batch match:', meetingName);
+                      
+                      // Get the batch information from database to compare
+                      const Batch = require('@/models/Batch');
+                      const studentBatch = await Batch.findById(studentBatchId).lean();
+                      
+                      if (studentBatch) {
+                        console.log('🔍 Student batch info:', {
+                          id: studentBatch._id,
+                          name: studentBatch.batchName,
+                          course: studentBatch.course_title || studentBatch.courseTitle
+                        });
+                        
+                        // Check if meeting name contains batch name or course title
+                        const batchName = studentBatch.batchName || '';
+                        const courseTitle = studentBatch.course_title || studentBatch.courseTitle || '';
+                        
+                        const nameMatchesBatch = meetingName.toLowerCase().includes(batchName.toLowerCase()) ||
+                                               meetingName.toLowerCase().includes(courseTitle.toLowerCase()) ||
+                                               (batchName.toLowerCase().includes('ayansh') && meetingName.toLowerCase().includes('ayansh')) ||
+                                               (batchName.toLowerCase().includes('test') && meetingName.toLowerCase().includes('test'));
+                        
+                        console.log('🔍 Name matching results:', {
+                          meetingName,
+                          batchName,
+                          courseTitle,
+                          nameMatchesBatch
+                        });
+                        
+                        if (nameMatchesBatch) {
+                          activeMeetingId = foundMeetingId;
+                          trainerFound = true;
+                          console.log('🎯 Found trainer via name matching in batch meeting:', activeMeetingId);
+                          break;
+                        }
+                      }
+                    }
+                  } catch (dbError) {
+                    console.log('❌ Database lookup error for meeting:', foundMeetingId, dbError);
+                  }
+                }
+              } else {
+                console.log(`❌ Meeting ${i + 1} has no moderators`);
+              }
+            }
+            
+            console.log('🔍 Final scan results:', { trainerFound, activeMeetingId });
+          } else {
+            console.log('❌ Failed to get meetings or no meetings found');
+            console.log('Response includes SUCCESS?', meetingsXML.includes('<returncode>SUCCESS</returncode>'));
+            console.log('Response includes meetings?', meetingsXML.includes('<meetings>'));
+          }
+        } catch (scanError) {
+          console.log('Error scanning for trainer in other meetings:', scanError);
+        }
+        
+        // ADDITIONAL FALLBACK: If no match found via database, try direct batch check
+        if (!trainerFound) {
+          console.log('🔍 No database match found, trying direct batch comparison...');
+          
+          try {
+            // Get all classes for the student's batch
+            const allBatchClasses = await ModuleClass.find({ batchId: moduleClass.batchId }).lean();
+            console.log(`🔍 Found ${allBatchClasses.length} classes in student's batch`);
+            
+            // Check if any of these classes match active meeting IDs
+            const meetingsResponse = await fetch(`${apiUrl}/getMeetings?checksum=${generateBBBChecksum('getMeetings', '', bbbApiSecret)}`);
+            if (meetingsResponse.ok) {
+              const meetingsXML = await meetingsResponse.text();
+              const activeMeetingIds: string[] = [];
+              
+              const meetingMatches = meetingsXML.match(/<meetingID><!\[CDATA\[(.*?)\]\]><\/meetingID>/g) || [];
+              meetingMatches.forEach(match => {
+                const meetingId = match.replace(/<meetingID><!\[CDATA\[/, '').replace(/\]\]><\/meetingID>/, '');
+                activeMeetingIds.push(meetingId);
+              });
+              
+              console.log('🔍 Active meeting IDs from BBB:', activeMeetingIds);
+              
+              // Check if any batch classes have active meeting IDs
+              for (const batchClass of allBatchClasses) {
+                if (batchClass.bbbMeetingId && activeMeetingIds.includes(batchClass.bbbMeetingId)) {
+                  activeMeetingId = batchClass.bbbMeetingId;
+                  trainerFound = true;
+                  console.log('🎯 Found active meeting via batch class lookup:', activeMeetingId);
+                  break;
+                }
+              }
+            }
+          } catch (fallbackError) {
+            console.log('❌ Fallback batch check error:', fallbackError);
+          }
+        }
+        
+        // If we found trainer in a related meeting, update our class record and allow join
+        if (trainerFound && activeMeetingId) {
+          console.log(`🔄 Updating class meeting ID from ${meetingId} to ${activeMeetingId}`);
+          
+          try {
+            // Update the class with the correct meeting ID
+            await ModuleClass.findByIdAndUpdate(classId, {
+              bbbMeetingId: activeMeetingId,
+              status: 'live',
+              isLive: true
+            });
+            
+            // Use the correct meeting ID for the join
+            meetingId = activeMeetingId;
+            meetingExists = true;
+            
+            console.log('✅ Updated class meeting ID - continuing with join process');
+            
+            // Don't return here - let the function continue with the corrected meeting ID
+          } catch (updateError) {
+            console.log('Failed to update meeting ID:', updateError);
+          }
+        } else {
+          // ENHANCED: If no trainer found via database, try a simpler approach
+          // Check if there are ANY meetings with moderators for this batch
+          console.log('🔍 Trying simpler batch matching approach...');
+          
+          try {
+            // Get all meetings and find any with the same batch pattern
+            const meetingsResponse = await fetch(`${apiUrl}/getMeetings?checksum=${generateBBBChecksum('getMeetings', '', bbbApiSecret)}`);
+            if (meetingsResponse.ok) {
+              const meetingsXML = await meetingsResponse.text();
+              
+              // Look for any meeting that has moderators and might be for this batch
+              const meetingMatches = meetingsXML.match(/<meeting>(.*?)<\/meeting>/gs) || [];
+              
+              for (const meetingMatch of meetingMatches) {
+                // Check if meeting has moderators (trainers)
+                if (meetingMatch.includes('<role>MODERATOR</role>')) {
+                  const meetingIdMatch = meetingMatch.match(/<meetingID><!\[CDATA\[(.*?)\]\]><\/meetingID>/);
+                  const meetingNameMatch = meetingMatch.match(/<meetingName><!\[CDATA\[(.*?)\]\]><\/meetingName>/);
+                  
+                  if (meetingIdMatch) {
+                    const foundMeetingId = meetingIdMatch[1];
+                    const meetingName = meetingNameMatch ? meetingNameMatch[1] : '';
+                    
+                    console.log('🔍 Found meeting with moderator:', { meetingId: foundMeetingId, name: meetingName });
+                    
+                    // For timing-based classes, be more flexible - any active meeting with trainer might work
+                    if (classId.startsWith('timing-')) {
+                      console.log('🎯 Timing-based class - allowing join to any active meeting with trainer');
+                      
+                      // Update our class to use this active meeting
+                      await ModuleClass.findByIdAndUpdate(classId, {
+                        bbbMeetingId: foundMeetingId,
+                        status: 'live',
+                        isLive: true
+                      });
+                      
+                      meetingId = foundMeetingId;
+                      meetingExists = true;
+                      trainerFound = true;
+                      
+                      console.log('✅ Updated timing-based class to use active meeting:', foundMeetingId);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          } catch (simpleError) {
+            console.log('❌ Simple batch check failed:', simpleError);
+          }
+        }
+        
+        // If we still don't have a valid meeting after all checks, block student join
+        if (!trainerFound || !activeMeetingId) {
+          // Check if this is a forceRejoin scenario - provide better error message
+          if (forceRejoin) {
+            return res.status(400).json({
+              success: false,
+              error: 'The trainer has left the meeting or it has ended. Please wait for your trainer to start a new class session.',
+              meetingNotStarted: true,
+              userType: 'student',
+              classId: classId,
+              meetingId: meetingId,
+              trainerLeft: true,
+              meetingEnded: true,
+              message: 'Meeting no longer active - trainer must restart'
+            });
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: 'The class meeting has not been started yet. Please wait for your trainer to start the class before joining.',
+              meetingNotStarted: true,
+              userType: 'student',
+              classId: classId,
+              meetingId: meetingId,
+              trainerNotInMeeting: true,
+              message: 'Students can only join meetings that have been started by the trainer'
+            });
+          }
+        }
       }
       
       try {
@@ -512,7 +1157,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // Check if trainer has a saved sessionToken for rejoin
       if (userType === 'trainer' || userType === 'moderator') {
         const existingClass = await ModuleClass.findById(classId) as any;
-        if (existingClass && existingClass.trainerSessionToken) {
+        if (existingClass && existingClass.trainerSessionToken && !forceRejoin) {
           sessionToken = existingClass.trainerSessionToken;
           console.log('Reusing saved trainer sessionToken for rejoin:', sessionToken);
         } else {

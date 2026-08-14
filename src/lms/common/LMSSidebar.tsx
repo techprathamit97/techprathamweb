@@ -19,6 +19,7 @@ import {
   LogOut,
   Key,
   Video,
+  PlayCircle,
   DollarSign,
   CreditCard,
   X
@@ -41,6 +42,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
     { icon: CreditCard, label: 'Payments', href: '/lms/payments' },
     { icon: DollarSign, label: 'Finance', href: '/lms/finance' },
     { icon: Video, label: 'Live Classes', href: '/lms/live-classes' },
+    { icon: PlayCircle, label: 'Recordings', href: '/lms/recordings' },
     { icon: ClipboardList, label: 'Quizzes', href: '/lms/quizzes' },
     { icon: Award, label: 'Certificates', href: '/lms/certificates' },
     { icon: BarChart3, label: 'Analytics', href: '/lms/analytics' },
