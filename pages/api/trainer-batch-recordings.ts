@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
+import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 const Batch = require("@/models/Batch");
 const Trainer = require("@/models/Trainer");
 const Course = require("@/models/Course");
@@ -203,25 +204,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           const participants = participantsMatch?.[1];
           const size = sizeMatch?.[1];
 
-          // Get playback URLs
-          const playbackMatches = recordingMatch.match(/<playback>([\s\S]*?)<\/playback>/);
-          let videoUrl = null;
-          let previewUrl = null;
+          // Playback URLs - newline/CDATA tolerant with a derived-URL fallback so
+          // recordings created outside the LMS still expose Play/Download.
+          const playback = extractPlaybackInfo(recordingMatch, {
+            bbbServerUrl,
+            recordId,
+            published
+          });
 
-          if (playbackMatches) {
-            const urlCDATA = playbackMatches[1].match(/<url><!\[CDATA\[(.*?)\]\]><\/url>/);
-            const urlRegular = playbackMatches[1].match(/<url>(.*?)<\/url>/);
-            videoUrl = urlCDATA?.[1] || urlRegular?.[1];
-
-            const previewMatches = playbackMatches[1].match(/<preview>([\s\S]*?)<\/preview>/);
-            if (previewMatches) {
-              const previewImageMatch = previewMatches[1].match(/<images>([\s\S]*?)<\/images>/);
-              if (previewImageMatch) {
-                const imageMatch = previewImageMatch[1].match(/<image[^>]*>(.*?)<\/image>/);
-                previewUrl = imageMatch?.[1];
-              }
-            }
-          }
+          const videoUrl = playback.videoUrl;
+          const previewUrl = playback.previewUrl;
 
           // Calculate duration
           let duration = 0;
@@ -277,7 +269,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             participants: participants || '0',
             size: size,
             sizeText: sizeText,
-            canDownload: published && state === 'published' && videoUrl,
+            canDownload: Boolean(published && state === 'published' && videoUrl),
+            playbackFormats: playback.formats,
+            playbackDerived: playback.derived,
             status: published && state === 'published' ? 
               (videoUrl ? 'Ready' : 'No Video') : 
               `Processing (${state})`

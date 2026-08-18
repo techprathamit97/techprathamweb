@@ -18,7 +18,9 @@ import {
   Eye,
   AlertTriangle,
   ChevronRight,
-  RefreshCw
+  RefreshCw,
+  Circle,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -93,13 +95,57 @@ const TrainerBatchManagement = () => {
   // UI state
   const [activeTab, setActiveTab] = useState<'classes' | 'recordings'>('classes');
 
+  // Verified live state for the selected batch (trainer actually in the meeting)
+  const [liveStatus, setLiveStatus] = useState<any>(null);
+
+  // Custom (ad-hoc) class creation
+  const [showCustomClassForm, setShowCustomClassForm] = useState(false);
+  const [customClassTitle, setCustomClassTitle] = useState('');
+  const [creatingCustomClass, setCreatingCustomClass] = useState(false);
+  const [endingSession, setEndingSession] = useState(false);
+
+  // Ask the server whether this batch genuinely has a live class right now
+  const fetchLiveStatus = async (batch: Batch) => {
+    try {
+      const res = await fetch(`/api/batch-live-status?batchId=${batch._id}`);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setLiveStatus(data);
+        console.log('📡 Live status:', data.isLive ? `LIVE (${data.reason})` : `not live (${data.reason})`);
+        return data;
+      }
+
+      setLiveStatus(null);
+      return null;
+    } catch (error) {
+      console.error('❌ Live status check failed:', error);
+      setLiveStatus(null);
+      return null;
+    }
+  };
+
   // Manual refresh function for users to call when needed
   const handleRefreshClasses = () => {
     if (selectedBatch) {
       console.log('🔄 Manual refresh requested by user');
+      fetchLiveStatus(selectedBatch);
       fetchBatchClasses(selectedBatch);
     }
   };
+
+  // While a class is live, re-check periodically so ending the session from
+  // inside BBB is reflected here without a full page refresh.
+  useEffect(() => {
+    if (!selectedBatch || !liveStatus?.isLive) return;
+
+    const interval = setInterval(() => {
+      console.log('📡 Re-checking live status');
+      fetchLiveStatus(selectedBatch);
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, [selectedBatch?._id, liveStatus?.isLive]);
 
   // Initialize trainer info and fetch batches
   useEffect(() => {
@@ -194,7 +240,6 @@ const TrainerBatchManagement = () => {
       const trainerIdToUse = trainerInfo._id || trainerInfo.trainerId;
       console.log('🎯 TRAINER - Fetching classes (PURE TIME-BASED MODE):', batch.batchName, 'Batch ID:', batch._id);
       
-      // PURE TIME-BASED LOGIC: Create virtual class based on timing, ignore database status
       let displayClasses: ScheduledClass[] = [];
 
       // Get current time in IST
@@ -202,7 +247,34 @@ const TrainerBatchManagement = () => {
       const istNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
       
       console.log(`🕒 Current IST time: ${istNow.toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}`);
-      
+
+      // A verified live class always wins, including ad-hoc custom classes that
+      // do not sit on the batch timetable.
+      const live = await fetchLiveStatus(batch);
+
+      if (live?.isLive && live?.liveClass) {
+        const lc = live.liveClass;
+        console.log('🔴 Showing verified live class:', lc.moduleTitle);
+
+        setBatchClasses([{
+          _id: lc._id,
+          moduleTitle: lc.moduleTitle,
+          scheduledDate: lc.scheduledDate,
+          scheduledTime: lc.scheduledTime,
+          duration: lc.duration || 60,
+          status: 'live',
+          isLive: true,
+          canJoin: true,
+          batchName: batch.batchName,
+          courseTitle: batch.courseTitle,
+          bbbMeetingId: lc.bbbMeetingId,
+          isVirtual: false
+        }]);
+
+        toast.success(`Live now: ${lc.moduleTitle}`);
+        return;
+      }
+
       if (batch.timing) {
         console.log('🎯 Creating class based on batch timing (ignoring database):', batch.timing);
         
@@ -371,9 +443,13 @@ const TrainerBatchManagement = () => {
     setSelectedBatch(batch);
     setBatchClasses([]);
     setBatchRecordings([]);
+    setLiveStatus(null);
+    setShowCustomClassForm(false);
+    setCustomClassTitle('');
     setActiveTab('classes');
     
     // Fetch data for the selected batch
+    fetchLiveStatus(batch);
     fetchBatchClasses(batch);
     fetchBatchRecordings(batch);
     
@@ -385,6 +461,9 @@ const TrainerBatchManagement = () => {
     setSelectedBatch(null);
     setBatchClasses([]);
     setBatchRecordings([]);
+    setLiveStatus(null);
+    setShowCustomClassForm(false);
+    setCustomClassTitle('');
     setActiveTab('classes');
   };
   
@@ -419,6 +498,103 @@ const TrainerBatchManagement = () => {
     } catch (error) {
       console.error('Create next class error:', error);
       toast.error('Failed to create next class');
+    }
+  };
+
+  // Create an ad-hoc class and immediately start it, so every student in the
+  // batch sees a live class they can join.
+  const handleCreateCustomClass = async () => {
+    if (!selectedBatch || !trainerInfo || creatingCustomClass) return;
+
+    setCreatingCustomClass(true);
+
+    try {
+      const res = await fetch('/api/module-class/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: selectedBatch._id,
+          trainerId: trainerInfo._id || trainerInfo.trainerId,
+          title: customClassTitle.trim() || undefined,
+          duration: 60
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        toast.error(`Failed to create custom class: ${data.error || 'unknown error'}`);
+        return;
+      }
+
+      const created = data.data;
+      toast.success(`Created "${created.moduleTitle}" - starting it now`);
+
+      setShowCustomClassForm(false);
+      setCustomClassTitle('');
+
+      // Joining is what creates the BBB meeting and flips the class to live, which
+      // is also what makes it visible to students.
+      await handleJoinClass({
+        _id: created._id,
+        moduleTitle: created.moduleTitle,
+        scheduledDate: created.scheduledDate,
+        scheduledTime: created.scheduledTime,
+        duration: created.duration,
+        status: 'scheduled',
+        isLive: false,
+        canJoin: true,
+        batchName: selectedBatch.batchName,
+        courseTitle: selectedBatch.courseTitle,
+        isVirtual: false
+      });
+    } catch (error: any) {
+      console.error('Custom class error:', error);
+      toast.error('Failed to create custom class: ' + error.message);
+    } finally {
+      setCreatingCustomClass(false);
+    }
+  };
+
+  // End the live class for everyone and clear the live state immediately
+  const handleEndSession = async () => {
+    if (!selectedBatch || endingSession) return;
+
+    const confirmEnd = confirm(
+      'End the live class for all students? They will no longer be able to join, ' +
+      'and the Live button will disappear for everyone.'
+    );
+    if (!confirmEnd) return;
+
+    setEndingSession(true);
+
+    try {
+      const res = await fetch('/api/module-class/end-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId: selectedBatch._id })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        if (data.endedCount > 0) {
+          toast.success(`Session ended for all students (${data.endedCount} class closed)`);
+        } else {
+          toast.info('No live class was running');
+        }
+
+        setLiveStatus(null);
+        await fetchLiveStatus(selectedBatch);
+        await fetchBatchClasses(selectedBatch);
+      } else {
+        toast.error(`Failed to end session: ${data.error || 'unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error('End session error:', error);
+      toast.error('Failed to end session: ' + error.message);
+    } finally {
+      setEndingSession(false);
     }
   };
 
@@ -558,6 +734,20 @@ const TrainerBatchManagement = () => {
       console.log(`  Join Window Start: ${joinWindowStart.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
       console.log(`  Grace Period End: ${gracePeriodEnd.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
       
+      // A verified running meeting takes priority so the trainer sees a rejoin
+      // action rather than a "start" action for a class that is already live.
+      if (liveStatus?.isLive && liveStatus?.liveClass?._id === classItem._id) {
+        return {
+          status: 'live',
+          canJoin: true,
+          label: 'Live Now',
+          color: 'bg-red-600',
+          message: `Class is live${
+            liveStatus.participantCount ? ` - ${liveStatus.participantCount} in the room` : ''
+          }. You can rejoin or end it for everyone.`
+        };
+      }
+
       // PURE TIME-BASED STATUS DETERMINATION (trainers can start classes earlier)
       if (istNow < joinWindowStart) {
         // Before join window - show when class will start
@@ -882,17 +1072,7 @@ const TrainerBatchManagement = () => {
                 }
               </p>
             </div>
-            {/* Cleanup button for fixing stale live classes */}
-            {!selectedBatch && (
-              <Button
-                onClick={handleCleanupStaleClasses}
-                variant="ghost"
-                size="sm" 
-                className="text-white hover:bg-white/20"
-              >
-                🧹 Fix Live Classes
-              </Button>
-            )}
+            
           </div>
         </div>
 
@@ -968,15 +1148,7 @@ const TrainerBatchManagement = () => {
                       <RefreshCw className={`h-4 w-4 ${loadingClasses ? 'animate-spin' : ''}`} />
                       Refresh
                     </Button>
-                    <Button
-                      onClick={handleCleanupMultipleLive}
-                      variant="outline"
-                      size="sm"
-                      className="flex items-center gap-2 bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100"
-                    >
-                      <AlertTriangle className="h-4 w-4" />
-                      Fix Multiple Live
-                    </Button>
+                    
                     <Button
                       onClick={() => window.open('/trainer/notes', '_blank')}
                       variant="outline"
@@ -988,6 +1160,93 @@ const TrainerBatchManagement = () => {
                     </Button>
                   </div>
                 </div>
+
+                {/* Live session controls */}
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
+                  {liveStatus?.isLive ? (
+                    <>
+                      <Badge className="bg-red-600">
+                        <Circle className="mr-1 h-2 w-2 fill-current animate-pulse" />
+                        Live: {liveStatus.liveClass?.moduleTitle}
+                      </Badge>
+
+                      <Button
+                        onClick={handleEndSession}
+                        variant="destructive"
+                        size="sm"
+                        disabled={endingSession}
+                        className="flex items-center gap-2"
+                      >
+                        {endingSession ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                        End Session for All
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={() => setShowCustomClassForm(!showCustomClassForm)}
+                      variant="default"
+                      size="sm"
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                    >
+                      <PlayCircle className="h-4 w-4" />
+                      Start Custom Class
+                    </Button>
+                  )}
+                </div>
+
+                {/* Custom class form */}
+                {showCustomClassForm && !liveStatus?.isLive && (
+                  <div className="mt-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                    <label
+                      htmlFor="custom-class-title"
+                      className="mb-2 block text-sm font-medium text-green-900"
+                    >
+                      Class title (optional)
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        id="custom-class-title"
+                        type="text"
+                        value={customClassTitle}
+                        onChange={(e) => setCustomClassTitle(e.target.value)}
+                        placeholder={`e.g. ${selectedBatch.batchName} - Doubt Session`}
+                        className="min-w-[260px] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                      />
+                      <Button
+                        onClick={handleCreateCustomClass}
+                        size="sm"
+                        disabled={creatingCustomClass}
+                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+                      >
+                        {creatingCustomClass ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlayCircle className="h-4 w-4" />
+                        )}
+                        Create &amp; Start
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setShowCustomClassForm(false);
+                          setCustomClassTitle('');
+                        }}
+                        variant="outline"
+                        size="sm"
+                        disabled={creatingCustomClass}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-xs text-green-700">
+                      Starts a class immediately, outside the batch timetable. Every student in
+                      {' '}{selectedBatch.batchName} will see it as live once you join.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

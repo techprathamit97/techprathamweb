@@ -97,17 +97,58 @@ const StudentBatchManagement = () => {
   const [batchNotes, setBatchNotes] = useState<any[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [notesDiagnostics, setNotesDiagnostics] = useState<any>(null);
+
+  // Authoritative live state from the server (trainer actually in the meeting).
+  // Time alone must never drive "Live Now" for students.
+  const [liveStatus, setLiveStatus] = useState<any>(null);
   
   // UI state
   const [activeTab, setActiveTab] = useState<'classes' | 'recordings' | 'notes'>('classes');
+
+  // Ask the server whether this batch genuinely has a live class right now.
+  // Returns the status so callers can use it immediately.
+  const fetchLiveStatus = async (batch: StudentBatch) => {
+    try {
+      const res = await fetch(`/api/batch-live-status?batchId=${batch._id}`);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setLiveStatus(data);
+        console.log('📡 Live status:', data.isLive ? `LIVE (${data.reason})` : `not live (${data.reason})`);
+        return data;
+      }
+
+      setLiveStatus(null);
+      return null;
+    } catch (error) {
+      console.error('❌ Live status check failed:', error);
+      setLiveStatus(null);
+      return null;
+    }
+  };
 
   // Manual refresh function for users to call when needed
   const handleRefreshClasses = () => {
     if (selectedBatch) {
       console.log('🔄 Manual refresh requested by user');
+      fetchLiveStatus(selectedBatch);
       fetchBatchClasses(selectedBatch);
     }
   };
+
+  // While a class looks live, re-check periodically so the Live button disappears
+  // once the trainer leaves or ends the session for all. Only this small status
+  // call repeats - the rest of the page is not refreshed.
+  useEffect(() => {
+    if (!selectedBatch || !liveStatus?.isLive) return;
+
+    const interval = setInterval(() => {
+      console.log('📡 Re-checking live status');
+      fetchLiveStatus(selectedBatch);
+    }, 45000);
+
+    return () => clearInterval(interval);
+  }, [selectedBatch?._id, liveStatus?.isLive]);
 
   // Initialize student info and fetch batches
   useEffect(() => {
@@ -266,7 +307,6 @@ const StudentBatchManagement = () => {
       const studentIdToUse = studentInfo._id || studentInfo.studentId;
       console.log('🎯 STUDENT - Fetching classes (PURE TIME-BASED MODE):', batch.batchName, 'ID:', batch._id);
       
-      // PURE TIME-BASED LOGIC: Create virtual class based on timing, ignore database status
       let displayClasses: ScheduledClass[] = [];
 
       // Get current time in IST
@@ -274,7 +314,35 @@ const StudentBatchManagement = () => {
       const istNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
       
       console.log(`🕒 Current IST time: ${istNow.toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}`);
-      
+
+      // A verified live class always wins. This covers custom/ad-hoc classes the
+      // trainer starts outside the batch timetable, which a timing-derived class
+      // could never represent.
+      const live = await fetchLiveStatus(batch);
+
+      if (live?.isLive && live?.liveClass) {
+        const lc = live.liveClass;
+        console.log('🔴 Showing verified live class:', lc.moduleTitle);
+
+        setBatchClasses([{
+          _id: lc._id,
+          moduleTitle: lc.moduleTitle,
+          scheduledDate: lc.scheduledDate,
+          scheduledTime: lc.scheduledTime,
+          duration: lc.duration || 60,
+          status: 'live',
+          isLive: true,
+          canJoin: true,
+          batchName: batch.batchName,
+          courseTitle: batch.courseTitle,
+          bbbMeetingId: lc.bbbMeetingId,
+          isVirtual: false
+        }]);
+
+        toast.success(`Live now: ${lc.moduleTitle}`);
+        return;
+      }
+
       if (batch.timing) {
         console.log('🎯 Creating class based on batch timing (ignoring database):', batch.timing);
         
@@ -505,6 +573,7 @@ const StudentBatchManagement = () => {
     
     // Fetch data for the selected batch
     console.log('Fetching classes for selected batch...');
+    fetchLiveStatus(batch);
     fetchBatchClasses(batch);
     fetchBatchRecordings(batch);
     fetchBatchNotes(batch);
@@ -518,6 +587,7 @@ const StudentBatchManagement = () => {
     setBatchClasses([]);
     setBatchRecordings([]);
     setBatchNotes([]);
+    setLiveStatus(null);
     setJoinedClasses(new Set()); // Reset joined classes
     setActiveTab('classes');
   };
@@ -591,6 +661,33 @@ const StudentBatchManagement = () => {
       console.log(`  Join Window Start: ${joinWindowStart.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
       console.log(`  Grace Period End: ${gracePeriodEnd.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`);
       
+      // TRAINER PRESENCE OVERRIDES THE CLOCK.
+      // The server verified against BBB that the trainer is in the meeting, so
+      // this class is genuinely joinable right now - even outside its window.
+      if (liveStatus?.isLive && liveStatus?.trainerPresent) {
+        console.log('  🔴 LIVE: server confirms trainer is in the meeting');
+        return {
+          status: 'live',
+          canJoin: true,
+          label: 'Live Now',
+          color: 'bg-red-600',
+          message: 'Your trainer has started the class - you can join now'
+        };
+      }
+
+      // No verified live meeting. Time can only ever say "upcoming" or
+      // "waiting for trainer" - never "Live Now", because joining would fail.
+      if (istNow >= istClassDateTime && istNow <= gracePeriodEnd) {
+        console.log('  ⏳ WAITING: class time reached but trainer has not started');
+        return {
+          status: 'waiting-for-trainer',
+          canJoin: false,
+          label: 'Waiting for Trainer',
+          color: 'bg-amber-600',
+          message: 'Class time has arrived. Waiting for your trainer to start the session.'
+        };
+      }
+
       // PURE TIME-BASED STATUS DETERMINATION
       if (istNow < joinWindowStart) {
         // Before join window - show when class will start
@@ -624,41 +721,20 @@ const StudentBatchManagement = () => {
           message: `Class will start at ${classTimeString} (in ${timeText})`
         };
         
-      } else if (istNow >= istClassDateTime && istNow <= classEndTime) {
-        // During class time - show as LIVE (regardless of database)
-        console.log(`  🔴 LIVE TIME: Current time is during class hours - showing as LIVE`);
-        return {
-          status: 'live',
-          canJoin: true,
-          label: 'Live Now',
-          color: 'bg-red-600',
-          message: 'Class is live now - you can join'
-        };
-        
       } else if (istNow > joinWindowStart && istNow < istClassDateTime) {
-        // In join window before class starts
+        // Inside the pre-class window. The verified-live check above already
+        // returned if the trainer had started, so joining is not offered here.
         const minutesUntilStart = Math.ceil((istClassDateTime.getTime() - istNow.getTime()) / (60 * 1000));
-        
-        console.log(`  � STARTING SOON: In join window, class starts in ${minutesUntilStart} minutes`);
+
+        console.log(`  🟡 STARTING SOON: class starts in ${minutesUntilStart} minutes`);
         return {
           status: 'starting-soon',
-          canJoin: true,
+          canJoin: false,
           label: 'Starting Soon',
           color: 'bg-yellow-600',
-          message: `Class starts in ${minutesUntilStart} minutes - you can join now`
+          message: `Class starts in ${minutesUntilStart} minutes - wait for your trainer to start it`
         };
-        
-      } else if (istNow > classEndTime && istNow <= gracePeriodEnd) {
-        // In grace period after class ended
-        console.log(`  � GRACE PERIOD: Class time ended but still in grace period`);
-        return {
-          status: 'recently-ended',
-          canJoin: true,
-          label: 'Recently Ended',
-          color: 'bg-orange-600',
-          message: 'Class time ended but you can still try to join if active'
-        };
-        
+
       } else {
         // Past grace period - expired
         console.log(`  ⏰ EXPIRED: Past grace period`);

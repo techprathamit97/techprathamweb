@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
+import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 const Batch = require("@/models/Batch");
 const Student = require("@/models/Student");
 const Course = require("@/models/Course");
@@ -162,28 +163,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             continue;
           }
 
-          // Get playback URLs
-          const playbackMatches = recordingMatch.match(/<playback>([\s\S]*?)<\/playback>/);
-          let videoUrl = null;
-          let previewUrl = null;
+          // Playback URLs - newline/CDATA tolerant with a derived-URL fallback.
+          // The previous regex returned null for recordings created outside the
+          // LMS, and the skip below then dropped them from the student view
+          // entirely even though they were published and playable.
+          const playback = extractPlaybackInfo(recordingMatch, {
+            bbbServerUrl,
+            recordId,
+            published
+          });
 
-          if (playbackMatches) {
-            const urlCDATA = playbackMatches[1].match(/<url><!\[CDATA\[(.*?)\]\]><\/url>/);
-            const urlRegular = playbackMatches[1].match(/<url>(.*?)<\/url>/);
-            videoUrl = urlCDATA?.[1] || urlRegular?.[1];
+          const videoUrl = playback.videoUrl;
+          const previewUrl = playback.previewUrl;
 
-            const previewMatches = playbackMatches[1].match(/<preview>([\s\S]*?)<\/preview>/);
-            if (previewMatches) {
-              const previewImageMatch = previewMatches[1].match(/<images>([\s\S]*?)<\/images>/);
-              if (previewImageMatch) {
-                const imageMatch = previewImageMatch[1].match(/<image[^>]*>(.*?)<\/image>/);
-                previewUrl = imageMatch?.[1];
-              }
-            }
-          }
-
-          // Skip recordings without video URL
+          // Skip recordings without any resolvable playback URL
           if (!videoUrl) {
+            console.warn(`⚠️ Skipping recording "${name}" - no playback URL could be resolved`);
             continue;
           }
 

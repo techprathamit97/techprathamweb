@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
+import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 const Batch = require("@/models/Batch");
 const ModuleClass = require("@/models/ModuleClass");
 
@@ -117,24 +118,21 @@ export async function GET(req: NextRequest) {
           const endTime = endTimeMatch?.[1];
           const participants = participantsMatch?.[1];
           const size = sizeMatch?.[1];
-          // Get playback URLs (same as trainer API)
-          const playbackMatches = recordingMatch.match(/<playback>([\s\S]*?)<\/playback>/);
-          let videoUrl = null;
-          let previewUrl = null;
+          // Playback URLs - newline/CDATA tolerant, handles multiple <format>
+          // blocks, and derives a playback URL when the XML cannot be parsed.
+          // Recordings created outside the LMS (Greenlight) previously fell
+          // through this and lost their Play/Download buttons.
+          const playback = extractPlaybackInfo(recordingMatch, {
+            bbbServerUrl,
+            recordId,
+            published
+          });
 
-          if (playbackMatches) {
-            const urlCDATA = playbackMatches[1].match(/<url><!\[CDATA\[(.*?)\]\]><\/url>/);
-            const urlRegular = playbackMatches[1].match(/<url>(.*?)<\/url>/);
-            videoUrl = urlCDATA?.[1] || urlRegular?.[1];
+          const videoUrl = playback.videoUrl;
+          const previewUrl = playback.previewUrl;
 
-            const previewMatches = playbackMatches[1].match(/<preview>([\s\S]*?)<\/preview>/);
-            if (previewMatches) {
-              const previewImageMatch = previewMatches[1].match(/<images>([\s\S]*?)<\/images>/);
-              if (previewImageMatch) {
-                const imageMatch = previewImageMatch[1].match(/<image[^>]*>(.*?)<\/image>/);
-                previewUrl = imageMatch?.[1];
-              }
-            }
+          if (playback.derived) {
+            console.log(`🔗 Derived playback URL for "${name}" (recordID: ${recordId})`);
           }
 
           // Calculate duration (same as trainer API)
@@ -191,7 +189,9 @@ export async function GET(req: NextRequest) {
             participants: participants || '0',
             size: size,
             sizeText: sizeText,
-            canDownload: published && state === 'published' && videoUrl,
+            canDownload: Boolean(published && state === 'published' && videoUrl),
+            playbackFormats: playback.formats,
+            playbackDerived: playback.derived,
             status: published && state === 'published' ? 
               (videoUrl ? 'Ready' : 'No Video') : 
               `Processing (${state})`
