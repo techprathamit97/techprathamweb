@@ -328,7 +328,10 @@ const TrainersManagement = () => {
         } else if (responseData.error && responseData.error.includes('Login ID already exists')) {
           toast.error('This Login ID is already taken. Please choose a different one.');
         } else {
-          toast.error(responseData.error || responseData.message || 'Failed to create trainer');
+          // Include the server-provided detail so a deployed failure is readable
+          // rather than a bare "Failed to create trainer".
+          const baseMessage = responseData.error || responseData.message || 'Failed to create trainer';
+          toast.error(responseData.detail ? `${baseMessage}: ${responseData.detail}` : baseMessage);
         }
       }
     } catch (error: any) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectMongo } from "@/utils/mongodb";
+import { nextTrainerId, parseTrainerIdNumber, formatTrainerId } from "@/utils/nextTrainerId";
 const Trainer = require("@/models/Trainer");
 const Batch = require("@/models/Batch");
 const bcrypt = require('bcryptjs');
@@ -71,25 +72,54 @@ export async function POST(req: Request) {
     
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    
-    // Generate trainerId
-    const trainerCount = await Trainer.countDocuments({});
-    const trainerId = `TRN${String(trainerCount + 1).padStart(4, '0')}`;
-    
-    // Create trainer
-    const newTrainer = await Trainer.create({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      phone: data.phone,
-      trainerId: trainerId,
-      expertise: data.expertise || [],
-      bio: data.bio || '',
-      qualification: data.qualification || '',
-      experience: data.experience || '',
-      isActive: true
-    });
-    
+
+    // Derive trainerId from the highest existing ID, not from a document count.
+    // A count collides with an existing ID as soon as any trainer has been
+    // deleted (e.g. TRN0001-TRN0005 with TRN0003 removed gives count 4, which
+    // regenerates the already-taken TRN0005). trainerId is a unique index, so
+    // that collision surfaced as a 500 on servers with real data while a clean
+    // local database never hit it.
+    const existing = await Trainer.find({}).select('trainerId').lean();
+    const startingId = nextTrainerId(existing.map((t: any) => t.trainerId));
+    const nextNumber = parseTrainerIdNumber(startingId) ?? 1;
+
+    // Concurrent creates can still race for the same ID, so retry on duplicate key.
+    let newTrainer: any = null;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const trainerId = formatTrainerId(nextNumber + attempt);
+
+      try {
+        newTrainer = await Trainer.create({
+          name: data.name,
+          email: data.email,
+          password: hashedPassword,
+          phone: data.phone,
+          trainerId: trainerId,
+          expertise: data.expertise || [],
+          bio: data.bio || '',
+          qualification: data.qualification || '',
+          experience: data.experience || '',
+          isActive: true
+        });
+        break;
+      } catch (createError: any) {
+        lastError = createError;
+
+        // Only a trainerId clash is worth retrying with a new ID.
+        const isTrainerIdClash =
+          createError?.code === 11000 &&
+          Object.keys(createError?.keyPattern || createError?.keyValue || {}).includes('trainerId');
+
+        if (!isTrainerIdClash) throw createError;
+
+        console.warn(`trainerId ${trainerId} already taken, retrying`);
+      }
+    }
+
+    if (!newTrainer) throw lastError || new Error('Could not allocate a trainerId');
+
     return NextResponse.json({
       success: true,
       message: 'Trainer created successfully',
@@ -103,10 +133,45 @@ export async function POST(req: Request) {
       },
       loginPassword: password // Return the password so admin can share it
     }, { status: 201 });
-  } catch (error) {
-    console.error('Failed to create trainer:', error);
+  } catch (error: any) {
+    // Log the full error server-side, and return enough detail that a failure in
+    // a deployed environment is diagnosable instead of an opaque 500.
+    console.error('Failed to create trainer:', {
+      name: error?.name,
+      code: error?.code,
+      message: error?.message,
+      keyValue: error?.keyValue,
+      errors: error?.errors ? Object.keys(error.errors) : undefined
+    });
+
+    // Duplicate key - report which field actually clashed
+    if (error?.code === 11000) {
+      const field = Object.keys(error?.keyPattern || error?.keyValue || {})[0] || 'field';
+      return NextResponse.json(
+        { error: `A trainer with this ${field} already exists`, field, code: 'DUPLICATE_KEY' },
+        { status: 409 }
+      );
+    }
+
+    // Schema validation failure
+    if (error?.name === 'ValidationError') {
+      const fields = Object.keys(error.errors || {});
+      return NextResponse.json(
+        {
+          error: `Validation failed for: ${fields.join(', ')}`,
+          fields,
+          code: 'VALIDATION_ERROR'
+        },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to create trainer' },
+      {
+        error: 'Failed to create trainer',
+        detail: error?.message || 'Unknown error',
+        code: error?.name || 'UNKNOWN'
+      },
       { status: 500 }
     );
   }
