@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
 import { extractPlaybackInfo } from "@/utils/bbbRecordings";
+import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
 const Batch = require("@/models/Batch");
 const ModuleClass = require("@/models/ModuleClass");
 
@@ -212,127 +213,56 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Create a map of BBB meeting IDs to batch/module info (same as trainer API)
-    const meetingIdToBatch: Record<string, any> = {};
-    moduleClasses.forEach((moduleClass: any) => {
-      if (moduleClass.bbbMeetingId) {
-        meetingIdToBatch[moduleClass.bbbMeetingId] = {
-          batchId: moduleClass.batchId._id.toString(),
-          batchName: moduleClass.batchId.batchName,
-          batchCode: moduleClass.batchId.batchCode,
-          courseName: moduleClass.courseId?.title || 'N/A',
-          moduleTitle: moduleClass.moduleTitle,
-          moduleIndex: moduleClass.moduleIndex,
-          scheduledDate: moduleClass.scheduledDate
-        };
-      }
-    });
+    // Authoritative attribution: meeting ID -> class -> batch, with a strict
+    // "<Batch Name> - ..." name convention fallback.
+    const meetingIndex = buildMeetingBatchIndex(moduleClasses);
+    console.log(
+      `Built attribution index: ${meetingIndex.byMeetingId.size} meeting IDs, ` +
+      `${meetingIndex.byClassId.size} class IDs`
+    );
 
-    console.log(`Created mapping for ${Object.keys(meetingIdToBatch).length} BBB meeting IDs`);
+    const { byBatchId, unmatched } = groupRecordingsByBatch(
+      allRecordings,
+      allBatches as any[],
+      meetingIndex
+    );
 
-    // Match recordings with batches (SAME logic as trainer API)
-    const batchesWithRecordings = allBatches.map((batch: any) => {
-      const batchRecordings = allRecordings.filter((recording: any) => {
-        // First, try exact BBB meeting ID match
-        if (recording.meetingId && meetingIdToBatch[recording.meetingId]) {
-          const meetingInfo = meetingIdToBatch[recording.meetingId];
-          const isMatch = meetingInfo.batchId === batch._id.toString();
-          
-          if (isMatch) {
-            console.log(`✅ Recording "${recording.name}" matched to batch "${batch.batchName}" via BBB meeting ID: ${recording.meetingId}`);
-          }
-          
-          return isMatch;
-        }
-
-        // Fallback: try name-based matching (same as trainer API)
-        const searchTerms = [
-          batch.batchCode?.toLowerCase(),
-          batch.batchName?.toLowerCase(),
-          batch.courseId?.title?.toLowerCase(),
-        ].filter(Boolean);
-        
-        const recordingName = recording.name?.toLowerCase() || '';
-        const meetingId = recording.meetingId?.toLowerCase() || '';
-        
-        const isMatched = searchTerms.some((term: string | undefined) => {
-          if (!term) return false;
-          return recordingName.includes(term) || meetingId.includes(term);
-        });
-
-        if (isMatched) {
-          console.log(`⚠️ Recording "${recording.name}" matched to batch "${batch.batchName}" via fallback name matching`);
-        }
-
-        return isMatched;
-      });
-
-      return {
-        _id: batch._id.toString(),
-        batchName: batch.batchName,
-        batchCode: batch.batchCode,
-        courseName: batch.courseId?.title || 'N/A',
-        studentCount: (batch.studentIds || []).length,
-        timing: batch.timing || '',
-        startDate: batch.startDate,
-        endDate: batch.endDate,
-        recordings: batchRecordings.sort((a: any, b: any) => {
-          if (a.startTime && b.startTime) {
-            return parseInt(b.startTime) - parseInt(a.startTime);
-          }
-          return 0;
-        })
-      };
-    });
-    // Calculate total matched recordings
-    const totalMatchedRecordings = batchesWithRecordings.reduce((sum: number, batch: any) => sum + batch.recordings.length, 0);
-    const unmatchedRecordings = allRecordings.filter((recording: any) => {
-      return !batchesWithRecordings.some((batch: any) => 
-        batch.recordings.some((batchRec: any) => batchRec.recordId === recording.recordId)
-      );
-    });
+    const batchesWithRecordings = allBatches.map((batch: any) => ({
+      _id: batch._id.toString(),
+      batchName: batch.batchName,
+      batchCode: batch.batchCode,
+      courseName: batch.courseId?.title || 'N/A',
+      studentCount: (batch.studentIds || []).length,
+      timing: batch.timing || '',
+      startDate: batch.startDate,
+      endDate: batch.endDate,
+      recordings: byBatchId.get(batch._id.toString()) || []
+    }));
+    const totalMatchedRecordings = batchesWithRecordings.reduce(
+      (sum: number, batch: any) => sum + batch.recordings.length,
+      0
+    );
 
     console.log(`📊 MATCHING RESULTS:`);
     console.log(`- Total recordings from BBB: ${allRecordings.length}`);
     console.log(`- Matched to batches: ${totalMatchedRecordings}`);
-    console.log(`- Unmatched: ${unmatchedRecordings.length}`);
+    console.log(`- Unmatched: ${unmatched.length}`);
 
-    // If we have many unmatched recordings, distribute them among batches (same as trainer API)
-    if (unmatchedRecordings.length > 0 && batchesWithRecordings.length > 0) {
-      console.log(`⚠️ Distributing ${unmatchedRecordings.length} unmatched recordings to first batch`);
-      
-      // Add unmatched recordings to the first batch
-      batchesWithRecordings[0].recordings = [
-        ...batchesWithRecordings[0].recordings,
-        ...unmatchedRecordings.sort((a: any, b: any) => {
-          if (a.startTime && b.startTime) {
-            return parseInt(b.startTime) - parseInt(a.startTime);
-          }
-          return 0;
-        })
-      ];
-      
-      console.log(`First batch now has ${batchesWithRecordings[0].recordings.length} recordings`);
-    }
-
-    const finalTotalRecordings = batchesWithRecordings.reduce((sum: number, batch: any) => sum + batch.recordings.length, 0);
-
-    console.log(`📊 FINAL RESULTS (SAME AS TRAINER):`);
-    console.log(`- Total batches: ${allBatches.length}`);
-    console.log(`- Total recordings: ${finalTotalRecordings}`);
-    console.log(`- Batches with recordings: ${batchesWithRecordings.filter(b => b.recordings.length > 0).length}`);
-
+    // Unmatched recordings are returned in their own bucket. They used to be
+    // appended to the first batch, which made recordings from unrelated rooms
+    // look like that batch's content.
     return NextResponse.json({
       success: true,
-      message: `Found ${finalTotalRecordings} recordings across ${allBatches.length} batches`,
+      message: `Found ${totalMatchedRecordings} recordings across ${allBatches.length} batches`,
       totalBatches: allBatches.length,
-      totalRecordings: finalTotalRecordings,
+      totalRecordings: totalMatchedRecordings,
       batches: batchesWithRecordings,
+      unmatchedRecordings: unmatched,
       debug: {
         originalRecordings: allRecordings.length,
-        matchedRecordings: finalTotalRecordings,
-        unmatchedCount: unmatchedRecordings.length,
-        batchesWithRecordings: batchesWithRecordings.filter(b => b.recordings.length > 0).length
+        matchedRecordings: totalMatchedRecordings,
+        unmatchedCount: unmatched.length,
+        batchesWithRecordings: batchesWithRecordings.filter((b: any) => b.recordings.length > 0).length
       }
     });
 
