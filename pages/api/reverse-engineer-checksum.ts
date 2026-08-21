@@ -117,7 +117,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const checksum5 = crypto.createHash('sha1').update(checksumInput5, 'utf8').digest('hex');
     
     // Test this minimal version on the server
-    const minimalUrl = `https://class.techpratham.org/bigbluebutton/api/create?${queryString5}&checksum=${checksum5}`;
+    const minimalUrl = `https://class.techpratham.com/bigbluebutton/api/create?${queryString5}&checksum=${checksum5}`;
     
     let minimalResult = 'Not tested';
     try {
@@ -144,7 +144,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     
     return res.json({
       success: true,
-      apiMateUrl: 'https://class.techpratham.org/bigbluebutton/api/create?allowStartStopRecording=true&attendeePW=ap&autoStartRecording=false&meetingID=random-1131767&moderatorPW=mp&name=random-1131767&record=false&voiceBridge=73751&welcome=%3Cbr%3EWelcome+to+%3Cb%3E%25%25CONFNAME%25%25%3C%2Fb%3E%21&checksum=9e8e9e13a620b4417d8ce77aba01601aab570322',
+      apiMateUrl: 'https://class.techpratham.com/bigbluebutton/api/create?allowStartStopRecording=true&attendeePW=ap&autoStartRecording=false&meetingID=random-1131767&moderatorPW=mp&name=random-1131767&record=false&voiceBridge=73751&welcome=%3Cbr%3EWelcome+to+%3Cb%3E%25%25CONFNAME%25%25%3C%2Fb%3E%21&checksum=9e8e9e13a620b4417d8ce77aba01601aab570322',
       expectedChecksum: expectedChecksum,
       workingParameters: workingParams,
       tests: tests,

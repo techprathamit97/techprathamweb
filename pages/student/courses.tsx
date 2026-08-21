@@ -219,7 +219,7 @@ const StudentCourses = () => {
                   action: {
                     label: 'Join Now',
                     onClick: () => {
-                      const demoUrl = 'https://class.techpratham.org/demo/demo1.jsp';
+                      const demoUrl = 'https://class.techpratham.com/demo/demo1.jsp';
                       
                       const popup = window.open(
                         demoUrl,

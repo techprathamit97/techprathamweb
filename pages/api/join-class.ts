@@ -1069,7 +1069,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           record: 'true',  // Enable recording
           autoStartRecording: userType === 'trainer' || userType === 'moderator' ? 'true' : 'false',  // Auto-start only for trainers
           allowStartStopRecording: 'true',  // Allow trainers to control recording
-          logoutURL: 'https://class.techpratham.org'
+          logoutURL: 'https://class.techpratham.com'
         };
         
         // Sort parameters for checksum (BBB requires alphabetical order)
@@ -1267,7 +1267,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         record: 'true',
         autoStartRecording: userType === 'trainer' || userType === 'moderator' ? 'true' : 'false',
         allowStartStopRecording: 'true',
-        logoutURL: 'https://class.techpratham.org'
+        logoutURL: 'https://class.techpratham.com'
       };
 
       const sortedCreateKeys = Object.keys(createParams).sort();
@@ -1350,7 +1350,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if ((userType === 'trainer' || userType === 'moderator') && sessionToken) {
       try {
         // Create HTML5 client redirect URL format
-        const html5ClientUrl = `https://class.techpratham.org/html5client/?sessionToken=${sessionToken}`;
+        const html5ClientUrl = `https://class.techpratham.com/html5client/?sessionToken=${sessionToken}`;
 
         await ModuleClass.findByIdAndUpdate(classId, {
           bbbModeratorJoinUrl: html5ClientUrl,
@@ -1394,7 +1394,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
       {
         name: 'BBB Home',
-        url: 'https://class.techpratham.org',
+        url: 'https://class.techpratham.com',
         description: 'BigBlueButton home page'
       }
     ];

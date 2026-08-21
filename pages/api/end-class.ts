@@ -11,8 +11,8 @@ function generateBBBChecksum(apiCall: string, params: string, secret: string): s
 
 // End BBB meeting
 async function endBBBMeeting(meetingId: string, moderatorPW: string): Promise<boolean> {
-  const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
-  const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
+  const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
+  const bbbApiSecret = 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE';
 
   const endMeetingParams = `meetingID=${meetingId}&password=${moderatorPW}`;
   const endMeetingChecksum = generateBBBChecksum('endMeeting', endMeetingParams, bbbApiSecret);

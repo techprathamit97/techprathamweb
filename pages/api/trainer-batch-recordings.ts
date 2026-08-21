@@ -138,8 +138,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get BBB recordings
     console.log('🔗 Connecting to BBB API...');
-    const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
-    const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
+    const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
+    const bbbApiSecret = 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE';
 
     const getRecordingsParams = '';
     const getRecordingsChecksum = generateBBBChecksum('getRecordings', getRecordingsParams, bbbApiSecret);

@@ -99,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     // Get BBB recordings
-    const bbbServerUrl = 'https://class.techpratham.org/bigbluebutton';
+    const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
     const bbbApiSecret = '6R9sIYi5RItE0xnuvXhWffyDHLqR5yzujOGLZfs8X0g';
 
     const getRecordingsParams = '';

@@ -15,8 +15,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       processEnvKeys: Object.keys(process.env).filter(key => key.includes('BIGBLUE')),
     },
     expectedValues: {
-      BIGBLUEBUTTON_SERVER_URL: 'https://class.techpratham.org/bigbluebutton',
-      BIGBLUEBUTTON_API_SECRET: '77NxbTZnnrkERic8MBiqK5yOsUdMtmFjdgSmqr4Nj4 (42 chars)'
+      BIGBLUEBUTTON_SERVER_URL: 'https://class.techpratham.com/bigbluebutton',
+      BIGBLUEBUTTON_API_SECRET: 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE (42 chars)'
     },
     instructions: [
       'If values show NOT SET, check .env.local file exists',

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { extractPlaybackInfo, readTag, toPlaybackOrigin } from '../bbbRecordings';
 
-const SERVER = 'https://class.techpratham.org/bigbluebutton';
+const SERVER = 'https://class.techpratham.com/bigbluebutton';
 
 // Shape produced by our own LMS meetings - URL inline in CDATA on one line.
 const lmsRecording = `<recording>
@@ -13,11 +13,11 @@ const lmsRecording = `<recording>
   <playback>
     <format>
       <type>presentation</type>
-      <url><![CDATA[https://class.techpratham.org/playback/presentation/2.3/abc123]]></url>
+      <url><![CDATA[https://class.techpratham.com/playback/presentation/2.3/abc123]]></url>
       <length>95</length>
       <preview>
         <images>
-          <image width="176" height="136" alt="x">https://class.techpratham.org/thumb.png</image>
+          <image width="176" height="136" alt="x">https://class.techpratham.com/thumb.png</image>
         </images>
       </preview>
     </format>
@@ -36,7 +36,7 @@ const prettyPrintedRecording = `<recording>
     <format>
       <type>presentation</type>
       <url>
-        https://class.techpratham.org/playback/presentation/2.3/green456
+        https://class.techpratham.com/playback/presentation/2.3/green456
       </url>
     </format>
   </playback>
@@ -50,11 +50,11 @@ const multiFormatRecording = `<recording>
   <playback>
     <format>
       <type>podcast</type>
-      <url><![CDATA[https://class.techpratham.org/podcast/multi789]]></url>
+      <url><![CDATA[https://class.techpratham.com/podcast/multi789]]></url>
     </format>
     <format>
       <type>presentation</type>
-      <url><![CDATA[https://class.techpratham.org/playback/presentation/2.3/multi789]]></url>
+      <url><![CDATA[https://class.techpratham.com/playback/presentation/2.3/multi789]]></url>
     </format>
   </playback>
 </recording>`;
@@ -92,7 +92,7 @@ describe('readTag', () => {
 
 describe('toPlaybackOrigin', () => {
   it('strips the /bigbluebutton suffix', () => {
-    expect(toPlaybackOrigin(SERVER)).toBe('https://class.techpratham.org');
+    expect(toPlaybackOrigin(SERVER)).toBe('https://class.techpratham.com');
   });
 
   it('strips a trailing slash and /api', () => {
@@ -110,9 +110,9 @@ describe('extractPlaybackInfo', () => {
     });
 
     expect(info.videoUrl).toBe(
-      'https://class.techpratham.org/playback/presentation/2.3/abc123'
+      'https://class.techpratham.com/playback/presentation/2.3/abc123'
     );
-    expect(info.previewUrl).toBe('https://class.techpratham.org/thumb.png');
+    expect(info.previewUrl).toBe('https://class.techpratham.com/thumb.png');
     expect(info.derived).toBe(false);
   });
 
@@ -124,7 +124,7 @@ describe('extractPlaybackInfo', () => {
     });
 
     expect(info.videoUrl).toBe(
-      'https://class.techpratham.org/playback/presentation/2.3/green456'
+      'https://class.techpratham.com/playback/presentation/2.3/green456'
     );
     expect(info.derived).toBe(false);
   });
@@ -137,7 +137,7 @@ describe('extractPlaybackInfo', () => {
     });
 
     expect(info.videoUrl).toBe(
-      'https://class.techpratham.org/playback/presentation/2.3/multi789'
+      'https://class.techpratham.com/playback/presentation/2.3/multi789'
     );
     expect(info.formats).toHaveLength(2);
   });
@@ -150,7 +150,7 @@ describe('extractPlaybackInfo', () => {
     });
 
     expect(info.videoUrl).toBe(
-      'https://class.techpratham.org/playback/presentation/2.3/lost999'
+      'https://class.techpratham.com/playback/presentation/2.3/lost999'
     );
     expect(info.derived).toBe(true);
   });

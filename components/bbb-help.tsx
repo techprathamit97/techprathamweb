@@ -123,7 +123,7 @@ const BBBHelp: React.FC<BBBHelpProps> = ({ userType }) => {
 
         <div className="flex gap-2 mt-4">
           <Button
-            onClick={() => window.open('https://class.techpratham.org', '_blank')}
+            onClick={() => window.open('https://class.techpratham.com', '_blank')}
             className="bg-blue-600 hover:bg-blue-700"
           >
             Open BigBlueButton

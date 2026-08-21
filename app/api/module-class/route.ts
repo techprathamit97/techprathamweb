@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     // Generate simple room identifier
     const tempRoomId = `class-${Date.now()}`;
     
-    const serverUrl = 'https://class.techpratham.org';
+    const serverUrl = 'https://class.techpratham.com';
 
     // Instead of creating BBB meeting via API (which has checksum issues),
     // we'll store class info and let users create rooms manually in Greenlight
