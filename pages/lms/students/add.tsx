@@ -180,7 +180,7 @@ const AddStudent = () => {
                   </div>
 
                   <div style="text-align: center; margin-bottom: 25px;">
-                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://yourdomain.com'}/student" 
+                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://lms.techpratham.com/student/login'}/student" 
                        style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
                       Access Student Portal
                     </a>
