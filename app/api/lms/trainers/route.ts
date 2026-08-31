@@ -30,6 +30,7 @@ export async function GET() {
           isActive: trainer.isActive !== false,
           batches: batches.length,
           rating: 4.5,
+          plainPassword: trainer.plainPassword || '',
           createdAt: trainer.createdAt
         };
       })
@@ -95,6 +96,7 @@ export async function POST(req: Request) {
           name: data.name,
           email: data.email,
           password: hashedPassword,
+          plainPassword: password,
           phone: data.phone,
           trainerId: trainerId,
           expertise: data.expertise || [],

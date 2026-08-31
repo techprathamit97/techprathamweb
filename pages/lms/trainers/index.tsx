@@ -64,6 +64,7 @@ interface Trainer {
   joinedAt: string;
   salary: number;
   paymentMode: string;
+  plainPassword?: string;
 }
 
 interface NewTrainerForm {
@@ -132,48 +133,27 @@ const TrainersManagement = () => {
     toast.success('Password generated!');
   };
 
-  const handleEditClick = async (trainer: Trainer) => {
+  const handleEditClick = (trainer: Trainer) => {
     setSelectedTrainer(trainer);
-    
-    // Fetch the login ID from TrainerAuth
-    try {
-      const res = await fetch(`/api/lms/trainers/get-login-id?email=${encodeURIComponent(trainer.email)}`);
-      const data = await res.json();
-      
-      setEditTrainer({
-        _id: trainer._id,
-        name: trainer.name,
-        email: trainer.email,
-        phone: trainer.phone,
-        experience: trainer.experience,
-        expertise: trainer.expertise,
-        bio: trainer.bio,
-        linkedIn: trainer.linkedIn,
-        github: trainer.github,
-        portfolio: trainer.portfolio,
-        salary: trainer.salary,
-        paymentMode: trainer.paymentMode,
-        loginPassword: '' // Don't show existing password
-      });
-    } catch (error) {
-      console.error('Failed to fetch login ID:', error);
-      setEditTrainer({
-        _id: trainer._id,
-        name: trainer.name,
-        email: trainer.email,
-        phone: trainer.phone,
-        experience: trainer.experience,
-        expertise: trainer.expertise,
-        bio: trainer.bio,
-        linkedIn: trainer.linkedIn,
-        github: trainer.github,
-        portfolio: trainer.portfolio,
-        salary: trainer.salary,
-        paymentMode: trainer.paymentMode,
-        loginPassword: ''
-      });
-    }
-    
+
+    // trainer.plainPassword is already returned from GET /api/lms/trainers
+    // (see route.ts). No extra fetch needed.
+    setEditTrainer({
+      _id: trainer._id,
+      name: trainer.name,
+      email: trainer.email,
+      phone: trainer.phone,
+      experience: trainer.experience,
+      expertise: trainer.expertise,
+      bio: trainer.bio,
+      linkedIn: trainer.linkedIn,
+      github: trainer.github,
+      portfolio: trainer.portfolio,
+      salary: trainer.salary,
+      paymentMode: trainer.paymentMode,
+      loginPassword: trainer.plainPassword || ''
+    });
+
     setIsEditDialogOpen(true);
   };
 
@@ -404,7 +384,7 @@ const TrainersManagement = () => {
                       <Input
                         value="Will be auto-generated (e.g., TRN0001)"
                         readOnly
-                        className="bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed"
+                        className="bg-gray-900 border-gray-600 text-gray-200 cursor-not-allowed focus-visible:ring-0"
                       />
                       <p className="text-gray-400 text-xs mt-1">Trainer ID will be automatically generated for login</p>
                     </div>
@@ -809,8 +789,8 @@ const TrainersManagement = () => {
                     <Label className="text-white">Trainer ID (Auto-generated)</Label>
                     <Input
                       value={selectedTrainer?.trainerId || 'Auto-generated'}
-                      disabled
-                      className="bg-gray-600 border-gray-500 text-gray-300 cursor-not-allowed"
+                      readOnly
+                      className="bg-gray-900 border-gray-600 text-white font-mono font-semibold cursor-not-allowed focus-visible:ring-0"
                     />
                     <p className="text-gray-400 text-xs mt-1">Trainer ID is auto-generated and cannot be changed</p>
                   </div>
@@ -844,7 +824,9 @@ const TrainersManagement = () => {
                         <RefreshCw className="h-4 w-4" />
                       </Button>
                     </div>
-                    <p className="text-gray-400 text-xs mt-1">Leave empty to keep current password</p>
+                    <p className="text-gray-400 text-xs mt-1">
+                      Current password shown above. Edit it to change, or clear to keep it unchanged.
+                    </p>
                   </div>
                 </div>
               </div>

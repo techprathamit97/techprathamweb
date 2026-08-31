@@ -12,7 +12,7 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
-import { ArrowLeft, Plus, UserPlus } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Plus, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useRouter } from 'next/router';
@@ -22,6 +22,7 @@ const AddStudent = () => {
   const [courses, setCourses] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   
   const [studentData, setStudentData] = useState({
@@ -308,14 +309,25 @@ const AddStudent = () => {
 
               <div>
                 <Label className="text-white">Password *</Label>
-                <Input
-                  type="password"
-                  value={studentData.password}
-                  onChange={(e) => setStudentData(prev => ({ ...prev, password: e.target.value }))}
-                  className="bg-gray-700 border-gray-600 text-white"
-                  placeholder="Enter password for student login"
-                  required
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? 'text' : 'password'}
+                    value={studentData.password}
+                    onChange={(e) => setStudentData(prev => ({ ...prev, password: e.target.value }))}
+                    className="bg-gray-700 border-gray-600 text-white pr-10"
+                    placeholder="Enter password for student login"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-white focus:outline-none"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 <p className="text-gray-400 text-xs mt-1">Student will use their Student ID and this password to login</p>
               </div>
 

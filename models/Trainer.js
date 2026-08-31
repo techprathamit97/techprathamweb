@@ -5,6 +5,10 @@ const trainerSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  // Plaintext copy of the password so admins can view it in the edit dialog.
+  // NOTE: This is a deliberate security tradeoff — anyone with DB access can
+  // read trainer passwords. Do NOT enable this pattern for end-user accounts.
+  plainPassword: { type: String },
   phone: String,
   expertise: [String],
   bio: String,

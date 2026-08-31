@@ -62,7 +62,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onClose }) => {
       {/* Logo */}
       <div className="p-6 pt-0 lg:pt-6 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-800">Trainer Portal</h2>
-        <p className="text-xs text-gray-500 mt-1">Learning Management System</p>
+       
       </div>
 
       {/* Navigation Menu */}

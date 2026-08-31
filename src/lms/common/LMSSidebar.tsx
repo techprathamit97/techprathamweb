@@ -11,7 +11,6 @@ import {
   ClipboardList,
   Award,
   BarChart3,
-  Settings,
   GraduationCap,
   UserCheck,
   FileText,
@@ -48,7 +47,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
     { icon: BarChart3, label: 'Analytics', href: '/lms/analytics' },
     { icon: FileText, label: 'Reports', href: '/lms/reports' },
     { icon: MessageSquare, label: 'Communications', href: '/lms/communications' },
-    { icon: Settings, label: 'Settings', href: '/lms/settings' },
+
   ];
 
   const handleSignOut = () => {
@@ -88,54 +87,50 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
               height={30}
               className='w-full h-auto'
             />
-            <span className="absolute bottom-2 pl-1 left-1/2 -translate-x-1/2 text-[7px] text-white">
-              Learning Management System
-            </span>
+           
           </div>
         </Link>
       </div>
 
-      {/* Navigation Menu */}
-      <div className='flex overflow-y-scroll flex-col w-full h-full items-start justify-between'>
-        <div className='w-full h-full flex-1 flex flex-col gap-1'>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = router.pathname === item.href || 
-                           (item.href !== '/lms' && router.pathname.startsWith(item.href));
-            
-            return (
-              <Link 
-                key={item.href}
-                href={item.href} 
-                className={`text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 ${
-                  isActive && 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
-                }`}
-              >
-                <Icon className='w-5 h-5' />
-                <div className="font-medium">{item.label}</div>
-              </Link>
-            );
-          })}
-        </div>
+      {/* Scrollable Navigation Menu */}
+      <div className='w-full flex-1 min-h-0 overflow-y-auto flex flex-col gap-1'>
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = router.pathname === item.href ||
+                         (item.href !== '/lms' && router.pathname.startsWith(item.href));
 
-        {/* Back to Admin & Sign Out */}
-        <div className='w-full border-t border-gray-800 pt-4 space-y-2'>
-          <Link 
-            href='/admin/dashboard'
-            className='text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 w-full'
-          >
-            <UserCheck className='w-5 h-5' />
-            <div className="font-medium">Back to Admin</div>
-          </Link>
-          
-          <button 
-            onClick={handleSignOut}
-            className='text-gray-400 hover:text-red-400 hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 w-full'
-          >
-            <LogOut className='w-5 h-5' />
-            <div className="font-medium">Sign Out</div>
-          </button>
-        </div>
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 ${
+                isActive && 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
+              }`}
+            >
+              <Icon className='w-5 h-5' />
+              <div className="font-medium">{item.label}</div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* Sticky footer: Back to Admin & Sign Out */}
+      <div className='w-full border-t border-gray-800 pt-4 mt-4 space-y-2 flex-shrink-0'>
+        <Link
+          href='/admin/dashboard'
+          className='text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 w-full'
+        >
+          <UserCheck className='w-5 h-5' />
+          <div className="font-medium">Back to Admin</div>
+        </Link>
+
+        <button
+          onClick={handleSignOut}
+          className='text-gray-400 hover:text-red-400 hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 w-full'
+        >
+          <LogOut className='w-5 h-5' />
+          <div className="font-medium">Sign Out</div>
+        </button>
       </div>
     </div>
   );
