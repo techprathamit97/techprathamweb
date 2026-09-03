@@ -280,7 +280,115 @@ const TrainersManagement = () => {
       const responseData = await res.json();
 
       if (res.ok) {
-        toast.success(`Trainer added successfully! Trainer ID: ${responseData.trainer.trainerId}`);
+        const createdTrainer = responseData.trainer;
+
+        // Send welcome email with login credentials
+        try {
+          const welcomeEmailData = {
+            to: newTrainer.email,
+            subject: `Welcome to TechPratham - Trainer Account Created`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa;">
+                <div style="background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                  <div style="text-align: center; margin-bottom: 30px;">
+                    <h1 style="color: #7c3aed; margin: 0; font-size: 28px;">Welcome to TechPratham!</h1>
+                    <p style="color: #6b7280; margin: 10px 0 0 0; font-size: 16px;">Your Trainer Account is Ready</p>
+                  </div>
+
+                  <div style="background-color: #f5f3ff; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <h2 style="color: #5b21b6; margin: 0 0 15px 0; font-size: 20px;">🎉 Account Created Successfully!</h2>
+                    <p style="margin: 0; color: #374151;">Dear ${newTrainer.name}, your trainer account has been created. You can now log in and start managing your classes.</p>
+                  </div>
+
+                  <div style="margin-bottom: 25px;">
+                    <h3 style="color: #374151; margin: 0 0 15px 0; font-size: 18px;">👨‍🏫 Trainer Details:</h3>
+                    <table style="width: 100%; border-collapse: collapse;">
+                      <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Name:</td>
+                        <td style="padding: 8px 0; color: #374151; font-weight: 600;">${newTrainer.name}</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Phone:</td>
+                        <td style="padding: 8px 0; color: #374151;">${newTrainer.phone || 'N/A'}</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Experience:</td>
+                        <td style="padding: 8px 0; color: #374151;">${newTrainer.experience || 'N/A'}</td>
+                      </tr>
+                      ${newTrainer.expertise.length > 0 ? `
+                      <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 8px 0; color: #6b7280; font-weight: 500;">Expertise:</td>
+                        <td style="padding: 8px 0; color: #374151;">${newTrainer.expertise.join(', ')}</td>
+                      </tr>
+                      ` : ''}
+                    </table>
+                  </div>
+
+                  <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+                    <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px;">🔑 Login Credentials:</h3>
+                    <table style="width: 100%;">
+                      <tr>
+                        <td style="padding: 5px 0; color: #92400e; font-weight: 500;">Trainer ID:</td>
+                        <td style="padding: 5px 0; color: #451a03; font-weight: 600;">${createdTrainer?.trainerId || 'Check with admin'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; color: #92400e; font-weight: 500;">Email:</td>
+                        <td style="padding: 5px 0; color: #451a03; font-weight: 600;">${newTrainer.email}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 5px 0; color: #92400e; font-weight: 500;">Password:</td>
+                        <td style="padding: 5px 0; color: #451a03; font-weight: 600;">${newTrainer.loginPassword}</td>
+                      </tr>
+                    </table>
+                    <p style="margin: 15px 0 0 0; color: #92400e; font-size: 14px; font-style: italic;">
+                      Please keep these credentials safe. You can change your password after logging in.
+                    </p>
+                  </div>
+
+                  <div style="text-align: center; margin-bottom: 25px;">
+                    <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'https://lms.techpratham.com'}/login"
+                       style="display: inline-block; background-color: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">
+                      Access Trainer Portal
+                    </a>
+                  </div>
+
+                  <div style="border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; font-size: 14px;">
+                    <p style="margin: 0 0 10px 0;"><strong>What's Next?</strong></p>
+                    <ul style="margin: 0; padding-left: 20px;">
+                      <li>Log in using your Trainer ID or email and password above</li>
+                      <li>Complete your profile setup</li>
+                      <li>View your assigned batches and students</li>
+                      <li>Schedule and conduct live classes</li>
+                    </ul>
+                  </div>
+
+                  <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #6b7280; margin: 0; font-size: 14px;">
+                      Need help? Contact us at <a href="mailto:support@techpratham.com" style="color: #7c3aed;">support@techpratham.com</a>
+                    </p>
+                    <p style="color: #9ca3af; margin: 10px 0 0 0; font-size: 12px;">
+                      © ${new Date().getFullYear()} TechPratham. All rights reserved.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            `,
+            message: `Welcome to TechPratham! Your trainer account has been created. Trainer ID: ${createdTrainer?.trainerId}`
+          };
+
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(welcomeEmailData)
+          });
+
+          console.log('Welcome email sent to trainer:', newTrainer.email);
+        } catch (emailError) {
+          console.error('Failed to send welcome email to trainer:', emailError);
+          // Don't block the success flow if email fails
+        }
+
+        toast.success(`Trainer added successfully! Trainer ID: ${createdTrainer?.trainerId}. Welcome email sent.`);
         setIsCreateDialogOpen(false);
         fetchTrainers();
         // Reset form
