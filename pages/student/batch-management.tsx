@@ -136,16 +136,32 @@ const StudentBatchManagement = () => {
     }
   };
 
-  // While a class looks live, re-check periodically so the Live button disappears
-  // once the trainer leaves or ends the session for all. Only this small status
-  // call repeats - the rest of the page is not refreshed.
+  // Poll live status continuously while a batch is selected so the UI
+  // transitions automatically:
+  //   - "Waiting for Trainer" → "Live Now"  when trainer joins
+  //   - "Live Now" → "Waiting / Upcoming"   when trainer ends the session
+  //
+  // Poll every 10 s when NOT yet live (fast detection of trainer joining).
+  // Poll every 30 s when already live (just need to detect end of session).
+  // Polling stops when no batch is selected.
   useEffect(() => {
-    if (!selectedBatch || !liveStatus?.isLive) return;
+    if (!selectedBatch) return;
 
-    const interval = setInterval(() => {
-      console.log('📡 Re-checking live status');
-      fetchLiveStatus(selectedBatch);
-    }, 45000);
+    const intervalMs = liveStatus?.isLive ? 30000 : 10000;
+
+    const interval = setInterval(async () => {
+      console.log('📡 Auto-polling live status (interval:', intervalMs, 'ms)');
+      const status = await fetchLiveStatus(selectedBatch);
+
+      // If the live state just changed, also refresh the class list so the
+      // Join / Waiting button updates without a manual page refresh.
+      const wasLive = liveStatus?.isLive;
+      const isNowLive = status?.isLive;
+      if (wasLive !== isNowLive) {
+        console.log(`🔄 Live state changed (${wasLive} → ${isNowLive}), refreshing class list`);
+        fetchBatchClasses(selectedBatch);
+      }
+    }, intervalMs);
 
     return () => clearInterval(interval);
   }, [selectedBatch?._id, liveStatus?.isLive]);
