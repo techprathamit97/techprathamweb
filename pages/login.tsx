@@ -15,6 +15,11 @@ const RoleBasedLogin = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<{
+    type: 'invalid-credentials' | 'wrong-password' | 'not-found' | 'deactivated' | 'restricted' | 'not-enrolled' | 'server' | null;
+    message: string;
+    suggestion?: string;
+  }>({ type: null, message: '' });
   const router = useRouter();
 
   const roles = [
@@ -58,13 +63,15 @@ const RoleBasedLogin = () => {
   const handleRoleSelect = (role: 'student' | 'trainer' | 'admin') => {
     setSelectedRole(role);
     setCredentials({ loginId: '', password: '' });
+    setLoginError({ type: null, message: '' });
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoginError({ type: null, message: '' });
+
     if (!credentials.loginId || !credentials.password) {
-      toast.error('Please enter both ID/Email and password');
+      setLoginError({ type: 'invalid-credentials', message: 'Please enter both your ID/Email and password.' });
       return;
     }
 
@@ -90,7 +97,7 @@ const RoleBasedLogin = () => {
           };
           break;
         case 'admin':
-          apiEndpoint = '/api/auth/login'; // Use unified auth for admin
+          apiEndpoint = '/api/auth/login';
           requestBody = {
             loginId: credentials.loginId,
             password: credentials.password
@@ -109,6 +116,7 @@ const RoleBasedLogin = () => {
       const data = await res.json();
 
       if (res.ok) {
+        setLoginError({ type: null, message: '' });
         // Store user data in localStorage based on role
         if (selectedRole === 'student' && data.student) {
           localStorage.setItem('student', JSON.stringify(data.student));
@@ -147,27 +155,62 @@ const RoleBasedLogin = () => {
           throw new Error('Invalid role or authentication response');
         }
       } else {
-        // Handle error responses - check for specific error types
-        console.log('Login error response:', data, 'Status:', res.status);
-
-        let errorMessage = '';
-        if (data.isRestricted === true) {
-          errorMessage = data.error || 'You are restricted from accessing the platform. Please contact admin for more information.';
+        // Map API error codes to structured inline errors
+        if (data.isRestricted) {
+          setLoginError({
+            type: 'restricted',
+            message: data.error || 'Your account has been restricted.',
+            suggestion: 'Please contact your administrator to resolve this.'
+          });
         } else if (data.notEnrolled) {
-          errorMessage = data.error || 'You are not enrolled in any batch yet. Please contact admin to enroll you before logging in.';
-        } else if (data.error) {
-          errorMessage = data.error;
+          setLoginError({
+            type: 'not-enrolled',
+            message: 'You are not enrolled in any batch yet.',
+            suggestion: 'Contact your administrator to get enrolled in a batch before logging in.'
+          });
+        } else if (res.status === 401) {
+          // Could be wrong password or user not found — API returns same message for security
+          setLoginError({
+            type: 'invalid-credentials',
+            message: 'Invalid ID/Email or password.',
+            suggestion: selectedRole === 'student'
+              ? 'Make sure you\'re using your Student ID (e.g. STU001) or registered email, and the correct password. Contact admin if you forgot your password.'
+              : selectedRole === 'trainer'
+              ? 'Make sure you\'re using your Trainer ID (e.g. TRN001) or registered email, and the correct password. Contact admin if you forgot your password.'
+              : 'Make sure you\'re using your Admin ID or registered email and the correct password.'
+          });
+        } else if (res.status === 403) {
+          setLoginError({
+            type: 'deactivated',
+            message: data.error || 'Access denied.',
+            suggestion: 'Contact your administrator to reactivate your account.'
+          });
+        } else if (res.status === 500) {
+          setLoginError({
+            type: 'server',
+            message: 'A server error occurred. Please try again in a moment.',
+            suggestion: 'If the problem persists, contact support at support@techpratham.com.'
+          });
         } else {
-          errorMessage = 'Login failed. Please check your credentials and try again.';
+          setLoginError({
+            type: 'invalid-credentials',
+            message: data.error || 'Login failed.',
+            suggestion: 'Please check your credentials and try again.'
+          });
         }
 
-        // Show toast notification
-        toast.error(errorMessage);
+        // Also show toast for immediate visibility
+        toast.error(loginError.message || data.error || 'Login failed');
         setIsLoading(false);
         return;
       }
     } catch (error: any) {
       console.error('Login error:', error);
+      setLoginError({
+        type: 'server',
+        message: error.message || 'An unexpected error occurred.',
+        suggestion: 'Please check your connection and try again.'
+      });
       toast.error(error.message || 'Login failed');
     } finally {
       setIsLoading(false);
@@ -258,8 +301,11 @@ const RoleBasedLogin = () => {
                   <Input
                     type="text"
                     value={credentials.loginId}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, loginId: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white pl-10 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      setCredentials(prev => ({ ...prev, loginId: e.target.value }));
+                      setLoginError({ type: null, message: '' });
+                    }}
+                    className={`bg-gray-700 border-gray-600 text-white pl-10 focus:ring-blue-500 focus:border-blue-500 ${loginError.type ? 'border-red-500' : ''}`}
                     placeholder={
                       selectedRole === 'student' ? 'Enter Student ID (STU001) or email' :
                       selectedRole === 'trainer' ? 'Enter Trainer ID (TRN001) or email' :
@@ -277,8 +323,11 @@ const RoleBasedLogin = () => {
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     value={credentials.password}
-                    onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
-                    className="bg-gray-700 border-gray-600 text-white pl-10 pr-10 focus:ring-blue-500 focus:border-blue-500"
+                    onChange={(e) => {
+                      setCredentials(prev => ({ ...prev, password: e.target.value }));
+                      setLoginError({ type: null, message: '' });
+                    }}
+                    className={`bg-gray-700 border-gray-600 text-white pl-10 pr-10 focus:ring-blue-500 focus:border-blue-500 ${loginError.type ? 'border-red-500' : ''}`}
                     placeholder="Enter your password"
                     required
                   />
@@ -294,6 +343,26 @@ const RoleBasedLogin = () => {
                 </div>
               </div>
 
+              {/* Inline error message with suggestion */}
+              {loginError.type && (
+                <div className={`rounded-lg p-3 text-sm border ${
+                  loginError.type === 'restricted' || loginError.type === 'deactivated'
+                    ? 'bg-red-900/40 border-red-700 text-red-300'
+                    : loginError.type === 'not-enrolled'
+                    ? 'bg-yellow-900/40 border-yellow-700 text-yellow-300'
+                    : loginError.type === 'server'
+                    ? 'bg-gray-700 border-gray-600 text-gray-300'
+                    : 'bg-red-900/40 border-red-700 text-red-300'
+                }`}>
+                  <p className="font-semibold mb-1">
+                    {loginError.type === 'not-enrolled' ? '⚠️' : '❌'} {loginError.message}
+                  </p>
+                  {loginError.suggestion && (
+                    <p className="text-xs opacity-90 leading-relaxed">{loginError.suggestion}</p>
+                  )}
+                </div>
+              )}
+
               <Button 
                 type="submit" 
                 className={`w-full bg-gradient-to-r ${currentRole?.bgGradient} hover:opacity-90 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200`}
@@ -307,7 +376,10 @@ const RoleBasedLogin = () => {
             <div className="mt-6 text-center">
               <Button
                 variant="outline"
-                onClick={() => setSelectedRole(null)}
+                onClick={() => {
+                  setSelectedRole(null);
+                  setLoginError({ type: null, message: '' });
+                }}
                 className="border-gray-600 text-gray-300 hover:bg-gray-700"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
@@ -326,9 +398,20 @@ const RoleBasedLogin = () => {
             </div>
 
             {/* Help Text */}
-            <div className="mt-4 text-center">
-              <p className="text-gray-400 text-xs">
-                Don't have an account? Contact your administrator
+            <div className="mt-4 text-center space-y-2">
+              {(selectedRole === 'student' || selectedRole === 'trainer') && (
+                <p className="text-gray-400 text-xs">
+                  Forgot your password?{' '}
+                  <a
+                    href="/forgot-password"
+                    className="text-blue-400 hover:text-blue-300 underline underline-offset-2"
+                  >
+                    Reset it here
+                  </a>
+                </p>
+              )}
+              <p className="text-gray-500 text-xs">
+                Don't have an account? Contact your administrator.
               </p>
             </div>
           </CardContent>
