@@ -1447,8 +1447,8 @@ const BatchesManagement = () => {
                   <CardHeader>
                     <div className="flex justify-between items-start">
                       <div>
-                        <CardTitle className="text-white text-lg">{batch.batchName}</CardTitle>
-                        <p className="text-gray-400 text-sm">{batch.batchId}</p>
+                        <CardTitle className="text-white text-sm">{batch.batchName}</CardTitle>
+                        {/* <p className="text-gray-400 text-sm">{batch.batchId}</p> */}
                       </div>
                       <Badge className={getStatusColor(batch.status)}>
                         {batch.status}
