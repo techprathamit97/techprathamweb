@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { User, Lock, LogIn, BookOpen, Users, Shield, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-
+['/;Z][']
 const RoleBasedLogin = () => {
   const [selectedRole, setSelectedRole] = useState<'student' | 'trainer' | 'admin' | null>(null);
   const [credentials, setCredentials] = useState({
