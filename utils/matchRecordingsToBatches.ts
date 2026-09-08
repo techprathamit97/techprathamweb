@@ -23,8 +23,16 @@ export interface MeetingBatchIndex {
   byClassId: Map<string, string>;
 }
 
-/** Meeting IDs created by our join flow look like `class-<mongoObjectId>`. */
-const LMS_MEETING_ID = /^class-([a-f0-9]{24})/i;
+/**
+ * Meeting IDs created by our join flow look like `class-<classId>` and may have a
+ * `-<timestamp>` suffix appended when a fresh meeting is created for a rejoin
+ * (e.g. `class-6aa00c7a...-1788872722974`).
+ *
+ * The class id itself is not always a 24-char Mongo ObjectId — some deployments
+ * use longer hex identifiers — so we capture everything after `class-` up to an
+ * optional trailing `-<digits>` timestamp rather than assuming a fixed length.
+ */
+const LMS_MEETING_ID = /^class-([a-f0-9]+?)(?:-\d{10,})?$/i;
 
 export function buildMeetingBatchIndex(moduleClasses: any[]): MeetingBatchIndex {
   const byMeetingId = new Map<string, string>();
@@ -40,11 +48,19 @@ export function buildMeetingBatchIndex(moduleClasses: any[]): MeetingBatchIndex 
     if (!batchId) continue;
 
     if (cls.bbbMeetingId) {
-      byMeetingId.set(String(cls.bbbMeetingId), batchId);
+      const stored = String(cls.bbbMeetingId);
+      byMeetingId.set(stored, batchId);
+      // Also index the timestamp-stripped form so a recording whose meeting ID
+      // lacks (or adds) the `-<timestamp>` suffix still resolves.
+      const strippedStored = stored.replace(/-\d{10,}$/, '');
+      if (strippedStored !== stored) {
+        byMeetingId.set(strippedStored, batchId);
+      }
     }
 
     if (cls._id) {
       byClassId.set(String(cls._id), batchId);
+      byClassId.set(String(cls._id).toLowerCase(), batchId);
     }
   }
 
@@ -69,12 +85,31 @@ export function resolveRecordingBatchId(
     return index.byMeetingId.get(meetingId)!;
   }
 
+  // 1b. The stored bbbMeetingId may carry a `-<timestamp>` suffix that the
+  //     recording's meeting ID does not (or vice versa). Compare with the
+  //     timestamp stripped so a rejoin-created meeting still matches its class.
+  if (meetingId) {
+    const withoutTimestamp = meetingId.replace(/-\d{10,}$/, '');
+    if (withoutTimestamp !== meetingId && index.byMeetingId.has(withoutTimestamp)) {
+      return index.byMeetingId.get(withoutTimestamp)!;
+    }
+    // Also try matching against any stored id whose timestamp-stripped form equals ours
+    for (const [storedId, batchId] of index.byMeetingId) {
+      if (storedId.replace(/-\d{10,}$/, '') === withoutTimestamp) {
+        return batchId;
+      }
+    }
+  }
+
   // 2. Our own meeting IDs embed the class id, so the batch is derivable even if
-  //    bbbMeetingId was never persisted on the class row.
+  //    bbbMeetingId was never persisted on the class row. Handles both
+  //    `class-<id>` and `class-<id>-<timestamp>`, and ids of any hex length.
   const embedded = meetingId.match(LMS_MEETING_ID);
   if (embedded) {
-    const batchId = index.byClassId.get(embedded[1].toLowerCase())
-      || index.byClassId.get(embedded[1]);
+    const classId = embedded[1];
+    const batchId =
+      index.byClassId.get(classId) ||
+      index.byClassId.get(classId.toLowerCase());
     if (batchId) return batchId;
   }
 

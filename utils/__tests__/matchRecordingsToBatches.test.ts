@@ -72,6 +72,21 @@ describe('resolveRecordingBatchId', () => {
   it('returns null when there is no meeting id or name', () => {
     expect(resolveRecordingBatchId({}, index, batches)).toBeNull();
   });
+
+  it('matches when the recording meeting id has a -<timestamp> suffix the class id lacks', () => {
+    // Stored bbbMeetingId is `class-<CLASS_A>`, recording came back with a suffix
+    const recording = { meetingId: `class-${CLASS_A}-1788872722974`, name: 'x' };
+    expect(resolveRecordingBatchId(recording, index, batches)).toBe(BATCH_A);
+  });
+
+  it('matches a long (non-24-char) hex class id via the class- prefix', () => {
+    const LONG_CLASS = '6aa00c7a406448746971731f019a29a5fe1d877132d3ba62694d847fb20c04e0';
+    const longIndex = buildMeetingBatchIndex([
+      { _id: LONG_CLASS, batchId: { _id: BATCH_A }, bbbMeetingId: null }
+    ]);
+    const recording = { meetingId: `class-${LONG_CLASS}-1788872722974`, name: 'x' };
+    expect(resolveRecordingBatchId(recording, longIndex, batches)).toBe(BATCH_A);
+  });
 });
 
 describe('groupRecordingsByBatch', () => {
