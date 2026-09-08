@@ -5,6 +5,10 @@ const studentSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+  // Plaintext copy of the password so admins can view/edit it in the LMS.
+  // Deliberate tradeoff: anyone with DB access can read it. Only used for
+  // admin-managed accounts, never exposed to students/trainers.
+  plainPassword: { type: String },
   phone: String,
   dateOfBirth: Date,
   address: String,
