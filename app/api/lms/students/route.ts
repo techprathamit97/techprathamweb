@@ -79,23 +79,49 @@ export async function POST(req: Request) {
     
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    
-    // Generate studentId
-    const studentCount = await Student.countDocuments({});
-    const studentId = `STU${String(studentCount + 1).padStart(4, '0')}`;
-    
-    // Create student
-    const newStudent = await Student.create({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      plainPassword: data.password,
-      phone: data.phone,
-      studentId: studentId,
-      dateOfBirth: data.dateOfBirth,
-      address: data.address,
-      isActive: true
-    });
+
+    // Derive next studentId from the highest existing id (not the doc count,
+    // which collides once any student has been deleted). Retry on race.
+    const existing = await Student.find({}).select('studentId').lean();
+    let highest = 0;
+    for (const s of existing as any[]) {
+      const m = typeof s.studentId === 'string' ? s.studentId.match(/^STU(\d+)$/) : null;
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!Number.isNaN(n) && n > highest) highest = n;
+      }
+    }
+    const nextNumber = highest + 1;
+
+    let newStudent: any = null;
+    let lastError: any = null;
+
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const studentId = `STU${String(nextNumber + attempt).padStart(4, '0')}`;
+      try {
+        newStudent = await Student.create({
+          name: data.name,
+          email: data.email,
+          password: hashedPassword,
+          plainPassword: data.password,
+          phone: data.phone,
+          studentId: studentId,
+          dateOfBirth: data.dateOfBirth,
+          address: data.address,
+          isActive: true
+        });
+        break;
+      } catch (createError: any) {
+        lastError = createError;
+        const isStudentIdClash =
+          createError?.code === 11000 &&
+          Object.keys(createError?.keyPattern || createError?.keyValue || {}).includes('studentId');
+        if (!isStudentIdClash) throw createError;
+        console.warn(`studentId ${studentId} already taken, retrying`);
+      }
+    }
+
+    if (!newStudent) throw lastError || new Error('Could not allocate a studentId');
     
     // Add to batch if batchId provided
     if (data.batchId) {
