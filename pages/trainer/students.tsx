@@ -8,17 +8,7 @@ import { Input } from '@/components/ui/input';
 import { 
   Users, 
   Search, 
-  Filter, 
-  BookOpen, 
-  Calendar, 
-  Mail, 
-  Phone, 
-  TrendingUp,
-  CheckCircle,
-  Clock,
-  DollarSign,
-  Award,
-  ExternalLink
+  BookOpen
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,8 +21,6 @@ interface Student {
   category: string;
   level: string;
   duration: string;
-  progressPercentage: number;
-  courseCompletion: boolean;
   enrolledDate: string;
   lastAccessedAt: string | null;
   batches: Array<{
@@ -81,8 +69,6 @@ interface StudentsData {
   }>;
   stats: {
     totalStudents: number;
-    completedStudents: number;
-    inProgressStudents: number;
     totalRevenue: number;
     collectedRevenue: number;
     pendingRevenue: number;
@@ -96,7 +82,6 @@ const TrainerStudents = () => {
   const [studentsData, setStudentsData] = useState<StudentsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'in-progress'>('all');
   const [filterBatch, setFilterBatch] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'all' | 'by-batch'>('all');
 
@@ -137,17 +122,12 @@ const TrainerStudents = () => {
 
   const filteredStudents = studentsData?.students.filter(student => {
     const matchesSearch = student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         student.studentId.toLowerCase().includes(searchTerm.toLowerCase())
-                         
-    
-    const matchesStatus = filterStatus === 'all' || 
-                         (filterStatus === 'completed' && student.courseCompletion) ||
-                         (filterStatus === 'in-progress' && !student.courseCompletion);
-    
+                         student.studentId.toLowerCase().includes(searchTerm.toLowerCase());
+
     const matchesBatch = filterBatch === 'all' || 
                         student.batches.some(batch => batch.batchId === filterBatch);
-    
-    return matchesSearch && matchesStatus && matchesBatch;
+
+    return matchesSearch && matchesBatch;
   }) || [];
 
   if (isLoading || !trainerData || !studentsData) {
@@ -184,36 +164,6 @@ const TrainerStudents = () => {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Completed</p>
-                  <p className="text-3xl font-bold text-gray-900">{studentsData.stats.completedStudents}</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">In Progress</p>
-                  <p className="text-3xl font-bold text-gray-900">{studentsData.stats.inProgressStudents}</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Clock className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-         
         </div>
 
         {/* Filters and Search */}
@@ -231,16 +181,6 @@ const TrainerStudents = () => {
                   />
                 </div>
                 
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value as any)}
-                  className="px-3 py-2 border border-gray-300 rounded-md"
-                >
-                  <option value="all">All Status</option>
-                  <option value="completed">Completed</option>
-                  <option value="in-progress">In Progress</option>
-                </select>
-
                 <select
                   value={filterBatch}
                   onChange={(e) => setFilterBatch(e.target.value)}
@@ -294,11 +234,11 @@ const TrainerStudents = () => {
                 <div className="space-y-4">
                   {filteredStudents.map((student) => (
                     <div key={student.studentId} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* Student Info */}
                         <div className="space-y-2">
                           <h3 className="font-semibold text-gray-900">{student.name}</h3>
-                          
+                          <p className="text-gray-600 text-sm">{student.studentId}</p>
                         </div>
 
                         {/* Course Info */}
@@ -306,36 +246,10 @@ const TrainerStudents = () => {
                           <h4 className="font-medium text-gray-900">Course Details</h4>
                           <div className="text-sm text-gray-600 space-y-1">
                             <p><span className="font-medium">Course:</span> {student.course_title}</p>
-                            {/* <p><span className="font-medium">Category:</span> {student.category}</p> */}
-                            {/* <p><span className="font-medium">Level:</span> {student.level}</p> */}
                             <p><span className="font-medium">Duration:</span> {student.duration}</p>
                           </div>
                         </div>
-
-                        {/* Progress & Status */}
-                        <div className="space-y-2">
-                          <h4 className="font-medium text-gray-900">Progress</h4>
-                          <div className="space-y-2">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-600">Completion</span>
-                              <span className="font-medium">{student.progressPercentage}%</span>
-                            </div>
-                            <div className="w-full bg-gray-200 rounded-full h-2">
-                              <div 
-                                className="bg-green-600 h-2 rounded-full transition-all"
-                                style={{ width: `${student.progressPercentage}%` }}
-                              />
-                            </div>
-                            <Badge className={student.courseCompletion ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
-                              {student.courseCompletion ? 'Completed' : 'In Progress'}
-                            </Badge>
-                          </div>
-                        </div>
-
-                      
                       </div>
-
-                    
                     </div>
                   ))}
                 </div>
@@ -379,10 +293,6 @@ const TrainerStudents = () => {
                         <thead>
                           <tr className="border-b border-gray-200">
                             <th className="text-left text-gray-600 font-medium p-3">Student</th>
-                            <th className="text-left text-gray-600 font-medium p-3">Contact</th>
-                            <th className="text-left text-gray-600 font-medium p-3">Progress</th>
-                            <th className="text-left text-gray-600 font-medium p-3">Payment</th>
-                            <th className="text-left text-gray-600 font-medium p-3">Status</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -393,34 +303,6 @@ const TrainerStudents = () => {
                                   <p className="text-gray-900 font-medium">{student.name}</p>
                                   <p className="text-gray-600 text-xs">{student.studentId}</p>
                                 </div>
-                              </td>
-                             
-                              <td className="p-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-16 bg-gray-200 rounded-full h-2">
-                                    <div 
-                                      className="bg-green-600 h-2 rounded-full"
-                                      style={{ width: `${student.progressPercentage}%` }}
-                                    />
-                                  </div>
-                                  <span className="text-xs">{student.progressPercentage}%</span>
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <div className="text-xs">
-                                  <p>₹{student.paidAmount.toLocaleString()}/₹{student.totalAmount.toLocaleString()}</p>
-                                  <Badge className={
-                                    student.paymentStatus === 'paid' ? 'bg-green-100 text-green-700 border-green-200' :
-                                    'bg-red-100 text-red-700 border-red-200'
-                                  }>
-                                    {student.paymentStatus}
-                                  </Badge>
-                                </div>
-                              </td>
-                              <td className="p-3">
-                                <Badge className={student.courseCompletion ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
-                                  {student.courseCompletion ? 'Completed' : 'In Progress'}
-                                </Badge>
                               </td>
                             </tr>
                           ))}

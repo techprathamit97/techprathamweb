@@ -238,24 +238,61 @@ const StudentNotes = () => {
                   ))}
                 </div>
               ) : (
-                /* PDF Content */
+                /* PDF Content - rendered inline in the same window */
                 selectedNote.pdfFile && (
-                  <div className="text-center py-8">
-                    <Upload className="h-16 w-16 text-red-600 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {selectedNote.pdfFile.fileName}
-                    </h3>
-                    <p className="text-gray-600 mb-6">
-                      {formatFileSize(selectedNote.pdfFile.fileSize)} • 
-                      Uploaded {new Date(selectedNote.pdfFile.uploadedAt).toLocaleDateString()}
+                  <div className="space-y-4">
+                    {/* File info + actions */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 border rounded-lg p-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Upload className="h-8 w-8 text-red-600 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <h3 className="text-base font-semibold text-gray-900 truncate">
+                            {selectedNote.pdfFile.fileName}
+                          </h3>
+                          <p className="text-gray-600 text-sm">
+                            {formatFileSize(selectedNote.pdfFile.fileSize)} • Uploaded{' '}
+                            {new Date(selectedNote.pdfFile.uploadedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <a
+                          href={selectedNote.pdfFile.url}
+                          download={selectedNote.pdfFile.fileName}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="outline" className="flex items-center gap-2">
+                            <Download className="h-4 w-4" />
+                            Download
+                          </Button>
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Inline PDF viewer */}
+                    <div className="w-full border rounded-lg overflow-hidden bg-gray-100">
+                      <iframe
+                        src={`${selectedNote.pdfFile.url}#toolbar=1&navpanes=0&view=FitH`}
+                        title={selectedNote.pdfFile.fileName}
+                        className="w-full"
+                        style={{ height: '80vh', border: 'none' }}
+                      />
+                    </div>
+
+                    {/* Fallback for browsers that can't render the iframe */}
+                    <p className="text-xs text-gray-500 text-center">
+                      Can't see the PDF?{' '}
+                      <a
+                        href={selectedNote.pdfFile.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 underline"
+                      >
+                        Open it in a new tab
+                      </a>
+                      .
                     </p>
-                    <Button 
-                      onClick={() => window.open(selectedNote.pdfFile!.url, '_blank')}
-                      className="flex items-center gap-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      Download PDF
-                    </Button>
                   </div>
                 )
               )}

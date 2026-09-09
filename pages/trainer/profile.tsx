@@ -278,53 +278,7 @@ const TrainerProfile = () => {
           </Card>
         </div>
 
-        {/* Stats Cards - Row 2 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total Revenue</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{profileData.stats.totalRevenue.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-1">From all courses</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Collection Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{profileData.stats.collectionRate}%</p>
-                  <p className="text-xs text-gray-500 mt-1">Payment collection</p>
-                </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Avg Progress</p>
-                  <p className="text-2xl font-bold text-gray-900">{profileData.stats.avgProgress}%</p>
-                  <p className="text-xs text-gray-500 mt-1">Student progress</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
-                  <Award className="h-6 w-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+     
 
         {/* Personal Information and Professional Details */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
