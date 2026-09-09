@@ -7,19 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import {
   BookOpen,
   CheckCircle,
-  PlayCircle,
-  TrendingUp,
   Calendar,
-  Clock,
   Award,
-  Bell,
-  FileText,
-  DollarSign,
   Target,
   User,
-  LogOut,
-  X,
-  Video
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFirebaseMessaging } from '@/hooks/useFirebaseMessaging';
@@ -53,6 +45,7 @@ interface EnrolledCourse {
   batchInfo?: {
     batchId: string;
     course_title: string;
+    batchName: string;
     trainerId: string;
     schedule: {
       startDate: string;
@@ -84,6 +77,7 @@ interface EnrolledCourse {
 interface Batch {
   batchId: string;
   course_title: string;
+  batchName:string;
   trainer: {
     name: string;
     email: string;
@@ -460,61 +454,6 @@ const StudentDashboard = () => {
           
         </div>
 
-        {/* Stats Cards - Row 2 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Total Paid</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{dashboardData.stats.totalPaid.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-1">{dashboardData.stats.paidInvoices} invoices</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                  <DollarSign className="h-6 w-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Pending Amount</p>
-                  <p className="text-2xl font-bold text-gray-900">₹{dashboardData.stats.totalPending.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500 mt-1">{dashboardData.stats.pendingInvoices} pending</p>
-                </div>
-                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-red-600" />
-                </div>
-              </div>
-              {dashboardData.stats.totalPending > 0 && (
-                <Button
-                  className="w-full mt-4 bg-red-600 hover:bg-red-700"
-                  onClick={() => router.push('/student/invoices')}
-                >
-                  Pay Due Now
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-600 text-sm">Quiz Performance</p>
-                  <p className="text-2xl font-bold text-gray-900">{dashboardData.stats.avgQuizScore}%</p>
-                  <p className="text-xs text-gray-500 mt-1">{dashboardData.stats.passedQuizzes}/{dashboardData.stats.totalQuizzes} passed</p>
-                </div>
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <Target className="h-6 w-6 text-indigo-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
 
         {/* My Courses */}
         <Card className="border-gray-200 shadow-sm">
@@ -573,8 +512,8 @@ const StudentDashboard = () => {
                           </h4>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                             <div>
-                              <p className="text-gray-600">Batch ID</p>
-                              <p className="text-gray-900 font-medium">{batchInfo.batchId}</p>
+                              <p className="text-gray-600">Batch Name</p>
+                              <p className="text-gray-900 font-medium">{batchInfo.batchName}</p>
                             </div>
                             <div>
                               <p className="text-gray-600">Status</p>
@@ -589,7 +528,7 @@ const StudentDashboard = () => {
                             <div>
                               <p className="text-gray-600">Schedule</p>
                               <p className="text-gray-900 font-medium">{batchInfo.schedule.timing}</p>
-                              <p className="text-gray-500 text-xs">{batchInfo.schedule.days.join(', ')}</p>
+                              {/* <p className="text-gray-500 text-xs">{batchInfo.schedule.days.join(', ')}</p> */}
                             </div>
                             <div>
                               <p className="text-gray-600">Duration</p>
@@ -598,12 +537,7 @@ const StudentDashboard = () => {
                                 {new Date(batchInfo.schedule.endDate).toLocaleDateString()}
                               </p>
                             </div>
-                            <div>
-                              <p className="text-gray-600">Capacity</p>
-                              <p className="text-gray-900 font-medium">
-                                {batchInfo.enrolled_students.length}/{batchInfo.capacity} students
-                              </p>
-                            </div>
+                            
                           </div>
                         </div>
                       )}
@@ -630,13 +564,7 @@ const StudentDashboard = () => {
                                   <p className="text-gray-600">Experience</p>
                                   <p className="text-gray-900 font-medium">{batchInfo.trainer.experience}</p>
                                 </div>
-                                <div>
-                                  <p className="text-gray-600">Rating</p>
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-gray-900 font-medium">{batchInfo.trainer.rating}</span>
-                                    <span className="text-yellow-500">★</span>
-                                  </div>
-                                </div>
+                               
                                
                                
                               </div>
@@ -695,40 +623,6 @@ const StudentDashboard = () => {
                           </div>
                         </div>
                       )}
-
-                      {/* Course Details */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm mb-4">
-                        <div>
-                          <p className="text-gray-600">Duration</p>
-                          <p className="text-gray-900 font-medium">{course.duration}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Level</p>
-                          <p className="text-gray-900 font-medium">{course.level}</p>
-                        </div>
-                        
-                      </div>
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-3">
-                        {batchInfo?.meetingLink && batchInfo.status === 'ongoing' && (
-                          <Button 
-                            className="bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
-                            onClick={() => window.open(batchInfo.meetingLink, '_blank')}
-                          >
-                            <PlayCircle className="h-4 w-4" />
-                            Join Class
-                          </Button>
-                        )}
-                        <Button 
-                          variant="outline"
-                          onClick={() => window.open(course.course_link, '_blank')}
-                          className="flex items-center gap-2"
-                        >
-                          <BookOpen className="h-4 w-4" />
-                          View Course
-                        </Button>
-                      </div>
                     </div>
                   );
                 })}

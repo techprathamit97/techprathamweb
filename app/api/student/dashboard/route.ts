@@ -258,6 +258,7 @@ export async function GET(req: NextRequest) {
       studentId: student.studentId,
       batchInfo: {
         batchId: batch.batchId,
+        batchName: batch.batchName,
         course_title: batch.course_title,
         trainerId: batch.trainer.trainerId,
         schedule: {
