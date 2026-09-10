@@ -5,6 +5,10 @@ import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
 const Batch = require("@/models/Batch");
 const ModuleClass = require("@/models/ModuleClass");
+// Registered so .populate('courseId') / .populate('trainerId') work — Mongoose
+// throws "Schema hasn't been registered for model Course" if these aren't loaded.
+const Course = require("@/models/Course");
+const Trainer = require("@/models/Trainer");
 
 // Helper function to generate BBB API checksum (same as trainer API)
 function generateBBBChecksum(apiCall: string, params: string, secret: string): string {
