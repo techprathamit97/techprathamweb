@@ -190,7 +190,15 @@ export async function GET(req: NextRequest) {
             participants: participants || '0',
             size: size,
             sizeText: sizeText,
-            canDownload: Boolean(published && state === 'published' && videoUrl),
+            // A recording is downloadable only when BBB has generated the
+            // combined `video` playback format (video-0.m4v). Older recordings
+            // that only have the `presentation` format cannot be downloaded, so
+            // the button should not appear for them.
+            canDownload: Boolean(
+              published &&
+              state === 'published' &&
+              (playback.formats || []).some((f: any) => f.type === 'video')
+            ),
             playbackFormats: playback.formats,
             playbackDerived: playback.derived,
             status: published && state === 'published' ? 

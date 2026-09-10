@@ -173,90 +173,26 @@ const LMSRecordingsManagement = () => {
     }
   };
 
-  // Handle BigBlueButton recording download - enhanced for Blindside Networks
+  // Handle recording download.
+  // Routes through our own API which fetches the MP4 from the BBB server over
+  // HTTP and streams it back with a Content-Disposition: attachment header, so
+  // the browser saves a real file instead of opening the BBB playback page.
   const handleDownloadRecording = (recording: BBBRecording) => {
-    if (!recording.videoUrl) {
-      toast.error('No download URL available for this recording');
+    if (!recording.canDownload) {
+      toast.error('This recording is not available for download yet');
       return;
     }
-    
-    console.log('🔽 Processing BBB Recording URL:', recording.videoUrl);
-    
-    // Check if this is a Blindside Networks recording
-    if (recording.videoUrl.includes('blindsidenetworks.com') || recording.videoUrl.includes('recordings.blindsidenetworks.com')) {
-      console.log('🔍 Detected Blindside Networks recording');
-      
-      // Try to construct potential download URLs for Blindside Networks
-      try {
-        const url = new URL(recording.videoUrl);
-        const pathParts = url.pathname.split('/');
-        
-        // Extract the recording ID from the path
-        const recordingId = pathParts.find(part => part.length > 20); // Long hash-like ID
-        
-        if (recordingId) {
-          // Try different Blindside Networks download formats
-          const possibleDownloadUrls = [
-            `${url.origin}/bn/${recordingId}/video/webcams.webm`, // Webcam video
-            `${url.origin}/bn/${recordingId}/video/webcams.mp4`,  // Webcam video MP4
-            `${url.origin}/bn/${recordingId}/deskshare/deskshare.webm`, // Screen share
-            `${url.origin}/bn/${recordingId}/deskshare/deskshare.mp4`,  // Screen share MP4
-            `${url.origin}/bn/${recordingId}/presentation/slides_export.zip`, // Slides export
-            `${url.origin}/download/${recordingId}`, // Direct download
-          ];
-          
-          console.log('🔽 Trying Blindside Networks download URLs:', possibleDownloadUrls);
-          
-          // Create a clean filename
-          const cleanName = recording.name.replace(/[^a-zA-Z0-9\s-]/g, '');
-          const dateStr = recording.dateText.replace(/[^a-zA-Z0-9]/g, '_');
-          
-          // Try each potential download URL
-          let attempted = false;
-          possibleDownloadUrls.forEach((downloadUrl, index) => {
-            setTimeout(() => {
-              try {
-                const downloadLink = document.createElement('a');
-                downloadLink.href = downloadUrl;
-                downloadLink.download = `${cleanName}_${dateStr}_${index}`;
-                downloadLink.style.display = 'none';
-                downloadLink.target = '_blank';
-                
-                document.body.appendChild(downloadLink);
-                downloadLink.click();
-                document.body.removeChild(downloadLink);
-                
-                console.log(`🔽 Attempted download URL ${index + 1}:`, downloadUrl);
-                attempted = true;
-              } catch (err) {
-                console.log(`🔽 Download URL ${index + 1} failed:`, downloadUrl, err);
-              }
-            }, index * 500); // Stagger attempts
-          });
-          
-          if (attempted) {
-            toast.success('Attempting to download recording files...');
-            setTimeout(() => {
-              toast.info('If downloads didn\'t start, the recording will open in a new tab for manual saving', {
-                duration: 8000,
-              });
-            }, 3000);
-          }
-        }
-      } catch (urlError) {
-        console.log('🔽 Failed to parse Blindside Networks URL:', urlError);
-      }
+    if (!recording.recordId) {
+      toast.error('Recording ID is missing');
+      return;
     }
-    
-    // Fallback: Open the recording in a new tab (original approach)
-    window.open(recording.videoUrl, '_blank');
-    
-    // Show instructions to the user
-    setTimeout(() => {
-      toast.info('Recording opened in new tab. To save: Press Ctrl+S (or Cmd+S on Mac) → Select "Webpage, Complete" → Save to your computer', {
-        duration: 12000,
-      });
-    }, 2000);
+
+    console.log('🔽 Starting recording download:', recording.recordId);
+    // The API resolves the combined MP4 on the BBB server from the recordId.
+    const downloadUrl = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
+    // Trigger a real file download in the same window
+    window.location.href = downloadUrl;
+    toast.success('Preparing download…');
   };
 
   // Handle play recording
