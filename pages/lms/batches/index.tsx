@@ -1319,7 +1319,7 @@ const BatchesManagement = () => {
                       <div>
                         <Label className="text-sm text-gray-300">Days of Week</Label>
                         <div className="grid grid-cols-3 gap-2 mt-2">
-                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
                             <div key={day} className="flex items-center space-x-2">
                               <Checkbox
                                 id={day}
@@ -2373,7 +2373,7 @@ const BatchesManagement = () => {
                   <div>
                     <Label className="text-sm text-gray-300">Days of Week</Label>
                     <div className="grid grid-cols-3 gap-2 mt-2">
-                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((day) => (
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
                         <div key={day} className="flex items-center space-x-2">
                           <Checkbox
                             id={`edit-${day}`}
