@@ -86,8 +86,9 @@ export async function GET(req: NextRequest) {
         startDate: batch.startDate,
         endDate: batch.endDate,
         timing: batch.timing || 'Not set',
-        days: batch.days || []
+        days: batch.daysOfWeek || batch.days || []
       },
+      daysOfWeek: batch.daysOfWeek || [],
       capacity: batch.capacity || 30,
       enrolled_students: (batch.studentIds || []).map((student: any) => student._id),
       status: batch.status || 'active',

@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
         hasTrainer: !!trainer._id,
         schedule: batch.timing ? {
           timing: batch.timing,
-          days: [],
+          days: batch.daysOfWeek || [],
           startDate: batch.startDate,
           endDate: batch.endDate
         } : null,
@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
           meetingLink: b.meetingLink || '',
           schedule: {
             timing: b.timing || '',
-            days: [],
+            days: b.daysOfWeek || [],
             startDate: b.startDate,
             endDate: b.endDate
           }

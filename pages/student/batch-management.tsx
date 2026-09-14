@@ -54,6 +54,7 @@ interface StudentBatch {
   timing?: string;
   startDate?: string;
   endDate?: string;
+  daysOfWeek?: string[];
 }
 
 interface BBBRecording {
@@ -242,7 +243,8 @@ const StudentBatchManagement = () => {
               liveClasses: 0, // Will be updated when classes are fetched
               timing: batch.schedule?.timing || 'TBD',
               startDate: batch.schedule?.startDate || '',
-              endDate: batch.schedule?.endDate || ''
+              endDate: batch.schedule?.endDate || '',
+              daysOfWeek: batch.schedule?.days || batch.daysOfWeek || []
             };
             
             console.log('Processed batch:', JSON.stringify(processedBatch, null, 2));
@@ -273,7 +275,8 @@ const StudentBatchManagement = () => {
             liveClasses: 0,
             timing: course.schedule?.timing || 'TBD',
             startDate: course.schedule?.startDate || '',
-            endDate: course.schedule?.endDate || ''
+            endDate: course.schedule?.endDate || '',
+            daysOfWeek: course.schedule?.days || course.daysOfWeek || []
           }));
           
           console.log('✅ CONVERTED COURSES TO BATCHES:', JSON.stringify(courseBatches, null, 2));
@@ -314,6 +317,22 @@ const StudentBatchManagement = () => {
       console.log('🏁 === FETCH BATCHES DEBUG END ===');
     }
   };
+  // Map day-of-week name -> JS Date.getDay() index (Sun=0 ... Sat=6)
+  const DAY_NAME_TO_INDEX: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6
+  };
+
+  // Allowed getDay() indices for a batch from its daysOfWeek.
+  // Empty/absent means "every weekday Mon-Sat" (legacy behaviour).
+  const allowedDayIndices = (batch: StudentBatch): number[] => {
+    const days = batch.daysOfWeek || [];
+    if (!days.length) return [1, 2, 3, 4, 5, 6];
+    return days
+      .map(d => DAY_NAME_TO_INDEX[String(d).trim().toLowerCase()])
+      .filter(n => n !== undefined);
+  };
+
   // Fetch classes for selected batch - PURE TIME-BASED SINGLE CLASS DISPLAY
   const fetchBatchClasses = async (batch: StudentBatch) => {
     if (!studentInfo) return;
@@ -377,36 +396,45 @@ const StudentBatchManagement = () => {
 
           console.log(`📅 Parsed class time: ${classHour}:${classMinute.toString().padStart(2, '0')}`);
           
-          // ALWAYS show today's class if we haven't passed the extended grace period
+          // Which weekdays this batch actually runs on (from daysOfWeek).
+          const allowed = allowedDayIndices(batch);
+          console.log('📅 Batch scheduled day indices:', allowed);
+
+          // Today's class time
           const todayClass = new Date(istNow);
           todayClass.setHours(classHour, classMinute, 0, 0);
-          
+
           console.log(`📅 Today's class time: ${todayClass.toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}`);
-          
-          // Calculate extended grace period (3 hours after class ends)
-          const todayClassEndTime = new Date(todayClass.getTime() + 60 * 60 * 1000); // 1 hour duration
-          const extendedGracePeriodEnd = new Date(todayClassEndTime.getTime() + 3 * 60 * 60 * 1000); // 3 hours grace
-          
+
+          // Extended grace period (3 hours after class ends)
+          const todayClassEndTime = new Date(todayClass.getTime() + 60 * 60 * 1000);
+          const extendedGracePeriodEnd = new Date(todayClassEndTime.getTime() + 3 * 60 * 60 * 1000);
+
           console.log(`📅 Today's class end + grace: ${extendedGracePeriodEnd.toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}`);
-          
+
+          // Show today's class only if today is a scheduled day AND we're still
+          // within its grace window. Otherwise jump to the next scheduled day.
+          const isTodayScheduled = allowed.includes(istNow.getDay());
           let targetClassDate = todayClass;
           let isShowingTodayClass = true;
-          
-          // Only move to next day if today's class + extended grace has completely passed
-          if (istNow > extendedGracePeriodEnd) {
-            console.log('🔄 Today\'s class + extended grace has passed, showing next weekday class');
+
+          if (!isTodayScheduled || istNow > extendedGracePeriodEnd) {
+            console.log(
+              !isTodayScheduled
+                ? '🔄 Today is not a scheduled day, finding next scheduled day'
+                : '🔄 Today\'s class + grace has passed, finding next scheduled day'
+            );
             isShowingTodayClass = false;
-            
-            // Find next weekday (skip weekends)
+
+            // Walk forward until we hit an allowed weekday (max 7 days).
             let nextClassDate = new Date(istNow);
-            nextClassDate.setDate(nextClassDate.getDate() + 1);
-            nextClassDate.setHours(classHour, classMinute, 0, 0);
-            
-            // Skip weekends
-            while (nextClassDate.getDay() === 0 || nextClassDate.getDay() === 6) {
-              nextClassDate.setDate(nextClassDate.getDate() + 1);
+            for (let i = 1; i <= 7; i++) {
+              nextClassDate = new Date(istNow);
+              nextClassDate.setDate(istNow.getDate() + i);
+              nextClassDate.setHours(classHour, classMinute, 0, 0);
+              if (allowed.includes(nextClassDate.getDay())) break;
             }
-            
+
             targetClassDate = nextClassDate;
             console.log(`📅 Next class will be: ${targetClassDate.toLocaleString('en-IN', {timeZone: 'Asia/Kolkata'})}`);
           } else {
