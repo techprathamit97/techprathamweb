@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import LMSSidebar from './LMSSidebar';
 import LMSTopBar from './LMSTopBar';
+import { isSessionExpired, clearSession, sessionTimeRemainingMs } from '@/utils/session';
 
 interface LMSLayoutProps {
   children: React.ReactNode;
@@ -13,39 +14,65 @@ const LMSLayout: React.FC<LMSLayoutProps> = ({ children }) => {
   // 'checking' → verifying session, 'authorized' → render, 'denied' → redirecting
   const [authState, setAuthState] = useState<'checking' | 'authorized' | 'denied'>('checking');
 
-  // Gate every /lms/* admin page behind an admin session. Without this, typing
-  // an /lms URL directly rendered the admin UI to anyone.
+  // Gate every /lms/* admin page behind an admin session, and enforce the
+  // 5-hour session expiry. Without this, typing an /lms URL directly rendered
+  // the admin UI to anyone, and sessions never expired.
   useEffect(() => {
-    try {
-      const adminRaw = localStorage.getItem('admin');
-      const sessionRaw = localStorage.getItem('userSession');
+    const verify = () => {
+      try {
+        const adminRaw = localStorage.getItem('admin');
+        const sessionRaw = localStorage.getItem('userSession');
 
-      let isAdmin = false;
-      if (adminRaw) {
-        const admin = JSON.parse(adminRaw);
-        // Accept if the stored admin object looks valid...
-        if (admin && (admin._id || admin.userId)) {
-          isAdmin = true;
+        // Expired session → clear everything and bounce to login.
+        if (isSessionExpired()) {
+          clearSession();
+          setAuthState('denied');
+          router.replace('/login');
+          return;
         }
-      }
-      // ...and confirm the session role is admin when a session exists.
-      if (isAdmin && sessionRaw) {
-        const session = JSON.parse(sessionRaw);
-        if (session?.role && session.role !== 'admin') {
-          isAdmin = false;
-        }
-      }
 
-      if (isAdmin) {
-        setAuthState('authorized');
-      } else {
+        let isAdmin = false;
+        if (adminRaw) {
+          const admin = JSON.parse(adminRaw);
+          if (admin && (admin._id || admin.userId)) {
+            isAdmin = true;
+          }
+        }
+        if (isAdmin && sessionRaw) {
+          const session = JSON.parse(sessionRaw);
+          if (session?.role && session.role !== 'admin') {
+            isAdmin = false;
+          }
+        }
+
+        if (isAdmin) {
+          setAuthState('authorized');
+        } else {
+          setAuthState('denied');
+          router.replace('/login');
+        }
+      } catch {
+        clearSession();
         setAuthState('denied');
         router.replace('/login');
       }
-    } catch {
-      setAuthState('denied');
-      router.replace('/login');
-    }
+    };
+
+    verify();
+
+    // Auto-logout the moment the 5-hour window elapses while the tab is open.
+    const remaining = sessionTimeRemainingMs();
+    const timer =
+      remaining > 0
+        ? setTimeout(() => {
+            clearSession();
+            router.replace('/login');
+          }, remaining)
+        : undefined;
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [router]);
 
   // While checking or redirecting, don't render the admin UI at all.

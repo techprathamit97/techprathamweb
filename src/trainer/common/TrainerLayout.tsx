@@ -1,14 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/router';
 import TrainerSidebar from './TrainerSidebar';
 import TrainerNavbar from './TrainerNavbar';
 import TrainerFooter from './TrainerFooter';
+import { isSessionExpired, clearSession, sessionTimeRemainingMs } from '@/utils/session';
 
 interface TrainerLayoutProps {
   children: React.ReactNode;
 }
 
 const TrainerLayout: React.FC<TrainerLayoutProps> = ({ children }) => {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Enforce the 5-hour session expiry. If the session is past its window,
+  // clear it and send the user back to login.
+  useEffect(() => {
+    if (isSessionExpired()) {
+      clearSession();
+      router.replace('/login');
+      return;
+    }
+    const remaining = sessionTimeRemainingMs();
+    const timer =
+      remaining > 0
+        ? setTimeout(() => {
+            clearSession();
+            router.replace('/login');
+          }, remaining)
+        : undefined;
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
