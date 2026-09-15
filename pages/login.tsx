@@ -187,7 +187,7 @@ const RoleBasedLogin = () => {
               </div>
             </div>
             <h1 className="text-4xl font-bold text-white mb-2">TechPratham LMS</h1>
-            <p className="text-gray-400 text-lg">Choose your role to continue</p>
+            <p className="text-gray-400 text-lg">Choose your role to continue.</p>
           </div>
 
           {/* Role Selection */}

@@ -246,7 +246,7 @@ const TrainerStudents = () => {
                           <h4 className="font-medium text-gray-900">Course Details</h4>
                           <div className="text-sm text-gray-600 space-y-1">
                             <p><span className="font-medium">Course:</span> {student.course_title}</p>
-                            <p><span className="font-medium">Duration:</span> {student.duration}</p>
+                            {/* <p><span className="font-medium">Duration:</span> {student.duration}</p> */}
                           </div>
                         </div>
                       </div>
