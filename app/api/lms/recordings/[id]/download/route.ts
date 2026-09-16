@@ -60,9 +60,6 @@ export async function GET(
     const key = `bbb-recordings/${id}/recording.mp4`;
     const filename = `recording-${id}.mp4`;
 
-    console.log('⬇️ Recording download requested:', id);
-    console.log('☁️ S3 object:', `s3://${S3_BUCKET}/${key}`);
-
     const command = new GetObjectCommand({
       Bucket: S3_BUCKET,
       Key: key,
@@ -74,8 +71,6 @@ export async function GET(
 
     // Presigned URL valid for 10 minutes.
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 600 });
-
-    console.log('✅ Generated S3 presigned URL for recording:', id);
 
     // Browser follows this redirect and downloads directly from S3.
     return NextResponse.redirect(signedUrl, 307);

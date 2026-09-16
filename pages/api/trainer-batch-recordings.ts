@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
 import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
+import { getManualRecordingsByBatch, mergeAndSort } from "@/utils/manualRecordings";
 const Batch = require("@/models/Batch");
 const Trainer = require("@/models/Trainer");
 const Course = require("@/models/Course");
@@ -322,6 +323,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       endDate: batch.endDate,
       recordings: byBatchId.get(batch._id.toString()) || []
     }));
+
+    // Merge manually-uploaded (non-BBB) recordings into each batch. Trainers see
+    // all of them; they sort into the day-wise series by classDate.
+    try {
+      const manualByBatch = await getManualRecordingsByBatch(
+        trainerBatches.map((b: BatchType) => b._id.toString())
+      );
+      for (const b of batchesWithRecordings) {
+        const manual = manualByBatch.get(b._id) || [];
+        if (manual.length) b.recordings = mergeAndSort(b.recordings, manual);
+      }
+    } catch (e) {
+      console.warn('Failed to merge manual recordings (trainer):', e);
+    }
 
     // Debug: Log matching results
     batchesWithRecordings.forEach((batch: ProcessedBatchType) => {

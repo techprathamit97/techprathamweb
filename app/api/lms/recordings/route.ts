@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { connectMongo } from "@/utils/mongodb";
 import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
+import { getManualRecordingsByBatch, mergeAndSort } from "@/utils/manualRecordings";
 const Batch = require("@/models/Batch");
 const ModuleClass = require("@/models/ModuleClass");
 // Registered so .populate('courseId') / .populate('trainerId') work — Mongoose
@@ -250,6 +251,21 @@ export async function GET(req: NextRequest) {
       endDate: batch.endDate,
       recordings: byBatchId.get(batch._id.toString()) || []
     }));
+
+    // Merge manually-uploaded (non-BBB) recordings into each batch. Admin sees
+    // all of them (published or not); they sort by classDate into the series.
+    try {
+      const manualByBatch = await getManualRecordingsByBatch(
+        allBatches.map((b: any) => b._id.toString())
+      );
+      for (const b of batchesWithRecordings) {
+        const manual = manualByBatch.get(b._id) || [];
+        if (manual.length) b.recordings = mergeAndSort(b.recordings, manual);
+      }
+    } catch (e) {
+      console.warn('Failed to merge manual recordings (admin):', e);
+    }
+
     const totalMatchedRecordings = batchesWithRecordings.reduce(
       (sum: number, batch: any) => sum + batch.recordings.length,
       0

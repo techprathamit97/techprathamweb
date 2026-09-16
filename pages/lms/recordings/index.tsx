@@ -59,6 +59,18 @@ const LMSRecordingsManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deletingRecording, setDeletingRecording] = useState<string | null>(null);
+
+  // Manual (non-BBB) recording upload state
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadForm, setUploadForm] = useState({
+    batchId: '',
+    title: '',
+    classDate: '',
+    platform: 'other',
+    file: null as File | null,
+  });
   // Fetch all recordings from all batches
   const fetchAllRecordings = async () => {
     try {
@@ -99,6 +111,93 @@ const LMSRecordingsManagement = () => {
       toast.error('Failed to load recordings: ' + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Upload a manual (non-BBB) recording: presign → PUT to S3 → save metadata.
+  const handleUploadRecording = async () => {
+    const { batchId, title, classDate, platform, file } = uploadForm;
+    if (!batchId || !title.trim() || !classDate || !file) {
+      toast.error('Batch, title, class date and a video file are required');
+      return;
+    }
+    if (!file.type.startsWith('video/')) {
+      toast.error('Please select a video file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      // 1. Get a presigned PUT URL
+      const presignRes = await fetch('/api/lms/recordings/manual/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batchId, fileName: file.name, contentType: file.type }),
+      });
+      const presign = await presignRes.json();
+      if (!presignRes.ok || !presign.success) {
+        throw new Error(presign.error || 'Failed to prepare upload');
+      }
+
+      // 2. Upload the file directly to S3 with progress (XHR for progress events).
+      //    Content-Type is intentionally NOT set: the presigned URL does not
+      //    sign it, so setting it here is unnecessary and avoids any header
+      //    mismatch. This isolates a 403 to IAM/CORS on the bucket.
+      await new Promise<void>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', presign.uploadUrl, true);
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            setUploadProgress(Math.round((e.loaded / e.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve();
+          } else {
+            // Surface S3's actual error (XML) so the real cause is visible.
+            const body = xhr.responseText || '';
+            const codeMatch = body.match(/<Code>(.*?)<\/Code>/);
+            const msgMatch = body.match(/<Message>(.*?)<\/Message>/);
+            const s3Code = codeMatch ? codeMatch[1] : 'Unknown';
+            const s3Msg = msgMatch ? msgMatch[1] : '';
+            console.error('S3 PUT failed:', xhr.status, s3Code, s3Msg, body);
+            reject(new Error(`S3 upload failed (${xhr.status}) ${s3Code}: ${s3Msg}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error during upload (likely CORS — check bucket CORS config)'));
+        xhr.send(file);
+      });
+
+      // 3. Save metadata
+      const saveRes = await fetch('/api/lms/recordings/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId,
+          title: title.trim(),
+          classDate,
+          platform,
+          s3Key: presign.s3Key,
+          fileSize: file.size,
+        }),
+      });
+      const saved = await saveRes.json();
+      if (!saveRes.ok || !saved.success) {
+        throw new Error(saved.error || 'Failed to save recording');
+      }
+
+      toast.success('Recording uploaded successfully');
+      setShowUpload(false);
+      setUploadForm({ batchId: '', title: '', classDate: '', platform: 'other', file: null });
+      fetchAllRecordings();
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -248,15 +347,132 @@ const LMSRecordingsManagement = () => {
     <LMSLayout>
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Video className="h-8 w-8" />
-            Recordings Management
-          </h1>
-          <p className="text-purple-100 mt-2">
-            Manage all BigBlueButton recordings across batches - view, download, and delete recordings
-          </p>
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+              <Video className="h-8 w-8" />
+              Recordings Management
+            </h1>
+            <p className="text-purple-100 mt-2">
+              Manage BBB recordings and upload recordings from other platforms (Zoom, Meet, etc.)
+            </p>
+          </div>
+          <Button
+            onClick={() => setShowUpload(true)}
+            className="bg-white text-purple-700 hover:bg-purple-50 flex-shrink-0"
+          >
+            Upload Recording
+          </Button>
         </div>
+
+        {/* Upload Recording Modal */}
+        {showUpload && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Upload Recording</h2>
+                <button
+                  onClick={() => !uploading && setShowUpload(false)}
+                  className="text-gray-400 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Batch *</label>
+                <select
+                  value={uploadForm.batchId}
+                  onChange={(e) => setUploadForm(f => ({ ...f, batchId: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                  disabled={uploading}
+                >
+                  <option value="" className="text-gray-900">Select a batch</option>
+                  {batches.map(b => (
+                    <option key={b._id} value={b._id} className="text-gray-900">
+                      {b.batchName} {b.courseName ? `— ${b.courseName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                <input
+                  type="text"
+                  value={uploadForm.title}
+                  onChange={(e) => setUploadForm(f => ({ ...f, title: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                  placeholder="e.g. Class 12 - Zoom session"
+                  disabled={uploading}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Class Date *</label>
+                  <input
+                    type="datetime-local"
+                    value={uploadForm.classDate}
+                    onChange={(e) => setUploadForm(f => ({ ...f, classDate: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                    disabled={uploading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+                  <select
+                    value={uploadForm.platform}
+                    onChange={(e) => setUploadForm(f => ({ ...f, platform: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                    disabled={uploading}
+                  >
+                    <option value="zoom" className="text-gray-900">Zoom</option>
+                    <option value="meet" className="text-gray-900">Google Meet</option>
+                    <option value="other" className="text-gray-900">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Video File *</label>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => setUploadForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
+                  className="w-full text-sm"
+                  disabled={uploading}
+                />
+                {uploadForm.file && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {uploadForm.file.name} ({Math.round(uploadForm.file.size / 1024 / 1024)} MB)
+                  </p>
+                )}
+              </div>
+
+              {uploading && (
+                <div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-purple-600 h-2 rounded-full transition-all"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-600 mt-1">Uploading… {uploadProgress}%</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setShowUpload(false)} disabled={uploading}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUploadRecording} disabled={uploading} className="bg-purple-600 hover:bg-purple-700">
+                  {uploading ? 'Uploading…' : 'Upload'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
