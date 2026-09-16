@@ -72,6 +72,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(404).json({ error: 'Student not found' });
     }
 
+    // Only active, non-restricted students may fetch recordings. This blocks
+    // deactivated/removed accounts from pulling video URLs.
+    if ((student as any).isActive === false || (student as any).isRestricted === true) {
+      return res.status(403).json({ error: 'Account is not allowed to access recordings' });
+    }
+
     // Get batches where this student is enrolled
     const studentBatches = await Batch.find({
       studentIds: student._id

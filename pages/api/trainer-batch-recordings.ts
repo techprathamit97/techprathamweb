@@ -63,25 +63,27 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await connectMongo();
     console.log('✅ Connected to MongoDB');
 
-    // Handle trainer ID - it might be _id or need to find trainer by trainerId field
-    let actualTrainerId = trainerId;
-    
-    // Check if it's a valid ObjectId
+    // Resolve and verify the trainer exists (by _id or trainerId field).
     const mongoose = require('mongoose');
-    
-    if (!mongoose.Types.ObjectId.isValid(trainerId)) {
-      console.log('📍 Trainer ID is not a valid ObjectId, trying to find trainer by trainerId field');
-      // Try to find trainer by trainerId field
-      const trainer = await Trainer.findOne({ trainerId: trainerId }).lean();
-      if (trainer) {
-        actualTrainerId = trainer._id;
-        console.log('✅ Found trainer by trainerId field:', actualTrainerId);
-      } else {
-        console.error('❌ No trainer found with trainerId:', trainerId);
-        return res.status(404).json({ error: 'Trainer not found' });
-      }
+    let trainerDoc: any = null;
+
+    if (mongoose.Types.ObjectId.isValid(trainerId)) {
+      trainerDoc = await Trainer.findById(trainerId).lean();
+    }
+    if (!trainerDoc) {
+      trainerDoc = await Trainer.findOne({ trainerId: trainerId }).lean();
+    }
+    if (!trainerDoc) {
+      console.error('❌ No trainer found with id:', trainerId);
+      return res.status(404).json({ error: 'Trainer not found' });
     }
 
+    // Only active trainers may fetch recordings.
+    if (trainerDoc.isActive === false) {
+      return res.status(403).json({ error: 'Account is not allowed to access recordings' });
+    }
+
+    const actualTrainerId = trainerDoc._id;
     console.log('🎯 Using trainer ObjectId:', actualTrainerId);
 
     // Get trainer's batches

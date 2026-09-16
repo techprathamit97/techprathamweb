@@ -60,6 +60,11 @@ const LMSRecordingsManagement = () => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [deletingRecording, setDeletingRecording] = useState<string | null>(null);
 
+  // Delete confirmation: admin must type the recording's batch name to confirm,
+  // so a recording is never deleted from the wrong batch by mistake.
+  const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+
   // Manual (non-BBB) recording upload state
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -242,24 +247,47 @@ const LMSRecordingsManagement = () => {
     filterRecordings();
   }, [selectedBatch, searchTerm, filterStatus, allRecordings]);
   // Handle recording deletion
-  const handleDeleteRecording = async (recordId: string, recordingName: string) => {
-    const confirmed = confirm(`Are you sure you want to delete the recording "${recordingName}"? This action cannot be undone.`);
-    if (!confirmed) return;
-    
+  // Confirmed delete. Called only after the admin types the exact batch name.
+  const handleDeleteRecording = async () => {
+    if (!deleteTarget) return;
+
+    const recordId: string = deleteTarget.recordId;
+    const recordingName: string = deleteTarget.name;
+    const expectedBatchName: string = deleteTarget.batchInfo?.batchName || '';
+
+    // Safety check: typed batch name must exactly match the recording's batch.
+    if (deleteConfirmInput.trim() !== expectedBatchName.trim()) {
+      toast.error('Batch name does not match. Deletion cancelled.');
+      return;
+    }
+
     setDeletingRecording(recordId);
-    
+
     try {
-      const res = await fetch(`/api/lms/recordings/${recordId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'delete' })
-      });
-      
+      let res: Response;
+
+      // Manual (uploaded) recordings have a `manual-<mongoId>` recordId. They
+      // are deleted via the manual API, which also removes the file from S3.
+      if (recordId.startsWith('manual-')) {
+        const manualId = recordId.replace(/^manual-/, '');
+        res = await fetch(`/api/lms/recordings/manual?id=${encodeURIComponent(manualId)}`, {
+          method: 'DELETE',
+        });
+      } else {
+        // BBB recordings are deleted through the BBB delete action.
+        res = await fetch(`/api/lms/recordings/${recordId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete' }),
+        });
+      }
+
       const data = await res.json();
-      
+
       if (res.ok && data.success) {
         toast.success(`Recording "${recordingName}" deleted successfully`);
-        // Refresh recordings list
+        setDeleteTarget(null);
+        setDeleteConfirmInput('');
         fetchAllRecordings();
       } else {
         throw new Error(data.error || 'Failed to delete recording');
@@ -468,6 +496,62 @@ const LMSRecordingsManagement = () => {
                 </Button>
                 <Button onClick={handleUploadRecording} disabled={uploading} className="bg-purple-600 hover:bg-purple-700">
                   {uploading ? 'Uploading…' : 'Upload'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal — requires typing the exact batch name */}
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Delete Recording</h2>
+              </div>
+
+              <p className="text-sm text-gray-700">
+                You are about to permanently delete{' '}
+                <span className="font-semibold">&quot;{deleteTarget.name}&quot;</span>. This action
+                cannot be undone.
+              </p>
+
+              <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <p className="text-sm text-red-800">
+                  To confirm, type the batch name exactly:
+                </p>
+                <p className="text-sm font-semibold text-red-900 mt-1">
+                  {deleteTarget.batchInfo?.batchName || 'Unknown'}
+                </p>
+              </div>
+
+              <input
+                type="text"
+                value={deleteConfirmInput}
+                onChange={(e) => setDeleteConfirmInput(e.target.value)}
+                placeholder="Enter batch name to confirm"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                autoFocus
+              />
+
+              <div className="flex justify-end gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  onClick={() => { setDeleteTarget(null); setDeleteConfirmInput(''); }}
+                  disabled={deletingRecording === deleteTarget.recordId}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteRecording}
+                  disabled={
+                    deletingRecording === deleteTarget.recordId ||
+                    deleteConfirmInput.trim() !== (deleteTarget.batchInfo?.batchName || '').trim()
+                  }
+                >
+                  {deletingRecording === deleteTarget.recordId ? 'Deleting…' : 'Delete Recording'}
                 </Button>
               </div>
             </div>
@@ -694,7 +778,7 @@ const LMSRecordingsManagement = () => {
                         )}
                         
                         <Button
-                          onClick={() => handleDeleteRecording(recording.recordId, recording.name)}
+                          onClick={() => { setDeleteTarget(recording); setDeleteConfirmInput(''); }}
                           size="sm"
                           variant="destructive"
                           disabled={deletingRecording === recording.recordId}
