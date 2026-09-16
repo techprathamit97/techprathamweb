@@ -315,10 +315,18 @@ const LMSRecordingsManagement = () => {
     }
 
     console.log('🔽 Starting recording download:', recording.recordId);
-    // The API resolves the combined MP4 on the BBB server from the recordId.
-    const downloadUrl = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
-    // Trigger a real file download in the same window
-    window.location.href = downloadUrl;
+
+    // Manual (uploaded) recordings download via the manual download API, which
+    // presigns a GetObject for the stored S3 key.
+    if (recording.recordId.startsWith('manual-')) {
+      const manualId = recording.recordId.replace(/^manual-/, '');
+      window.location.href = `/api/lms/recordings/manual/${encodeURIComponent(manualId)}/download`;
+      toast.success('Preparing download…');
+      return;
+    }
+
+    // BBB recordings: the API resolves the combined MP4 on the BBB server.
+    window.location.href = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
     toast.success('Preparing download…');
   };
 

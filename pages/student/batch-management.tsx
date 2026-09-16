@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Play,
   Circle,
-  RefreshCw
+  RefreshCw,
+  Download
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { sanitizeNoteHtml } from '@/utils/sanitizeHtml';
@@ -1112,6 +1113,32 @@ const StudentBatchManagement = () => {
     }
   };
 
+  // Handle downloading a recording (works for both manual and BBB recordings).
+  const handleDownloadRecording = (recording: BBBRecording) => {
+    if (!recording.canDownload) {
+      toast.error('This recording is not available for download yet');
+      return;
+    }
+
+    if (!recording.recordId) {
+      toast.error('Recording ID is missing');
+      return;
+    }
+
+    // Manual (uploaded) recordings download via the manual download API, which
+    // presigns a GetObject for the stored S3 key (no ListBucket needed).
+    if (recording.recordId.startsWith('manual-')) {
+      const manualId = recording.recordId.replace(/^manual-/, '');
+      window.location.href = `/api/lms/recordings/manual/${encodeURIComponent(manualId)}/download`;
+      toast.success('Preparing download…');
+      return;
+    }
+
+    // BBB recordings are streamed via our BBB download API (resolves the MP4).
+    window.location.href = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
+    toast.success('Preparing download…');
+  };
+
   // Handle viewing notes (read-only)
   const handleViewNotes = (note: any) => {
     console.log('Viewing note:', note.title, 'for batch:', selectedBatch?.batchName);
@@ -1279,6 +1306,7 @@ const StudentBatchManagement = () => {
                 recordings={batchRecordings}
                 loading={loadingRecordings}
                 onPlayRecording={handlePlayRecording}
+                onDownloadRecording={handleDownloadRecording}
                 batchName={selectedBatch.batchName}
               />
             ) : (
@@ -1585,8 +1613,9 @@ const StudentRecordingsTab: React.FC<{
   recordings: BBBRecording[],
   loading: boolean,
   onPlayRecording: (recording: BBBRecording) => void,
+  onDownloadRecording: (recording: BBBRecording) => void,
   batchName: string
-}> = ({ recordings, loading, onPlayRecording, batchName }) => {
+}> = ({ recordings, loading, onPlayRecording, onDownloadRecording, batchName }) => {
   if (loading) {
     return (
       <Card>
@@ -1704,15 +1733,27 @@ const StudentRecordingsTab: React.FC<{
                         </div>
                       </div>
 
-                      <Button
-                        onClick={() => onPlayRecording(recording)}
-                        className="w-full mt-2"
-                        variant="default"
-                        disabled={!recording.videoUrl}
-                      >
-                        <PlayCircle className="h-4 w-4 mr-2" />
-                        Watch Recording
-                      </Button>
+                      <div className="flex gap-2 mt-2">
+                        <Button
+                          onClick={() => onPlayRecording(recording)}
+                          className="flex-1"
+                          variant="default"
+                          disabled={!recording.videoUrl}
+                        >
+                          <PlayCircle className="h-4 w-4 mr-2" />
+                          Watch
+                        </Button>
+                        {recording.canDownload && (
+                          <Button
+                            onClick={() => onDownloadRecording(recording)}
+                            className="flex-1"
+                            variant="outline"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </CardContent>
