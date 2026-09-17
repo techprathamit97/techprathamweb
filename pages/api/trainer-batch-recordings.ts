@@ -4,6 +4,7 @@ import { connectMongo } from "@/utils/mongodb";
 import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
 import { getManualRecordingsByBatch, mergeAndSort } from "@/utils/manualRecordings";
+import { applyRecordingTitles } from "@/utils/recordingTitles";
 const Batch = require("@/models/Batch");
 const Trainer = require("@/models/Trainer");
 const Course = require("@/models/Course");
@@ -338,6 +339,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     } catch (e) {
       console.warn('Failed to merge manual recordings (trainer):', e);
+    }
+
+    // Apply display titles: "<batchName>-Class-N" default, overridden by any
+    // saved custom title.
+    for (const b of batchesWithRecordings) {
+      b.recordings = await applyRecordingTitles(b.batchName, b.recordings);
     }
 
     // Debug: Log matching results

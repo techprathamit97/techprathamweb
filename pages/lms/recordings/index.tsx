@@ -16,7 +16,8 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  Play
+  Play,
+  Edit
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,6 +65,11 @@ const LMSRecordingsManagement = () => {
   // so a recording is never deleted from the wrong batch by mistake.
   const [deleteTarget, setDeleteTarget] = useState<any | null>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+
+  // Rename recording state
+  const [renameTarget, setRenameTarget] = useState<any | null>(null);
+  const [renameInput, setRenameInput] = useState('');
+  const [renaming, setRenaming] = useState(false);
 
   // Manual (non-BBB) recording upload state
   const [showUpload, setShowUpload] = useState(false);
@@ -297,6 +303,39 @@ const LMSRecordingsManagement = () => {
       toast.error('Failed to delete recording: ' + error.message);
     } finally {
       setDeletingRecording(null);
+    }
+  };
+
+  // Save a renamed recording title.
+  const handleRenameRecording = async () => {
+    if (!renameTarget) return;
+    const newTitle = renameInput.trim();
+    if (!newTitle) {
+      toast.error('Title cannot be empty');
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await fetch('/api/lms/recordings/title', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordId: renameTarget.recordId,
+          title: newTitle,
+          batchId: renameTarget.batchInfo?.batchId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to rename');
+
+      toast.success('Recording renamed');
+      setRenameTarget(null);
+      setRenameInput('');
+      fetchAllRecordings();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to rename recording');
+    } finally {
+      setRenaming(false);
     }
   };
 
@@ -566,6 +605,46 @@ const LMSRecordingsManagement = () => {
           </div>
         )}
 
+        {/* Rename Recording Modal */}
+        {renameTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Edit className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Rename Recording</h2>
+              </div>
+              <p className="text-sm text-gray-600">
+                Batch: <span className="font-medium">{renameTarget.batchInfo?.batchName || 'Unknown'}</span>
+              </p>
+              <input
+                type="text"
+                value={renameInput}
+                onChange={(e) => setRenameInput(e.target.value)}
+                placeholder="Recording title"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                autoFocus
+              />
+              {renameTarget.autoTitle && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 hover:underline"
+                  onClick={() => setRenameInput(renameTarget.autoTitle)}
+                >
+                  Reset to default ({renameTarget.autoTitle})
+                </button>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <Button variant="outline" onClick={() => { setRenameTarget(null); setRenameInput(''); }} disabled={renaming}>
+                  Cancel
+                </Button>
+                <Button onClick={handleRenameRecording} disabled={renaming || !renameInput.trim()}>
+                  {renaming ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
@@ -785,6 +864,15 @@ const LMSRecordingsManagement = () => {
                           </Button>
                         )}
                         
+                        <Button
+                          onClick={() => { setRenameTarget(recording); setRenameInput(recording.name || ''); }}
+                          size="sm"
+                          variant="outline"
+                          title="Rename recording"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+
                         <Button
                           onClick={() => { setDeleteTarget(recording); setDeleteConfirmInput(''); }}
                           size="sm"

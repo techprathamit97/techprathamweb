@@ -4,6 +4,7 @@ import { connectMongo } from "@/utils/mongodb";
 import { extractPlaybackInfo } from "@/utils/bbbRecordings";
 import { buildMeetingBatchIndex, groupRecordingsByBatch } from "@/utils/matchRecordingsToBatches";
 import { getManualRecordingsByBatch, mergeAndSort } from "@/utils/manualRecordings";
+import { applyRecordingTitles } from "@/utils/recordingTitles";
 const Batch = require("@/models/Batch");
 const ModuleClass = require("@/models/ModuleClass");
 // Registered so .populate('courseId') / .populate('trainerId') work — Mongoose
@@ -264,6 +265,12 @@ export async function GET(req: NextRequest) {
       }
     } catch (e) {
       console.warn('Failed to merge manual recordings (admin):', e);
+    }
+
+    // Apply display titles: "<batchName>-Class-N" default, overridden by any
+    // saved custom title.
+    for (const b of batchesWithRecordings) {
+      b.recordings = await applyRecordingTitles(b.batchName, b.recordings);
     }
 
     const totalMatchedRecordings = batchesWithRecordings.reduce(

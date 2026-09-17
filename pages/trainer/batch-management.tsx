@@ -20,7 +20,8 @@ import {
   ChevronRight,
   RefreshCw,
   Circle,
-  XCircle
+  XCircle,
+  Edit
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -92,6 +93,11 @@ const TrainerBatchManagement = () => {
   // Recordings state
   const [batchRecordings, setBatchRecordings] = useState<BBBRecording[]>([]);
   const [loadingRecordings, setLoadingRecordings] = useState(false);
+
+  // Rename recording state
+  const [renameTarget, setRenameTarget] = useState<any | null>(null);
+  const [renameInput, setRenameInput] = useState('');
+  const [renaming, setRenaming] = useState(false);
   
   // UI state
   const [activeTab, setActiveTab] = useState<'classes' | 'recordings'>('classes');
@@ -1058,6 +1064,40 @@ const TrainerBatchManagement = () => {
       toast.error('Video URL not available for this recording');
     }
   };
+
+  // Save a renamed recording title.
+  const handleRenameRecording = async () => {
+    if (!renameTarget) return;
+    const newTitle = renameInput.trim();
+    if (!newTitle) {
+      toast.error('Title cannot be empty');
+      return;
+    }
+    setRenaming(true);
+    try {
+      const res = await fetch('/api/lms/recordings/title', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordId: renameTarget.recordId,
+          title: newTitle,
+          batchId: selectedBatch?._id,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to rename');
+
+      toast.success('Recording renamed');
+      setRenameTarget(null);
+      setRenameInput('');
+      if (selectedBatch) fetchBatchRecordings(selectedBatch);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to rename recording');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <TrainerLayout>
@@ -1071,6 +1111,47 @@ const TrainerBatchManagement = () => {
 
   return (
     <TrainerLayout>
+      {/* Rename Recording Modal */}
+      {renameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Edit className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Rename Recording</h2>
+            </div>
+            <input
+              type="text"
+              value={renameInput}
+              onChange={(e) => setRenameInput(e.target.value)}
+              placeholder="Recording title"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+              autoFocus
+            />
+            {renameTarget.autoTitle && (
+              <button
+                type="button"
+                className="text-xs text-blue-600 hover:underline"
+                onClick={() => setRenameInput(renameTarget.autoTitle)}
+              >
+                Reset to default ({renameTarget.autoTitle})
+              </button>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => { setRenameTarget(null); setRenameInput(''); }}
+                disabled={renaming}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleRenameRecording} disabled={renaming || !renameInput.trim()}>
+                {renaming ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
@@ -1294,6 +1375,7 @@ const TrainerBatchManagement = () => {
                 recordings={batchRecordings}
                 loading={loadingRecordings}
                 onPlayRecording={handlePlayRecording}
+                onRenameRecording={(rec: any) => { setRenameTarget(rec); setRenameInput(rec.name || ''); }}
                 batchName={selectedBatch.batchName}
               />
             )}
@@ -1589,8 +1671,9 @@ const RecordingsTab: React.FC<{
   recordings: BBBRecording[],
   loading: boolean,
   onPlayRecording: (recording: BBBRecording) => void,
+  onRenameRecording: (recording: BBBRecording) => void,
   batchName: string
-}> = ({ recordings, loading, onPlayRecording, batchName }) => {
+}> = ({ recordings, loading, onPlayRecording, onRenameRecording, batchName }) => {
   if (loading) {
     return (
       <Card>
@@ -1679,15 +1762,25 @@ const RecordingsTab: React.FC<{
               <Card key={recording.recordId} className="border-gray-200 hover:shadow-md transition-shadow">
                 <CardContent className="p-4">
                   <div className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between">
-                      <h3 className="font-semibold text-gray-900 line-clamp-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-semibold text-gray-900 line-clamp-2 flex-1">
                         {recording.name || 'Class Recording'}
                       </h3>
-                      {!recording.published && (
-                        <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
-                          Unpublished
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {!recording.published && (
+                          <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
+                            Unpublished
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => onRenameRecording(recording)}
+                          className="p-1 text-gray-400 hover:text-blue-600"
+                          title="Rename recording"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-2 text-sm text-gray-600">
