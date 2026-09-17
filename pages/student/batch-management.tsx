@@ -1300,6 +1300,7 @@ const StudentBatchManagement = () => {
                 onJoinClass={handleJoinClass}
                 batchName={selectedBatch.batchName}
                 getClassStatus={getClassStatus}
+                nextClassNumber={batchRecordings.length + 1}
               />
             ) : activeTab === 'recordings' ? (
               <StudentRecordingsTab
@@ -1441,8 +1442,18 @@ const StudentClassesTab: React.FC<{
   hasStudentJoinedClass: (classId: string) => boolean,
   onJoinClass: (classItem: ScheduledClass) => void,
   batchName: string,
-  getClassStatus: (classItem: ScheduledClass) => any
-}> = ({ classes, loading, joiningClass, joinedClasses, hasStudentJoinedClass, onJoinClass, batchName, getClassStatus }) => {
+  getClassStatus: (classItem: ScheduledClass) => any,
+  nextClassNumber: number
+}> = ({ classes, loading, joiningClass, joinedClasses, hasStudentJoinedClass, onJoinClass, batchName, getClassStatus, nextClassNumber }) => {
+  // The upcoming (virtual) class title is derived from existing recordings + 1,
+  // so a deleted recording drops the number instead of leaving a gap. Only the
+  // shown text changes, not the underlying class data or join behaviour.
+  const displayTitle = (classItem: ScheduledClass): string => {
+    if (classItem.isVirtual) {
+      return `${batchName} - Class ${nextClassNumber}`;
+    }
+    return classItem.moduleTitle;
+  };
   if (loading) {
     return (
       <Card>
@@ -1502,7 +1513,7 @@ const StudentClassesTab: React.FC<{
                         }`} />
                       )}
                       <h3 className="text-xl font-semibold text-gray-900">
-                        {classItem.moduleTitle}
+                        {displayTitle(classItem)}
                       </h3>
                       <Badge className={statusInfo.color}>
                         {statusInfo.label}

@@ -1368,6 +1368,7 @@ const TrainerBatchManagement = () => {
                 selectedBatch={selectedBatch}
                 batchName={selectedBatch.batchName}
                 getClassStatus={getClassStatus}
+                nextClassNumber={batchRecordings.length + 1}
               />
             ) : (
               // Recordings Tab
@@ -1517,8 +1518,18 @@ const ClassesTab: React.FC<{
   onCreateNextClass: (batch: Batch) => void,
   selectedBatch: Batch,
   batchName: string,
-  getClassStatus: (classItem: ScheduledClass) => any
-}> = ({ classes, loading, joiningClass, onJoinClass, onCreateNextClass, selectedBatch, batchName, getClassStatus }) => {
+  getClassStatus: (classItem: ScheduledClass) => any,
+  nextClassNumber: number
+}> = ({ classes, loading, joiningClass, onJoinClass, onCreateNextClass, selectedBatch, batchName, getClassStatus, nextClassNumber }) => {
+  // Display title for the upcoming (virtual/scheduled) class is derived from the
+  // number of existing recordings + 1, so a deleted recording drops the number
+  // instead of leaving a gap. Only affects the shown text, not the data.
+  const displayTitle = (classItem: ScheduledClass): string => {
+    if (classItem.isVirtual) {
+      return `${batchName} - Class ${nextClassNumber}`;
+    }
+    return classItem.moduleTitle;
+  };
   if (loading) {
     return (
       <Card>
@@ -1588,7 +1599,7 @@ const ClassesTab: React.FC<{
                         }`} />
                       )}
                       <h3 className="text-xl font-semibold text-gray-900">
-                        {classItem.moduleTitle}
+                        {displayTitle(classItem)}
                       </h3>
                       <Badge className={statusInfo.color}>
                         {statusInfo.label}
