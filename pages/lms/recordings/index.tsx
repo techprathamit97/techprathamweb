@@ -79,6 +79,7 @@ const LMSRecordingsManagement = () => {
     batchId: '',
     title: '',
     classDate: '',
+    durationMin: '',
     platform: 'other',
     file: null as File | null,
   });
@@ -127,7 +128,7 @@ const LMSRecordingsManagement = () => {
 
   // Upload a manual (non-BBB) recording: presign → PUT to S3 → save metadata.
   const handleUploadRecording = async () => {
-    const { batchId, title, classDate, platform, file } = uploadForm;
+    const { batchId, title, classDate, durationMin, platform, file } = uploadForm;
     if (!batchId || !title.trim() || !classDate || !file) {
       toast.error('Batch, title, class date and a video file are required');
       return;
@@ -136,6 +137,16 @@ const LMSRecordingsManagement = () => {
       toast.error('Please select a video file');
       return;
     }
+
+    // The datetime-local value ("2026-09-14T12:30") is wall-clock with no zone.
+    // The admin picks this in IST, so anchor it to IST (+05:30) as an explicit
+    // ISO instant. Stored/displayed back in IST, it shows the exact time picked
+    // regardless of server timezone.
+    const classDateIST = `${classDate}:00+05:30`;
+
+    const durationSec = durationMin && !Number.isNaN(parseInt(durationMin))
+      ? Math.max(0, parseInt(durationMin)) * 60
+      : 0;
 
     setUploading(true);
     setUploadProgress(0);
@@ -188,7 +199,8 @@ const LMSRecordingsManagement = () => {
         body: JSON.stringify({
           batchId,
           title: title.trim(),
-          classDate,
+          classDate: classDateIST,
+          durationSec,
           platform,
           s3Key: presign.s3Key,
           fileSize: file.size,
@@ -201,7 +213,7 @@ const LMSRecordingsManagement = () => {
 
       toast.success('Recording uploaded successfully');
       setShowUpload(false);
-      setUploadForm({ batchId: '', title: '', classDate: '', platform: 'other', file: null });
+      setUploadForm({ batchId: '', title: '', classDate: '', durationMin: '', platform: 'other', file: null });
       fetchAllRecordings();
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -483,14 +495,26 @@ const LMSRecordingsManagement = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Class Date *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Class Date &amp; Time *</label>
                   <input
                     type="datetime-local"
                     value={uploadForm.classDate}
                     onChange={(e) => setUploadForm(f => ({ ...f, classDate: e.target.value }))}
                     className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                    disabled={uploading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={uploadForm.durationMin}
+                    onChange={(e) => setUploadForm(f => ({ ...f, durationMin: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900"
+                    placeholder="e.g. 60"
                     disabled={uploading}
                   />
                 </div>
