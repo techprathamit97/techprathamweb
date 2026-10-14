@@ -373,9 +373,9 @@ const BatchesManagement = () => {
       } else {
         throw new Error(data.message || 'Failed to fetch batches');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch batches:', error);
-      toast.error('Failed to fetch batches');
+      toast.error('Failed to fetch batches: ' + error.message);
     } finally {
       setIsLoading(false);
     }

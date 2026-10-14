@@ -248,9 +248,9 @@ const TrainersManagement = () => {
       } else {
         throw new Error(data.message || 'Failed to fetch trainers');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch trainers:', error);
-      toast.error('Failed to fetch trainers');
+      toast.error('Failed to fetch trainers: ' + error.message);
     } finally {
       setIsLoading(false);
     }

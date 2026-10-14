@@ -46,8 +46,8 @@ export async function authenticatedFetch(
   
   // Check if we have valid auth headers
   if (!authHeaders['Authorization']) {
-    // Redirect to login if no valid session
-    if (typeof window !== 'undefined') {
+    // Only redirect if we're not already on the login page
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
       window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
     }
     throw new Error('Authentication required');
@@ -64,7 +64,8 @@ export async function authenticatedFetch(
   // Handle authentication errors
   if (response.status === 401) {
     clearSession();
-    if (typeof window !== 'undefined') {
+    // Only redirect if we're not already on the login page
+    if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
       window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname);
     }
     throw new Error('Authentication failed');
@@ -126,7 +127,13 @@ export function hasRole(role: 'admin' | 'student' | 'trainer'): boolean {
  * Check if current user is admin
  */
 export function isAdmin(): boolean {
-  return hasRole('admin');
+  const session = getStoredSession();
+  
+  if (!session || isSessionExpired(session)) {
+    return false;
+  }
+  
+  return session.role === 'admin';
 }
 
 /**
@@ -147,11 +154,25 @@ export function isStudent(): boolean {
  * Get current user info
  */
 export function getCurrentUser(): ClientSession | null {
-  const session = getStoredSession();
-  if (!session || isSessionExpired(session)) {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const session = getStoredSession();
+    
+    if (!session) {
+      return null;
+    }
+    
+    if (isSessionExpired(session)) {
+      clearSession();
+      return null;
+    }
+    
+    return session as ClientSession;
+  } catch (error) {
+    console.error('getCurrentUser - Error:', error);
     return null;
   }
-  return session as ClientSession;
 }
 
 /**
@@ -159,7 +180,7 @@ export function getCurrentUser(): ClientSession | null {
  */
 export function logout(redirectTo: string = '/login'): void {
   clearSession();
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
     window.location.href = redirectTo;
   }
 }

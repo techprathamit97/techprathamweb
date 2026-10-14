@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { authenticatedFetch, authGet, authPost, authPut, authDelete, getCurrentUser, isAdmin, logout } from '@/lib/clientAuth';
 import LMSLayout from '@/src/lms/common/LMSLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,26 @@ interface Course {
 }
 
 const CoursesManagement = () => {
+
+  // Check authentication first
+  const user = getCurrentUser();
+  
+  React.useEffect(() => {
+    if (!user) {
+      window.location.href = '/login';
+      return;
+    }
+    if (!isAdmin()) {
+      toast.error('Access denied: Admin privileges required');
+      logout();
+      return;
+    }
+  }, [user]);
+
+  // Don't render if not authenticated
+  if (!user || !isAdmin()) {
+    return <div className="p-6 text-center text-white">Checking authentication...</div>;
+  }
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');

@@ -116,9 +116,9 @@ const StudentsManagement = () => {
       } else {
         throw new Error(data.error || 'Failed to fetch students');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch students:', error);
-      toast.error('Failed to fetch students');
+      toast.error('Failed to fetch students: ' + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -142,7 +142,7 @@ const StudentsManagement = () => {
           }))
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch batches:', error);
     }
   };
@@ -166,7 +166,7 @@ const StudentsManagement = () => {
           }))
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to fetch batches:', err);
     } finally {
       setLoadingBatches(false);

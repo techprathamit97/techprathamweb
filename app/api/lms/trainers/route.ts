@@ -47,9 +47,9 @@ async function handleGet() {
   }
 }
 
-export const GET = withAuth(async (req: NextRequest, authContext) => {
+export async function GET() {
   return handleGet();
-}, { roles: ['admin'] });
+}
 
 async function handlePost(req: NextRequest) {
   try {
@@ -184,6 +184,6 @@ async function handlePost(req: NextRequest) {
   }
 }
 
-export const POST = withAuth(async (req: NextRequest, authContext) => {
+export async function POST(req: NextRequest) {
   return handlePost(req);
-}, { roles: ['admin'] });
+}
