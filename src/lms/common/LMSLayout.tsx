@@ -96,9 +96,12 @@ const LMSLayout: React.FC<LMSLayoutProps> = ({ children }) => {
         />
       )}
 
-      {/* Sidebar - hidden on mobile by default */}
+      {/* Sidebar - drawer on mobile, sticky full-height column on desktop so
+          its footer (Back to Admin / Sign Out) stays pinned to the bottom of
+          the viewport while the page scrolls. */}
       <div className={`
-        fixed lg:relative z-50 h-screen transition-transform duration-300 ease-in-out
+        fixed inset-y-0 left-0 lg:sticky lg:top-0 lg:self-start z-50 h-[100dvh] lg:h-screen
+        transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <LMSSidebar onClose={() => setSidebarOpen(false)} />

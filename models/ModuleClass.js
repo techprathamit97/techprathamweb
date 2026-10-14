@@ -210,6 +210,17 @@ const moduleClassSchema = new mongoose.Schema({
     },
     sentAt: Date,
     recipients: [String] // Array of student IDs or emails
+  }],
+
+  // Admin entries for audit trail (SAFE: Optional field, won't break existing data)
+  adminEntries: [{
+    adminName: { type: String },
+    joinedAt: { type: Date, default: Date.now },
+    purpose: { 
+      type: String, 
+      enum: ['attendance-monitoring', 'technical-support', 'quality-check', 'other'],
+      default: 'attendance-monitoring' 
+    }
   }]
 }, {
   timestamps: true,

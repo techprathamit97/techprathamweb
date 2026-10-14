@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
+import { withAuth } from '@/lib/auth';
 const Student = require('@/models/Student');
 const Assignment = require('@/models/Assignment');
 const Submission = require('@/models/Submission');
 const Batch = require('@/models/Batch');
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest, authContext: any) {
   try {
     await connectMongo();
 
@@ -16,6 +17,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { error: 'Student ID is required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is the same student or admin
+    if (authContext.user.role === 'student' && authContext.user.studentId !== studentId) {
+      return NextResponse.json(
+        { error: 'You can only access your own assignments' },
+        { status: 403 }
       );
     }
 
@@ -130,8 +139,10 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export const GET = withAuth(handleGet, { roles: ['admin', 'student'] });
+
 // Submit assignment
-export async function POST(req: NextRequest) {
+async function handlePost(req: NextRequest, authContext: any) {
   try {
     await connectMongo();
 
@@ -141,6 +152,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Student ID, assignment ID, and file URL are required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is the same student or admin
+    if (authContext.user.role === 'student' && authContext.user.studentId !== studentId) {
+      return NextResponse.json(
+        { error: 'You can only submit assignments for yourself' },
+        { status: 403 }
       );
     }
 
@@ -227,3 +246,5 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+export const POST = withAuth(handlePost, { roles: ['admin', 'student'] });

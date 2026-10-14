@@ -17,7 +17,8 @@ import {
   AlertCircle,
   CheckCircle,
   Play,
-  Edit
+  Edit,
+  Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,10 +36,24 @@ interface BBBRecording {
   durationText: string;
   dateText: string;
   participants: string;
+  participantDetails: ParticipantDetail[];
   size: string;
   sizeText: string;
   canDownload: boolean;
   status: string;
+}
+
+interface ParticipantDetail {
+  name: string;
+  email: string;
+  studentId: string;
+  phone: string;
+  joinedAt: string;
+  leftAt: string;
+  duration: string;
+  status: string;
+  isPlaceholder?: boolean;
+  note?: string;
 }
 
 interface BatchInfo {
@@ -71,6 +86,15 @@ const LMSRecordingsManagement = () => {
   const [renameInput, setRenameInput] = useState('');
   const [renaming, setRenaming] = useState(false);
 
+  // Participant details modal state
+  const [participantModalOpen, setParticipantModalOpen] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<BBBRecording | null>(null);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
+
+  // Render the list in pages so a large list doesn't render all at once.
+  const PAGE_SIZE = 20;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
   // Manual (non-BBB) recording upload state
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -83,11 +107,65 @@ const LMSRecordingsManagement = () => {
     platform: 'other',
     file: null as File | null,
   });
+  // Handle show participant details
+  const handleShowParticipants = async (recording: BBBRecording) => {
+   
+
+    setSelectedRecording(recording);
+    setParticipantModalOpen(true);
+
+    // If we don't have participant details already, fetch them
+    if (!recording.participantDetails || recording.participantDetails.length === 0) {
+      const batchId = (recording as any).batchInfo?.batchId;
+      if (batchId) {
+        setLoadingParticipants(true);
+        try {
+          const qs = `batchId=${encodeURIComponent(batchId)}&meetingId=${encodeURIComponent(recording.meetingId)}`;
+
+          const applyParticipants = (participants: ParticipantDetail[]) => {
+            // Cache on the list item so reopening the modal is instant.
+            setAllRecordings(prev => prev.map(r =>
+              r.recordId === recording.recordId ? { ...r, participantDetails: participants } : r
+            ));
+            setSelectedRecording(prev => prev && prev.recordId === recording.recordId ? {
+              ...prev,
+              participantDetails: participants
+            } : prev);
+          };
+
+          // 1. Archived BBB Learning Dashboard export (actual attendance).
+          try {
+            const response = await fetch(`/api/lms/recordings/participants?recordingId=${encodeURIComponent(recording.recordId)}&${qs}`);
+            const data = await response.json();
+            if (response.ok && data.success && data.participants?.length > 0) {
+              applyParticipants(data.participants);
+              return;
+            }
+          } catch {
+            // fall through to the live lookup
+          }
+
+          // 2. Fallback: BBB analytics / live meeting / class attendance.
+          const primaryRes = await fetch(`/api/lms/recordings?participantsFor=${encodeURIComponent(recording.recordId)}&${qs}`);
+          const primary = await primaryRes.json();
+          if (primaryRes.ok && primary.success && primary.participants?.length > 0) {
+            applyParticipants(primary.participants);
+          }
+        } catch (error) {
+          console.error('❌ Failed to fetch participant details:', error);
+          toast.error('Failed to load participant details');
+        } finally {
+          setLoadingParticipants(false);
+        }
+      }
+    }
+  };
+
   // Fetch all recordings from all batches
   const fetchAllRecordings = async () => {
     try {
       setIsLoading(true);
-      console.log('🎬 Fetching all recordings for LMS admin...');
+     
       
       const res = await fetch('/api/lms/recordings');
       const data = await res.json();
@@ -99,21 +177,25 @@ const LMSRecordingsManagement = () => {
         const allRecs: BBBRecording[] = [];
         data.batches?.forEach((batch: BatchInfo) => {
           batch.recordings?.forEach((recording: BBBRecording) => {
-            allRecs.push({
+            const enhancedRecording = {
               ...recording,
               batchInfo: {
                 batchId: batch._id,
                 batchName: batch.batchName,
                 courseName: batch.courseName
               }
-            } as any);
+            } as any;
+            
+        
+            
+            allRecs.push(enhancedRecording);
           });
         });
         
         setAllRecordings(allRecs);
         setFilteredRecordings(allRecs);
         
-        console.log(`✅ Loaded ${allRecs.length} recordings from ${data.batches?.length || 0} batches`);
+      
         toast.success(`Loaded ${allRecs.length} recordings from ${data.batches?.length || 0} batches`);
       } else {
         throw new Error(data.error || 'Failed to fetch recordings');
@@ -264,6 +346,11 @@ const LMSRecordingsManagement = () => {
   useEffect(() => {
     filterRecordings();
   }, [selectedBatch, searchTerm, filterStatus, allRecordings]);
+
+  // Start from the first page whenever the filters change.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [selectedBatch, searchTerm, filterStatus]);
   // Handle recording deletion
   // Confirmed delete. Called only after the admin types the exact batch name.
   const handleDeleteRecording = async () => {
@@ -365,7 +452,7 @@ const LMSRecordingsManagement = () => {
       return;
     }
 
-    console.log('🔽 Starting recording download:', recording.recordId);
+   
 
     // Manual (uploaded) recordings download via the manual download API, which
     // presigns a GetObject for the stored S3 key.
@@ -669,6 +756,274 @@ const LMSRecordingsManagement = () => {
           </div>
         )}
 
+        {/* Participant Details Modal */}
+        {participantModalOpen && selectedRecording && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[80vh] flex flex-col">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <Eye className="h-6 w-6 text-blue-600" />
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Participant Details</h2>
+                    <p className="text-sm text-gray-600 mt-1">
+                      Recording: <span className="font-medium">{selectedRecording.name}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Meeting ID: {selectedRecording.meetingId} | 
+                      Batch: {(selectedRecording as any).batchInfo?.batchName || 'Unknown'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setParticipantModalOpen(false);
+                    setSelectedRecording(null);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <span className="text-xl">×</span>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingParticipants && !((selectedRecording.participantDetails?.length ?? 0) > 0) ? (
+                  <div className="text-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
+                    <p className="text-gray-600">Loading participant details...</p>
+                  </div>
+                ) : selectedRecording.participantDetails && selectedRecording.participantDetails.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Users className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-blue-900">
+                          Total Participants: {selectedRecording.participantDetails.length}
+                        </span>
+                        {selectedRecording.participantDetails.some((p: any) => p.isLiveData) && (
+                          <Badge className="bg-green-100 text-green-800 text-xs">
+                            Live Data
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <span className="text-blue-700 font-medium">Present: </span>
+                          <span className="text-blue-900">
+                            {selectedRecording.participantDetails.filter(p => p.status === 'present').length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Moderators: </span>
+                          <span className="text-blue-900">
+                            {selectedRecording.participantDetails.filter((p: any) => p.role === 'MODERATOR').length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Students: </span>
+                          <span className="text-blue-900">
+                            {selectedRecording.participantDetails.filter((p: any) => p.role !== 'MODERATOR').length}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-blue-700 font-medium">Recording Date: </span>
+                          <span className="text-blue-900">{selectedRecording.dateText}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Participants Table */}
+                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                      <div className="bg-gray-50 px-6 py-3 border-b border-gray-200">
+                        <h3 className="text-lg font-semibold text-gray-900">Participant List</h3>
+                      </div>
+                      
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Student/Role
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Contact
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Timing
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Duration
+                              </th>
+                              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                Status
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {selectedRecording.participantDetails.map((participant, index) => (
+                              <tr key={index} className={`hover:bg-gray-50 ${
+                                (participant as any).isPlaceholder ? 'bg-yellow-50' : ''
+                              }`}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <div className="flex-shrink-0 h-10 w-10">
+                                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                                        (participant as any).isPlaceholder
+                                          ? 'bg-yellow-100'
+                                          : (participant as any).role === 'MODERATOR' 
+                                          ? 'bg-purple-100' 
+                                          : 'bg-blue-100'
+                                      }`}>
+                                        <span className={`text-sm font-medium ${
+                                          (participant as any).isPlaceholder
+                                            ? 'text-yellow-600'
+                                            : (participant as any).role === 'MODERATOR' 
+                                            ? 'text-purple-600' 
+                                            : 'text-blue-600'
+                                        }`}>
+                                          {participant.name.charAt(0).toUpperCase()}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="ml-4">
+                                      <div className="text-sm font-medium text-gray-900">
+                                        {participant.name}
+                                        {(participant as any).isPresenter && (
+                                          <Badge className="ml-2 bg-yellow-100 text-yellow-800 text-xs">
+                                            Presenter
+                                          </Badge>
+                                        )}
+                                        {(participant as any).isPlaceholder && (
+                                          <Badge className="ml-2 bg-orange-100 text-orange-800 text-xs">
+                                            Estimated
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="text-sm text-gray-500">
+                                        {(participant as any).role === 'MODERATOR' ? (
+                                          <span className="text-purple-600 font-medium">
+                                            {(participant as any).role} | ID: {participant.studentId}
+                                          </span>
+                                        ) : (
+                                          <span>ID: {participant.studentId}</span>
+                                        )}
+                                        {(participant as any).note && (
+                                          <div className="text-xs text-orange-600 mt-1">
+                                            {(participant as any).note}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="text-sm text-gray-900">{participant.email}</div>
+                                  <div className="text-sm text-gray-500">{participant.phone}</div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <div>
+                                    <div className="text-green-600">
+                                      <strong>Joined:</strong> {participant.joinedAt}
+                                    </div>
+                                    {participant.leftAt !== 'N/A' && (
+                                      <div className="text-red-600">
+                                        <strong>Left:</strong> {participant.leftAt}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {participant.duration}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    (participant as any).role === 'MODERATOR'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : participant.status === 'present' 
+                                      ? 'bg-green-100 text-green-800'
+                                      : participant.status === 'late'
+                                      ? 'bg-yellow-100 text-yellow-800'
+                                      : participant.status === 'left-early'
+                                      ? 'bg-orange-100 text-orange-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {(participant as any).role === 'MODERATOR' 
+                                      ? 'Moderator'
+                                      : participant.status.charAt(0).toUpperCase() + participant.status.slice(1).replace('-', ' ')
+                                    }
+                                  </span>
+                                  {(participant as any).isLiveData && (
+                                    <Badge className="ml-1 bg-blue-100 text-blue-800 text-xs">
+                                      Live
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Participant Details Available</h3>
+                    <p className="text-gray-500 mb-4">
+                      Detailed participant information is not available for this recording.
+                    </p>
+                    <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-4 max-w-md mx-auto">
+                      <p><strong>Possible reasons:</strong></p>
+                      <ul className="mt-2 list-disc list-inside space-y-1">
+                        <li>Recording was created before attendance tracking was enabled</li>
+                        <li>This is a manually uploaded recording</li>
+                        <li>No students joined this session</li>
+                        <li>Attendance data was not properly recorded</li>
+                      </ul>
+                      
+                      {/* Debug Information */}
+                      <div className="mt-4 p-3 bg-gray-100 rounded text-xs">
+                        <p><strong>Debug Info:</strong></p>
+                        <p>Recording ID: {selectedRecording.recordId}</p>
+                        <p>Meeting ID: {selectedRecording.meetingId}</p>
+                        <p>Batch: {(selectedRecording as any).batchInfo?.batchName}</p>
+                        <p>Participants Count: {selectedRecording.participants}</p>
+                        
+                        <div className="mt-2 p-2 bg-blue-100 rounded">
+                          <p className="text-blue-800 font-medium text-sm">💡 Suggestion:</p>
+                          <p className="text-blue-700 text-xs mt-1">
+                            To show detailed participant information in future recordings, ensure that:
+                          </p>
+                          <ul className="text-blue-600 text-xs mt-1 list-disc list-inside space-y-0.5">
+                            <li>Students join through the LMS (not directly through BBB)</li>
+                            <li>Attendance tracking is enabled in class settings</li>
+                            <li>Students are properly enrolled in the batch</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end gap-3 p-6 border-t border-gray-200">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setParticipantModalOpen(false);
+                    setSelectedRecording(null);
+                  }}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
@@ -817,7 +1172,7 @@ const LMSRecordingsManagement = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredRecordings.map((recording: any) => (
+                {filteredRecordings.slice(0, visibleCount).map((recording: any) => (
                   <div
                     key={recording.recordId}
                     className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
@@ -859,8 +1214,20 @@ const LMSRecordingsManagement = () => {
                         </div>
 
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <span><strong>Course:</strong> {recording.batchInfo?.courseName || 'N/A'}</span>
-                          <span><strong>Participants:</strong> {recording.participants}</span>
+                          <span><strong>Course:</strong> {(recording as any).batchInfo?.courseName || 'N/A'}</span>
+                          <span className="flex items-center gap-2">
+                            <strong>Participants:</strong> 
+                            <span>{recording.participants}</span>
+                            {parseInt(recording.participants) > 0 && (
+                              <button
+                                onClick={() => handleShowParticipants(recording)}
+                                className="ml-1 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                                title="View participant details"
+                              >
+                                <Eye className="h-4 w-4 text-blue-500 hover:text-blue-700" />
+                              </button>
+                            )}
+                          </span>
                           <span><strong>Meeting ID:</strong> {recording.meetingId}</span>
                         </div>
                       </div>
@@ -913,6 +1280,17 @@ const LMSRecordingsManagement = () => {
                     </div>
                   </div>
                 ))}
+
+                {visibleCount < filteredRecordings.length && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+                    >
+                      Load more ({filteredRecordings.length - visibleCount} remaining)
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

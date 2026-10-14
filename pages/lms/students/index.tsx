@@ -84,10 +84,12 @@ const StudentsManagement = () => {
 
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
+  const [batches, setBatches] = useState<AvailableBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [batchFilter, setBatchFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -119,6 +121,29 @@ const StudentsManagement = () => {
       toast.error('Failed to fetch students');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // ─── Fetch all available batches ──────────────────────────────────────────
+  const fetchBatches = async () => {
+    try {
+      const res = await fetch('/api/lms/batches');
+      const data = await res.json();
+      if (res.ok) {
+        const batchesData = Array.isArray(data) ? data : [];
+        setBatches(
+          batchesData.map((b: any) => ({
+            _id: b._id,
+            batchName: b.batchName,
+            courseId: b.courseId,
+            courseName: b.course_title || b.courseName || 'N/A',
+            studentCount: b.studentCount || 0,
+            capacity: b.capacity || 30,
+          }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to fetch batches:', error);
     }
   };
 
@@ -227,23 +252,51 @@ const StudentsManagement = () => {
 
   // ─── Filtering ────────────────────────────────────────────────────────────
   const filterStudents = () => {
-    let filtered = students;
-    if (searchTerm) {
+    let filtered = [...students];
+    
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (s) =>
-          s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          s.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          s.studentId.toLowerCase().includes(searchTerm.toLowerCase())
+          s.name.toLowerCase().includes(searchLower) ||
+          s.email.toLowerCase().includes(searchLower) ||
+          s.studentId.toLowerCase().includes(searchLower) ||
+          s.phone?.toLowerCase().includes(searchLower) ||
+          s.batches.some(b => 
+            b.batchName.toLowerCase().includes(searchLower) ||
+            b.courseName.toLowerCase().includes(searchLower)
+          )
       );
     }
+    
+    // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter((s) => (statusFilter === 'active' ? s.isActive : !s.isActive));
     }
-    if (categoryFilter !== 'all') {
+    
+    // Filter by batch
+    if (batchFilter !== 'all') {
       filtered = filtered.filter((s) =>
-        s.batches.some((b) => b.courseName.toLowerCase().includes(categoryFilter.toLowerCase()))
+        s.batches.some((b) => b.batchId === batchFilter)
       );
     }
+    
+    // Sort students
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'email':
+          return a.email.localeCompare(b.email);
+        case 'oldest':
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case 'newest':
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+    
     setFilteredStudents(filtered);
   };
 
@@ -252,20 +305,18 @@ const StudentsManagement = () => {
   const stats = {
     totalStudents: students.length,
     activeStudents: students.filter((s) => s.isActive).length,
-    completedStudents: students.filter((s) => s.batches.length > 0).length,
-    totalRevenue: 0,
+    enrolledStudents: students.filter((s) => s.batches.length > 0).length,
+    unenrolledStudents: students.filter((s) => s.batches.length === 0).length,
   };
-
-  const categories = [
-    ...new Set(students.flatMap((s) => s.batches.map((b) => b.courseName)).filter(Boolean)),
-  ];
 
   useEffect(() => {
     fetchStudents();
+    fetchBatches();
   }, []);
+  
   useEffect(() => {
     filterStudents();
-  }, [searchTerm, statusFilter, categoryFilter, students]);
+  }, [searchTerm, statusFilter, batchFilter, sortBy, students]);
 
   return (
     <LMSLayout>
@@ -288,9 +339,9 @@ const StudentsManagement = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {[
             { label: 'Total Students', value: stats.totalStudents, icon: Users, color: 'text-blue-400' },
-            { label: 'Active Students', value: stats.activeStudents, icon: BookOpen, color: 'text-green-400' },
-            { label: 'Enrolled in Batches', value: stats.completedStudents, icon: Award, color: 'text-yellow-400' },
-            { label: 'Revenue', value: `₹${stats.totalRevenue.toLocaleString()}`, icon: DollarSign, color: 'text-purple-400' },
+            { label: 'Active Students', value: stats.activeStudents, icon: CheckCircle, color: 'text-green-400' },
+            { label: 'Enrolled in Batches', value: stats.enrolledStudents, icon: Award, color: 'text-yellow-400' },
+            { label: 'Not Enrolled', value: stats.unenrolledStudents, icon: UserPlus, color: 'text-purple-400' },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label} className="bg-gray-800 border-gray-700">
               <CardContent className="p-4">
@@ -306,42 +357,87 @@ const StudentsManagement = () => {
           ))}
         </div>
 
-        {/* Filters */}
+        {/* Search and Filters */}
         <Card className="bg-gray-800 border-gray-700">
           <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex items-center gap-2">
-                <Search className="h-4 w-4 text-gray-400" />
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Search students..."
+                  placeholder="Search students by name, email, ID, phone, or batch..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-gray-700 border-gray-600 text-white w-64"
+                  className="pl-10 bg-gray-700 border-gray-600 text-white placeholder-gray-400 focus:border-blue-500"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white w-40">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-700 border-gray-600">
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="bg-gray-700 border-gray-600 text-white w-40">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-700 border-gray-600">
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              
+              {/* Filters Row */}
+              <div className="flex flex-wrap gap-3">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-40 bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Select value={batchFilter} onValueChange={setBatchFilter}>
+                  <SelectTrigger className="w-48 bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Filter by Batch" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="all">All Batches</SelectItem>
+                    {batches.map((batch) => (
+                      <SelectItem key={batch._id} value={batch._id}>
+                        {batch.batchName} - {batch.courseName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-40 bg-gray-700 border-gray-600 text-white">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-700 border-gray-600">
+                    <SelectItem value="newest">Newest First</SelectItem>
+                    <SelectItem value="oldest">Oldest First</SelectItem>
+                    <SelectItem value="name">Name A-Z</SelectItem>
+                    <SelectItem value="email">Email A-Z</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Results info and Clear filters */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-sm text-gray-400">
+              <span>
+                Showing {filteredStudents.length} of {students.length} students
+                {searchTerm && (
+                  <span className="text-blue-400 ml-2">
+                    for "{searchTerm}"
+                  </span>
+                )}
+              </span>
+              
+              {(searchTerm || statusFilter !== 'all' || batchFilter !== 'all' || sortBy !== 'newest') && (
+                <button
+                  type="button"
+                  className="text-blue-400 hover:underline"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setStatusFilter('all');
+                    setBatchFilter('all');
+                    setSortBy('newest');
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -353,9 +449,32 @@ const StudentsManagement = () => {
           </div>
         ) : filteredStudents.length === 0 ? (
           <div className="text-center py-8">
-            <UserPlus className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-400 text-lg">No students found</p>
-            <p className="text-gray-500 text-sm">Add your first student to get started</p>
+            {searchTerm || statusFilter !== 'all' || batchFilter !== 'all' ? (
+              <div className="space-y-3">
+                <UserPlus className="h-16 w-16 text-gray-600 mx-auto" />
+                <p className="text-gray-400 text-lg">No students found matching your filters</p>
+                <p className="text-gray-500 text-sm">Try adjusting your search criteria or clearing filters</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setStatusFilter('all');
+                    setBatchFilter('all');
+                    setSortBy('newest');
+                  }}
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  Clear all filters
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <UserPlus className="h-16 w-16 text-gray-600 mx-auto" />
+                <p className="text-gray-400 text-lg">No students found</p>
+                <p className="text-gray-500 text-sm">Add your first student to get started</p>
+              </div>
+            )}
           </div>
         ) : (
           <Card className="bg-gray-800 border-gray-700">
@@ -382,14 +501,31 @@ const StudentsManagement = () => {
                         </td>
                         <td className="p-4">
                           {student.batches.length > 0 ? (
-                            student.batches.map((b, idx) => (
-                              <div key={idx}>
-                                <p className="text-white font-medium">{b.courseName}</p>
-                                <p className="text-gray-400 text-sm">{b.batchName}</p>
-                              </div>
-                            ))
+                            <div className="space-y-2">
+                              {student.batches.map((b, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <Badge 
+                                    className="bg-blue-600 text-xs"
+                                    title={`Course: ${b.courseName}`}
+                                  >
+                                    {b.batchName}
+                                  </Badge>
+                                  <span className="text-gray-400 text-xs">
+                                    {b.courseName}
+                                  </span>
+                                </div>
+                              ))}
+                              {student.batches.length > 1 && (
+                                <p className="text-gray-500 text-xs">
+                                  Enrolled in {student.batches.length} batches
+                                </p>
+                              )}
+                            </div>
                           ) : (
-                            <p className="text-gray-400">Not enrolled in any batch</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-gray-600 text-xs">Not Enrolled</Badge>
+                              <span className="text-gray-500 text-xs">No active batch</span>
+                            </div>
                           )}
                         </td>
                         <td className="p-4">

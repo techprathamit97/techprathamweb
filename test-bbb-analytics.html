@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test BBB Analytics Access</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; }
+        pre { background: #f8f9fa; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>TechPratham BBB Analytics Test</h1>
+    
+    <div class="test-section">
+        <h3>Test 1: Debug API Endpoint</h3>
+        <p>This tests our custom debug endpoint to check BBB Learning Analytics access.</p>
+        <input type="text" id="recordId" placeholder="Enter Record ID (e.g., 837e699dba1a...)" style="width: 400px;">
+        <br><br>
+        <button onclick="testDebugAPI()">Test Debug API</button>
+        <div id="debugResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 2: Participant API Endpoint</h3>
+        <p>This tests the main participant details API used by the recording page.</p>
+        <input type="text" id="participantRecordId" placeholder="Record ID" style="width: 200px;">
+        <input type="text" id="batchId" placeholder="Batch ID" style="width: 200px;">
+        <input type="text" id="meetingId" placeholder="Meeting ID" style="width: 200px;">
+        <br><br>
+        <button onclick="testParticipantAPI()">Test Participant API</button>
+        <div id="participantResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Test 3: Direct BBB Learning Analytics</h3>
+        <p>This tests direct access to BBB Learning Analytics URL (may fail due to CORS).</p>
+        <input type="text" id="directRecordId" placeholder="Record ID" style="width: 200px;">
+        <input type="text" id="internalMeetingId" placeholder="Internal Meeting ID" style="width: 200px;">
+        <br><br>
+        <button onclick="testDirectAccess()">Test Direct Access</button>
+        <div id="directResult"></div>
+    </div>
+
+    <script>
+        async function testDebugAPI() {
+            const recordId = document.getElementById('recordId').value;
+            if (!recordId) {
+                alert('Please enter a Record ID');
+                return;
+            }
+
+            const resultDiv = document.getElementById('debugResult');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+
+            try {
+                const response = await fetch(`/api/debug/bbb-analytics?recordId=${encodeURIComponent(recordId)}`);
+                const data = await response.json();
+                
+                resultDiv.className = response.ok ? 'success' : 'error';
+                resultDiv.innerHTML = `
+                    <h4>Debug API Result (${response.status})</h4>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `<h4>Error</h4><p>${error.message}</p>`;
+            }
+        }
+
+        async function testParticipantAPI() {
+            const recordId = document.getElementById('participantRecordId').value;
+            const batchId = document.getElementById('batchId').value;
+            const meetingId = document.getElementById('meetingId').value;
+
+            if (!recordId || !batchId || !meetingId) {
+                alert('Please enter Record ID, Batch ID, and Meeting ID');
+                return;
+            }
+
+            const resultDiv = document.getElementById('participantResult');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+
+            try {
+                const url = `/api/lms/recordings/participants?recordingId=${encodeURIComponent(recordId)}&batchId=${encodeURIComponent(batchId)}&meetingId=${encodeURIComponent(meetingId)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                resultDiv.className = response.ok ? 'success' : 'error';
+                resultDiv.innerHTML = `
+                    <h4>Participant API Result (${response.status})</h4>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `<h4>Error</h4><p>${error.message}</p>`;
+            }
+        }
+
+        async function testDirectAccess() {
+            const recordId = document.getElementById('directRecordId').value;
+            const internalMeetingId = document.getElementById('internalMeetingId').value;
+
+            if (!recordId || !internalMeetingId) {
+                alert('Please enter Record ID and Internal Meeting ID');
+                return;
+            }
+
+            const resultDiv = document.getElementById('directResult');
+            resultDiv.innerHTML = '<p>Testing...</p>';
+
+            try {
+                const url = `https://class.techpratham.com/learning-analytics-dashboard/${recordId}/${internalMeetingId}/learning_dashboard_data.json`;
+                const response = await fetch(url);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.className = 'success';
+                    resultDiv.innerHTML = `
+                        <h4>Direct Access Result (${response.status})</h4>
+                        <p><strong>Analytics URL:</strong> ${url}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    resultDiv.className = 'error';
+                    resultDiv.innerHTML = `
+                        <h4>Direct Access Failed (${response.status})</h4>
+                        <p><strong>URL:</strong> ${url}</p>
+                        <p><strong>Error:</strong> ${errorText}</p>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.className = 'error';
+                resultDiv.innerHTML = `
+                    <h4>Direct Access Error</h4>
+                    <p><strong>URL:</strong> https://class.techpratham.com/learning-analytics-dashboard/${recordId}/${internalMeetingId}/learning_dashboard_data.json</p>
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p>This is likely due to CORS restrictions. The server-side API should work.</p>
+                `;
+            }
+        }
+
+        // Pre-fill with example values
+        document.getElementById('recordId').value = '837e699dba1a1d42cd62e9189c39b6f974e6d802-1791809925594';
+        document.getElementById('participantRecordId').value = '837e699dba1a1d42cd62e9189c39b6f974e6d802-1791809925594';
+        document.getElementById('batchId').value = '6accd36a1226d2cb08ec340e';
+        document.getElementById('meetingId').value = 'class-6accd36a1226d2cb08ec340e';
+        document.getElementById('directRecordId').value = '837e699dba1a1d42cd62e9189c39b6f974e6d802-1791809925594';
+        document.getElementById('internalMeetingId').value = '195jbjjxj7hp';
+    </script>
+</body>
+</html>

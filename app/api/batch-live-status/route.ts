@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 import { connectMongo } from '@/utils/mongodb';
 import { classifyMeetingState } from '@/utils/bbbMeetingState';
 const ModuleClass = require('@/models/ModuleClass');
 
-/**
- * Authoritative "is this batch actually live right now?" check.
- *
- * Time alone is not enough to decide this. A class is only live for students when
- * the trainer has started the BigBlueButton meeting AND is still in it. Two bugs
- * came from trusting the clock or the database alone:
- *
- *  - Students saw "Live Now" during the scheduled window before the trainer had
- *    started anything, so Join always failed.
- *  - When the trainer left or used "End session for all", BBB tore the meeting
- *    down but the database still said status:'live', so the Live button stayed.
- *
- * This endpoint verifies against BBB and self-heals stale rows.
- */
 
 function generateBBBChecksum(apiCall: string, params: string, secret: string): string {
   return crypto.createHash('sha1').update(apiCall + params + secret, 'utf8').digest('hex');
@@ -30,16 +17,28 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const batchId = searchParams.get('batchId');
 
-    if (!batchId) {
+    console.log('📡 batch-live-status called with batchId:', batchId);
+
+    if (!batchId || batchId === 'undefined' || batchId === 'null' || batchId === 'NaN') {
+      console.log('❌ Invalid batchId provided:', batchId);
       return NextResponse.json(
-        { success: false, error: 'batchId is required' },
+        { success: false, error: 'Valid batchId is required', providedBatchId: batchId },
+        { status: 400 }
+      );
+    }
+
+    // Validate ObjectId format before querying
+    if (!mongoose.Types.ObjectId.isValid(batchId)) {
+      console.log('❌ Invalid ObjectId format:', batchId);
+      return NextResponse.json(
+        { success: false, error: 'Invalid batchId format', providedBatchId: batchId },
         { status: 400 }
       );
     }
 
     // Newest first - if several rows are somehow live, the most recent wins.
     const liveClasses = await ModuleClass.find({
-      batchId,
+      batchId: new mongoose.Types.ObjectId(batchId), // Explicitly create ObjectId
       status: 'live',
       isLive: true
     }).sort({ actualStartTime: -1, updatedAt: -1, createdAt: -1 });

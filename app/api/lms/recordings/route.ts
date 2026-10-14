@@ -11,6 +11,7 @@ const ModuleClass = require("@/models/ModuleClass");
 // throws "Schema hasn't been registered for model Course" if these aren't loaded.
 const Course = require("@/models/Course");
 const Trainer = require("@/models/Trainer");
+const Student = require("@/models/Student");
 
 // Helper function to generate BBB API checksum (same as trainer API)
 function generateBBBChecksum(apiCall: string, params: string, secret: string): string {
@@ -18,13 +19,271 @@ function generateBBBChecksum(apiCall: string, params: string, secret: string): s
   return crypto.createHash('sha1').update(stringToHash, 'utf8').digest('hex');
 }
 
+// Helper function to get detailed participant information for recordings
+async function getRecordingParticipants(recordingMeetingId: string, batchId: string, recordId?: string) {
+  try {
+    
+    // Method 1: Try to get participant data from BBB Learning Analytics Dashboard  
+    if (recordId) {
+      try {
+        
+        // First, get the internal meeting ID from BBB recordings API
+        const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
+        const bbbApiSecret = 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE';
+        
+        // Ask BBB for just this recording instead of downloading the full list.
+        const getRecordingsParams = `recordID=${encodeURIComponent(recordId)}`;
+        const getRecordingsChecksum = generateBBBChecksum('getRecordings', getRecordingsParams, bbbApiSecret);
+        const getRecordingsUrl = `${bbbServerUrl}/api/getRecordings?${getRecordingsParams}&checksum=${getRecordingsChecksum}`;
+
+        const recordingsResponse = await fetch(getRecordingsUrl);
+        const recordingsXML = await recordingsResponse.text();
+        
+        if (recordingsXML.includes('<returncode>SUCCESS</returncode>')) {
+          const recordingMatches = recordingsXML.match(/<recording>([\s\S]*?)<\/recording>/g);
+          
+          if (recordingMatches) {
+            for (const recordingMatch of recordingMatches) {
+              const recordIdMatch = recordingMatch.match(/<recordID><!\[CDATA\[(.*?)\]\]><\/recordID>/) ||
+                                   recordingMatch.match(/<recordID>(.*?)<\/recordID>/);
+              const currentRecordId = recordIdMatch?.[1];
+              
+              if (currentRecordId === recordId) {
+                
+                // Extract internal meeting ID from the recording
+                const internalMeetingIdMatch = recordingMatch.match(/<internalMeetingID>(.*?)<\/internalMeetingID>/);
+                const internalMeetingId = internalMeetingIdMatch?.[1];
+                
+                if (internalMeetingId) {
+                  
+                  // Fetch learning analytics data
+                  const analyticsUrl = `https://class.techpratham.com/learning-analytics-dashboard/${recordId}/${internalMeetingId}/learning_dashboard_data.json`;
+                  
+                  const analyticsResponse = await fetch(analyticsUrl);
+                  
+                  if (analyticsResponse.ok) {
+                    const analyticsData = await analyticsResponse.json();
+                    
+                    // Extract participant data from analytics
+                    if (analyticsData.users_data) {
+                      
+                      const participants = Object.entries(analyticsData.users_data).map(([userId, userData]: [string, any]) => {
+                        
+                        // Calculate session duration
+                        let duration = 'N/A';
+                        let joinTime = 'N/A';
+                        let leftTime = 'N/A';
+                        
+                        if (userData.intIds && userData.intIds.length > 0) {
+                          // Get the first session data
+                          const sessionData = userData.intIds[0];
+                          
+                          if (sessionData.registeredOn && sessionData.leftOn) {
+                            const joinedAt = new Date(sessionData.registeredOn);
+                            const leftAt = new Date(sessionData.leftOn);
+                            const durationMs = leftAt.getTime() - joinedAt.getTime();
+                            const durationMin = Math.floor(durationMs / (1000 * 60));
+                            
+                            duration = `${durationMin} min`;
+                            joinTime = joinedAt.toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              year: 'numeric',
+                              month: 'short', 
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                            leftTime = leftAt.toLocaleString('en-IN', {
+                              timeZone: 'Asia/Kolkata',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric', 
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            });
+                          }
+                        }
+                        
+                        // Extract base name without session token
+                        const baseName = userData.name ? userData.name.replace(/-[a-z0-9]{8,}$/i, '') : 'Unknown';
+                        
+                        return {
+                          name: baseName,
+                          email: userData.role === 'moderator' ? 'Trainer/Admin' : 'Student email from LMS',
+                          studentId: userId,
+                          phone: 'N/A',
+                          joinedAt: joinTime,
+                          leftAt: leftTime,
+                          duration: duration,
+                          status: 'present',
+                          role: userData.role || 'viewer',
+                          isModerator: userData.role === 'moderator',
+                          isFromBBBAnalytics: true,
+                          totalOfMessages: userData.totalOfMessages || 0,
+                          talks: userData.talks || []
+                        };
+                      });
+                      
+                      return participants;
+                    }
+                  }
+                }
+                break;
+              }
+            }
+          }
+        }
+      } catch (analyticsError: any) {
+        // BBB Learning Analytics fetch failed, continue to fallback
+      }
+    }
+    
+    // Method 2: Try to get current meeting participants from BBB if meeting is active
+    try {
+      const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
+      const bbbApiSecret = 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE';
+      
+      const getMeetingInfoParams = `meetingID=${encodeURIComponent(recordingMeetingId)}`;
+      const getMeetingInfoChecksum = generateBBBChecksum('getMeetingInfo', getMeetingInfoParams, bbbApiSecret);
+      const getMeetingInfoUrl = `${bbbServerUrl}/api/getMeetingInfo?${getMeetingInfoParams}&checksum=${getMeetingInfoChecksum}`;
+      
+      const meetingInfoResponse = await fetch(getMeetingInfoUrl);
+      const meetingInfoXML = await meetingInfoResponse.text();
+      
+      if (meetingInfoXML.includes('<returncode>SUCCESS</returncode>') && meetingInfoXML.includes('<attendees>')) {
+        
+        const attendeeMatches = meetingInfoXML.match(/<attendee>([\s\S]*?)<\/attendee>/g);
+        
+        if (attendeeMatches && attendeeMatches.length > 0) {
+          
+          const liveParticipants = attendeeMatches.map((attendeeXML, index) => {
+            // Extract participant data from BBB XML
+            const userIdMatch = attendeeXML.match(/<userID><!\[CDATA\[(.*?)\]\]><\/userID>/) ||
+                               attendeeXML.match(/<userID>(.*?)<\/userID>/);
+            const fullNameMatch = attendeeXML.match(/<fullName><!\[CDATA\[(.*?)\]\]><\/fullName>/) || 
+                                 attendeeXML.match(/<fullName>(.*?)<\/fullName>/);
+            const roleMatch = attendeeXML.match(/<role>(.*?)<\/role>/);
+            const isPresenterMatch = attendeeXML.match(/<isPresenter>(.*?)<\/isPresenter>/);
+            const isListeningOnlyMatch = attendeeXML.match(/<isListeningOnly>(.*?)<\/isListeningOnly>/);
+            const hasJoinedVoiceMatch = attendeeXML.match(/<hasJoinedVoice>(.*?)<\/hasJoinedVoice>/);
+            
+            const fullName = fullNameMatch?.[1] || `Participant ${index + 1}`;
+            const userId = userIdMatch?.[1] || '';
+            const role = roleMatch?.[1] || 'VIEWER';
+            const isPresenter = isPresenterMatch?.[1] === 'true';
+            const isListeningOnly = isListeningOnlyMatch?.[1] === 'true';
+            const hasJoinedVoice = hasJoinedVoiceMatch?.[1] === 'true';
+            
+            // Extract base name without session token (format: Name-sessiontoken)
+            const baseName = fullName.replace(/-[a-z0-9]{8,}$/i, '');
+            
+            return {
+              name: baseName || fullName,
+              email: role === 'MODERATOR' ? 'Trainer/Admin' : 'Student email not available in live session',
+              studentId: userId || 'N/A',
+              phone: 'N/A',
+              joinedAt: 'Currently in session',
+              leftAt: 'Still present',
+              duration: 'Currently active',
+              status: 'present',
+              role: role,
+              isPresenter: isPresenter,
+              isListeningOnly: isListeningOnly,
+              hasJoinedVoice: hasJoinedVoice,
+              fullBBBName: fullName,
+              isLiveData: true
+            };
+          });
+          
+          return liveParticipants;
+        }
+      }
+    } catch (bbbError: any) {
+      // BBB meeting check failed, continue to fallback
+    }
+    
+    // Method 3: Look for ModuleClass records in this batch
+    const allModuleClasses = await ModuleClass.find({ batchId: batchId })
+      .select('bbbMeetingId attendees moduleTitle scheduledDate')
+      .populate({
+        path: 'attendees.studentId',
+        model: 'Student',
+        select: 'name email studentId phone'
+      })
+      .lean();
+
+    // Only an exact meeting match is used: borrowing another class's attendees
+    // (most attendees / most recent) attributed the wrong students.
+    // Meeting IDs look like `class-<classId>` (optionally `-<timestamp>`).
+    const embeddedClassId = recordingMeetingId.match(/^class-([a-f0-9]+?)(?:-\d{10,})?$/i)?.[1];
+    const moduleClass = allModuleClasses.find((mc: any) =>
+      mc.bbbMeetingId === recordingMeetingId ||
+      (embeddedClassId && String(mc._id) === embeddedClassId)
+    );
+
+    if (!moduleClass || !moduleClass.attendees || moduleClass.attendees.length === 0) {
+      return [];
+    }
+
+    // Format participant data from ModuleClass
+    const participants = moduleClass.attendees
+      .filter((attendee: any) => attendee.studentId && attendee.attendanceStatus !== 'absent')
+      .map((attendee: any) => ({
+        name: attendee.studentId?.name || 'Unknown',
+        email: attendee.studentId?.email || 'N/A',
+        studentId: attendee.studentId?.studentId || 'N/A',
+        phone: attendee.studentId?.phone || 'N/A',
+        joinedAt: attendee.joinedAt ? new Date(attendee.joinedAt).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }) : 'N/A',
+        leftAt: attendee.leftAt ? new Date(attendee.leftAt).toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }) : 'N/A',
+        duration: attendee.duration ? `${attendee.duration} min` : 'N/A',
+        status: attendee.attendanceStatus || 'present',
+        isLiveData: false
+      }));
+
+    return participants;
+  } catch (error: any) {
+    return [];
+  }
+}
+
 // GET /api/lms/recordings - Get available recordings for LMS admin (using SAME logic as trainer API)
+//
+// Participant details are NOT included in the list (they cost several BBB
+// round-trips per recording). Fetch them for one recording on demand with:
+// GET /api/lms/recordings?participantsFor=<recordId>&batchId=<id>&meetingId=<id>
 export async function GET(req: NextRequest) {
   try {
-    console.log('🎬 LMS ADMIN RECORDINGS API CALLED (SAME AS TRAINER APPROACH)');
 
     await connectMongo();
-    console.log('✅ Connected to MongoDB');
+
+    const { searchParams } = new URL(req.url);
+    const participantsFor = searchParams.get('participantsFor');
+    if (participantsFor) {
+      const batchId = searchParams.get('batchId');
+      const meetingId = searchParams.get('meetingId');
+      if (!batchId || !meetingId) {
+        return NextResponse.json(
+          { success: false, error: 'batchId and meetingId are required', participants: [] },
+          { status: 400 }
+        );
+      }
+      const participants = await getRecordingParticipants(meetingId, batchId, participantsFor);
+      return NextResponse.json({ success: true, participants });
+    }
 
     // Get all batches in the system
     const allBatches: any[] = await Batch.find({})
@@ -32,8 +291,6 @@ export async function GET(req: NextRequest) {
       .populate('trainerId')
       .sort({ createdAt: -1 })
       .lean();
-
-    console.log(`✅ Found ${allBatches.length} total batches in system`);
 
     if (allBatches.length === 0) {
       return NextResponse.json({
@@ -46,39 +303,30 @@ export async function GET(req: NextRequest) {
     }
 
     // Get all ModuleClass records to get BBB meeting IDs (same as trainer API)
+    // Only the fields buildMeetingBatchIndex needs - no populate.
     const moduleClasses: any[] = await ModuleClass.find({
       batchId: { $in: allBatches.map((batch: any) => batch._id) }
     })
-      .populate('courseId')
-      .populate('batchId')
+      .select('_id batchId bbbMeetingId')
       .sort({ scheduledDate: -1 })
       .lean();
 
-    console.log(`Found ${moduleClasses.length} module classes across all batches`);
-
     // Get BBB recordings using EXACT same approach as trainer API
-    console.log('🔗 Connecting to BBB API (SAME AS TRAINER)...');
     const bbbServerUrl = 'https://class.techpratham.com/bigbluebutton';
     const bbbApiSecret = 'FJxUf6Erzd1Gru9oPXVqpdaXAsP9s1vFKxPEjljXnE';
 
     const getRecordingsParams = '';
     const getRecordingsChecksum = generateBBBChecksum('getRecordings', getRecordingsParams, bbbApiSecret);
     const getRecordingsUrl = `${bbbServerUrl}/api/getRecordings?checksum=${getRecordingsChecksum}`;
-    console.log('📞 BBB API URL (SAME AS TRAINER):', getRecordingsUrl);
 
     const recordingsResponse = await fetch(getRecordingsUrl);
     const recordingsXML = await recordingsResponse.text();
 
-    console.log('📊 BBB API Response length:', recordingsXML.length);
-    console.log('📊 BBB API Response preview:', recordingsXML.substring(0, 200));
-
     if (!recordingsXML.includes('<returncode>SUCCESS</returncode>')) {
-      console.error('❌ BBB API call failed');
-      console.log('Full BBB Response:', recordingsXML);
       return NextResponse.json({
         success: false,
         error: 'BBB API call failed',
-        batches: allBatches.map(batch => ({
+        batches: allBatches.map((batch: any) => ({
           _id: batch._id.toString(),
           batchName: batch.batchName,
           batchCode: batch.batchCode,
@@ -95,7 +343,6 @@ export async function GET(req: NextRequest) {
     const recordingMatches = recordingsXML.match(/<recording>([\s\S]*?)<\/recording>/g);
     
     if (recordingMatches) {
-      console.log(`📊 Found ${recordingMatches.length} recording matches in XML`);
       
       for (const recordingMatch of recordingMatches) {
         try {
@@ -139,7 +386,7 @@ export async function GET(req: NextRequest) {
           const previewUrl = playback.previewUrl;
 
           if (playback.derived) {
-            console.log(`🔗 Derived playback URL for "${name}" (recordID: ${recordId})`);
+            // Derived playback URL - no logging needed in production
           }
 
           // Calculate duration (same as trainer API)
@@ -194,6 +441,7 @@ export async function GET(req: NextRequest) {
             durationText: durationText,
             dateText: dateText,
             participants: participants || '0',
+            participantDetails: [], // Will be populated later per batch
             size: size,
             sizeText: sizeText,
             // A recording is downloadable only when BBB has generated the
@@ -217,23 +465,15 @@ export async function GET(req: NextRequest) {
         }
       }
     }
-    console.log(`✅ Found ${allRecordings.length} total BBB recordings`);
     
     // Log sample recordings for debugging
     if (allRecordings.length > 0) {
-      console.log('📋 Sample recordings (first 3):');
-      allRecordings.slice(0, 3).forEach((rec, index) => {
-        console.log(`  ${index + 1}. "${rec.name}" (Meeting ID: ${rec.meetingId})`);
-      });
+      // Sample recordings available
     }
 
     // Authoritative attribution: meeting ID -> class -> batch, with a strict
     // "<Batch Name> - ..." name convention fallback.
     const meetingIndex = buildMeetingBatchIndex(moduleClasses);
-    console.log(
-      `Built attribution index: ${meetingIndex.byMeetingId.size} meeting IDs, ` +
-      `${meetingIndex.byClassId.size} class IDs`
-    );
 
     const { byBatchId, unmatched } = groupRecordingsByBatch(
       allRecordings,
@@ -269,19 +509,16 @@ export async function GET(req: NextRequest) {
 
     // Apply display titles: "<batchName>-Class-N" default, overridden by any
     // saved custom title.
-    for (const b of batchesWithRecordings) {
-      b.recordings = await applyRecordingTitles(b.batchName, b.recordings);
-    }
+    await Promise.all(
+      batchesWithRecordings.map(async (b: any) => {
+        b.recordings = await applyRecordingTitles(b.batchName, b.recordings);
+      })
+    );
 
     const totalMatchedRecordings = batchesWithRecordings.reduce(
       (sum: number, batch: any) => sum + batch.recordings.length,
       0
     );
-
-    console.log(`📊 MATCHING RESULTS:`);
-    console.log(`- Total recordings from BBB: ${allRecordings.length}`);
-    console.log(`- Matched to batches: ${totalMatchedRecordings}`);
-    console.log(`- Unmatched: ${unmatched.length}`);
 
     // Unmatched recordings are returned in their own bucket. They used to be
     // appended to the first batch, which made recordings from unrelated rooms

@@ -4,16 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter
-} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -22,305 +12,466 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import {
-  Video, Calendar, Clock, Users, Play, Circle, Plus, Settings, Edit,
-  Trash2, Eye, Search, Filter, BarChart3, FileVideo, AlertTriangle,
-  CheckCircle, XCircle, MoreVertical, Save, RefreshCw
+  Video, Calendar, Clock, Users, Play, Circle, 
+  Trash2, Eye, Search, RefreshCw, ArrowLeft, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import TimeStatusIndicator from '@/components/ui/time-status-indicator';
 
-interface LiveClass {
+interface ScheduledClass {
   _id: string;
-  title: string;
-  description: string;
-  batchId: string;
-  batchName: string;
-  trainerId: string;
-  trainerName: string;
+  moduleTitle: string;
   scheduledDate: string;
   scheduledTime: string;
   duration: number;
   status: string;
-  roomConfig: {
-    platform?: string;
-    meetingLink?: string;
-    meetingId?: string;
-    meetingPassword?: string;
-  };
-  recording: {
-    enabled: boolean;
-    recordingUrl?: string;
-    recordingStatus?: string;
-  };
-  enrolledStudents: Array<{ _id: string; name: string }>;
-  classSettings?: {
-    enableChat?: boolean;
-    enableScreenShare?: boolean;
-    enableRaiseHand?: boolean;
-  };
-  createdAt: string;
+  isLive: boolean;
+  canJoin: boolean;
+  batchName: string;
+  courseTitle: string;
+  bbbMeetingId?: string;
+  bbbJoinUrl?: string;
+  sessionToken?: string;
+  isVirtual?: boolean; // Indicates if this is a virtual class based on timing
 }
 
-interface Session {
+interface Batch {
   _id: string;
-  sessionNumber: number;
-  status: string;
-  scheduledStart: string;
-  actualStart: string;
-  actualEnd: string;
-  duration: number;
-  attendanceSummary: {
-    totalRegistered: number;
-    totalPresent: number;
-    attendancePercentage: number;
-  };
-  recording: {
-    recordingStatus: string;
-    recordingUrl?: string;
-  };
+  batchId?: string;
+  batchName: string;
+  courseTitle: string;
+  trainerName: string;
+  studentCount: number;
+  timing?: string;
+  startDate?: string;
+  endDate?: string;
+  daysOfWeek?: string[];
+  totalClasses?: number;
+  upcomingClasses?: number;
+  liveClasses?: number;
 }
 
 const LMSLiveClasses = () => {
-  const [classes, setClasses] = useState<LiveClass[]>([]);
-  const [sessions, setSessions] = useState<Session[]>([]);
+  // State for all classes from all batches (for table display)
+  const [allClasses, setAllClasses] = useState<ScheduledClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<LiveClass | null>(null);
-  const [batches, setBatches] = useState<Array<{ _id: string; batchName: string; trainerId?: string; trainerName?: string }>>([]);
-  const [trainers, setTrainers] = useState<Array<{ _id: string; name: string; email: string }>>([]);
 
-  const [newClass, setNewClass] = useState({
-    title: '',
-    description: '',
-    batchId: '',
-    trainerId: '',
-    scheduledDate: '',
-    scheduledTime: '',
-    duration: 60,
-    platform: 'zoom',
-    meetingLink: '',
-    meetingId: '',
-    meetingPassword: '',
-    recordingEnabled: true,
-    maxParticipants: 100
-  });
+  // Batch management state (for backend functionality)
+  const [availableBatches, setAvailableBatches] = useState<Batch[]>([]);
+  const [liveStatusMap, setLiveStatusMap] = useState<Record<string, any>>({});
+  const [checkingLiveStatus, setCheckingLiveStatus] = useState(false);
 
-  const fetchClasses = useCallback(async () => {
+  // Track last regeneration time
+  const [lastRegenerationTime, setLastRegenerationTime] = useState<number>(0);
+
+  // Fetch all batches and generate time-based classes for table display
+  const fetchAllBatchClasses = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (statusFilter !== 'all') {
-        params.set('status', statusFilter);
-      }
-      params.set('limit', '100');
+      console.log('🚀 ADMIN - Fetching all batch classes for table view');
+      
+      // First fetch all batches
+      const batchResponse = await fetch('/api/lms/batches');
+      const batchData = await batchResponse.json();
 
-      const response = await fetch(`/api/lms/live-classes?${params}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setClasses(data.data || []);
+      if (!Array.isArray(batchData)) {
+        console.error('❌ Invalid batches data:', batchData);
+        setAllClasses([]);
+        setAvailableBatches([]);
+        return;
       }
+
+      // Transform batch data
+      const batchesWithInfo: Batch[] = batchData.map((batch: any) => ({
+        _id: batch._id,
+        batchId: batch.batchId || batch._id,
+        batchName: batch.batchName || batch.name || 'Unknown Batch',
+        courseTitle: batch.courseTitle || batch.course_title || 'Course',
+        trainerName: batch.trainerName || 'Unknown Trainer',
+        studentCount: batch.enrolled_students?.length || batch.students?.length || 0,
+        timing: batch.schedule?.timing || batch.timing || null,
+        startDate: batch.schedule?.startDate || batch.startDate || '',
+        endDate: batch.schedule?.endDate || batch.endDate || '',
+        daysOfWeek: batch.daysOfWeek || batch.schedule?.days || [],
+        totalClasses: 0,
+        upcomingClasses: 0,
+        liveClasses: 0
+      }));
+
+      setAvailableBatches(batchesWithInfo);
+
+      // Generate time-based classes for each batch
+      const allGeneratedClasses: ScheduledClass[] = [];
+      const now = new Date();
+      const istNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+
+      for (const batch of batchesWithInfo) {
+        if (batch.timing) {
+          const timingMatch = batch.timing.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+          if (timingMatch) {
+            const [, hours, minutes, ampm] = timingMatch;
+            let classHour = parseInt(hours);
+            const classMinute = parseInt(minutes);
+            
+            // Convert to 24-hour format
+            if (ampm.toUpperCase() === 'PM' && classHour !== 12) {
+              classHour += 12;
+            } else if (ampm.toUpperCase() === 'AM' && classHour === 12) {
+              classHour = 0;
+            }
+
+            // Calculate allowed days
+            const days = batch.daysOfWeek || [];
+            const allowedDays = days.length > 0 ? 
+              days.map(d => DAY_NAME_TO_INDEX[String(d).trim().toLowerCase()]).filter(n => n !== undefined) :
+              [1, 2, 3, 4, 5, 6]; // Mon-Sat
+
+            // Today's class time
+            const todayClass = new Date(istNow);
+            todayClass.setHours(classHour, classMinute, 0, 0);
+
+            // Extended grace period (3 hours after class ends)
+            const todayClassEndTime = new Date(todayClass.getTime() + 60 * 60 * 1000);
+            const extendedGracePeriodEnd = new Date(todayClassEndTime.getTime() + 3 * 60 * 60 * 1000);
+
+            // Show today's class only if today is scheduled AND within grace period
+            const isTodayScheduled = allowedDays.includes(istNow.getDay());
+            let targetClassDate = todayClass;
+
+            if (!isTodayScheduled || istNow > extendedGracePeriodEnd) {
+              console.log(`🔄 ADMIN: ${batch.batchName} - ${!isTodayScheduled ? 'Not today\'s scheduled day' : 'Extended grace period expired'}, finding next class`);
+              // Find next scheduled day
+              let nextClassDate = new Date(istNow);
+              for (let i = 1; i <= 7; i++) {
+                nextClassDate = new Date(istNow);
+                nextClassDate.setDate(istNow.getDate() + i);
+                nextClassDate.setHours(classHour, classMinute, 0, 0);
+                if (allowedDays.includes(nextClassDate.getDay())) break;
+              }
+              targetClassDate = nextClassDate;
+              console.log(`📅 ADMIN: ${batch.batchName} - Next class: ${targetClassDate.toLocaleDateString()} ${targetClassDate.toLocaleTimeString()}`);
+            } else {
+              console.log(`✅ ADMIN: ${batch.batchName} - Showing today's class (within 3-hour grace period)`);
+            }
+
+            // Generate class number
+            let classNumber = 1;
+            try {
+              const res = await fetch(`/api/module-class?batchId=${batch._id}`);
+              const classData = await res.json();
+              
+              if (res.ok && classData.success && classData.data && Array.isArray(classData.data)) {
+                const existingClasses = classData.data.filter((cls: any) => cls.status !== 'cancelled');
+                classNumber = existingClasses.length + 1;
+              }
+            } catch (countError) {
+              // Default to 1
+            }
+
+            const generatedClass: ScheduledClass = {
+              _id: `timing-${batch._id}-${targetClassDate.toISOString()}`,
+              moduleTitle: `${batch.batchName} - Class ${classNumber}`,
+              scheduledDate: targetClassDate.toISOString().split('T')[0],
+              scheduledTime: `${classHour.toString().padStart(2, '0')}:${classMinute.toString().padStart(2, '0')}`,
+              duration: 60,
+              status: 'scheduled',
+              isLive: false,
+              canJoin: true,
+              batchName: batch.batchName,
+              courseTitle: batch.courseTitle,
+              isVirtual: true
+            };
+
+            allGeneratedClasses.push(generatedClass);
+          }
+        }
+      }
+
+      setAllClasses(allGeneratedClasses);
+      console.log(`✅ Generated ${allGeneratedClasses.length} time-based classes for admin table`);
+      
     } catch (error) {
-      console.error('Error fetching classes:', error);
-      toast.error('Failed to fetch live classes');
+      console.error('❌ Fetch all batch classes error:', error);
+      toast.error('Failed to load batch classes');
+      setAllClasses([]);
+      setAvailableBatches([]);
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
-
-  const fetchBatches = useCallback(async () => {
-    try {
-      const response = await fetch('/api/lms/batches');
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setBatches(data.map((b: any) => ({
-          _id: b._id,
-          batchName: b.batchName,
-          trainerId: b.trainerId,
-          trainerName: b.trainerName
-        })));
-      }
-    } catch (error) {
-      console.error('Error fetching batches:', error);
-    }
   }, []);
 
-  const fetchTrainers = useCallback(async () => {
+  // Check live status for all batches
+  const checkAllBatchesLiveStatus = useCallback(async () => {
+    if (availableBatches.length === 0) return;
+    
+    setCheckingLiveStatus(true);
+    
     try {
-      const response = await fetch('/api/lms/trainers');
-      const data = await response.json();
-
-      if (Array.isArray(data)) {
-        setTrainers(data.map((t: any) => ({
-          _id: t._id,
-          name: t.name,
-          email: t.email
-        })));
+      const statusMap: Record<string, any> = {};
+      
+      // Check each batch's live status
+      for (const batch of availableBatches) {
+        try {
+          const res = await fetch(`/api/batch-live-status?batchId=${batch._id}`);
+          const data = await res.json();
+          
+          if (data.success && data.isLive && data.trainerPresent && data.liveClass) {
+            // Map live status to the corresponding generated class
+            const classId = `timing-${batch._id}-*`; // Will match by batch ID
+            statusMap[batch._id] = data;
+          }
+        } catch (error) {
+          // Silent error for individual batch
+        }
       }
+      
+      setLiveStatusMap(statusMap);
     } catch (error) {
-      console.error('Error fetching trainers:', error);
+      // Silent error
+    } finally {
+      setCheckingLiveStatus(false);
     }
-  }, []);
+  }, [availableBatches]);
 
-  useEffect(() => {
-    fetchClasses();
-    fetchBatches();
-    fetchTrainers();
-  }, [fetchClasses, fetchBatches, fetchTrainers]);
-
-  const handleCreateClass = async () => {
+  // Admin join function - uses SAME API as students (/api/join-class)
+  const handleAdminJoin = async (cls: ScheduledClass) => {
     try {
-      const response = await fetch('/api/lms/live-classes', {
+      console.log('🚀 Admin joining class using student API:', {
+        classId: cls._id,
+        title: cls.moduleTitle,
+        batchName: cls.batchName,
+        status: cls.status
+      });
+      
+      // Use the SAME API that students use for joining classes
+      const response = await fetch('/api/join-class', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newClass)
+        body: JSON.stringify({
+          classId: cls._id,
+          userType: 'admin',
+          userId: 'admin-' + Date.now(),
+          userName: 'LMS Admin',
+          purpose: 'attendance-monitoring'
+        })
       });
 
       const data = await response.json();
+      console.log('🚀 Admin join response:', data);
 
-      if (data.success) {
-        toast.success('Class scheduled successfully');
-        setShowCreateModal(false);
-        setNewClass({
-          title: '',
-          description: '',
-          batchId: '',
-          trainerId: '',
-          scheduledDate: '',
-          scheduledTime: '',
-          duration: 60,
-          platform: 'zoom',
-          meetingLink: '',
-          meetingId: '',
-          meetingPassword: '',
-          recordingEnabled: true,
-          maxParticipants: 100
-        });
-        fetchClasses();
+      if (data.success && data.joinUrl) {
+        window.open(data.joinUrl, '_blank', 'noopener,noreferrer');
+        toast.success(`Joining ${cls.moduleTitle} for attendance monitoring`);
       } else {
-        toast.error(data.error || 'Failed to create class');
+        console.error('❌ Admin join failed:', data);
+        toast.error(data.error || 'Failed to join class');
       }
     } catch (error) {
-      console.error('Error creating class:', error);
-      toast.error('Failed to create class');
+      console.error('❌ Error joining class:', error);
+      toast.error('Failed to join class');
     }
   };
 
-  const handleCancelClass = async (classId: string) => {
-    if (!confirm('Are you sure you want to cancel this class?')) return;
+  // Manual refresh function
+  const handleRefreshAll = () => {
+    fetchAllBatchClasses();
+    checkAllBatchesLiveStatus();
+  };
 
+  // Map day-of-week name -> JS Date.getDay() index (Sun=0 ... Sat=6)
+  const DAY_NAME_TO_INDEX: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6
+  };
+
+  // Get class status - PURE TIME-BASED LOGIC (same as trainer/student pages)
+  const getClassStatus = (classItem: ScheduledClass) => {
+    const now = new Date();
+    const istNow = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+    
+    // Extract batch ID from class ID
+    const batchId = classItem._id.includes('timing-') ? 
+      classItem._id.split('-')[1] : 
+      classItem.batchName; // fallback
+    
+    // Check if this batch has live status
+    const batchLiveStatus = liveStatusMap[batchId];
+    
+    // ONLY check for cancelled status
+    if (classItem.status === 'cancelled') {
+      return {
+        status: 'cancelled',
+        canJoin: false,
+        label: 'Cancelled',
+        color: 'bg-red-600',
+        message: 'This class has been cancelled'
+      };
+    }
+    
+    // PURE TIME-BASED STATUS
     try {
-      const response = await fetch(`/api/lms/live-classes/${classId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'cancelled' })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Class cancelled');
-        fetchClasses();
+      let classDate = new Date(classItem.scheduledDate);
+      
+      if (isNaN(classDate.getTime())) {
+        const dateWithoutDay = classItem.scheduledDate.replace(/^[A-Za-z]+,\s*/, '');
+        classDate = new Date(dateWithoutDay);
       }
-    } catch (error) {
-      console.error('Error cancelling class:', error);
-      toast.error('Failed to cancel class');
-    }
-  };
-
-  const handleEndClass = async (classId: string) => {
-    if (!confirm('Are you sure you want to end this live class?')) return;
-
-    try {
-      const response = await fetch(`/api/lms/live-classes/${classId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'completed' })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Class ended successfully');
-        fetchClasses();
+      
+      if (isNaN(classDate.getTime())) {
+        throw new Error(`Invalid date: ${classItem.scheduledDate}`);
       }
-    } catch (error) {
-      console.error('Error ending class:', error);
-      toast.error('Failed to end class');
-    }
-  };
-
-  const handleDeleteClass = async (classId: string) => {
-    if (!confirm('Are you sure you want to permanently delete this class?')) return;
-
-    try {
-      const response = await fetch(`/api/lms/live-classes/${classId}?hardDelete=true`, {
-        method: 'DELETE'
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        toast.success('Class deleted');
-        fetchClasses();
+      
+      const timeParts = classItem.scheduledTime.split(':');
+      const hours = parseInt(timeParts[0]) || 0;
+      const minutes = parseInt(timeParts[1]) || 0;
+      
+      const classDateTime = new Date(classDate);
+      classDateTime.setHours(hours, minutes, 0, 0);
+      
+      const istClassDateTime = new Date(classDateTime.toLocaleString("en-US", {timeZone: "Asia/Kolkata"}));
+      const classEndTime = new Date(istClassDateTime.getTime() + (classItem.duration || 60) * 60 * 1000);
+      
+      const joinWindowStart = new Date(istClassDateTime.getTime() - 15 * 60 * 1000); // 15 minutes before
+      // Use EXTENDED grace period (3 hours) to match class generation logic
+      const extendedGracePeriodEnd = new Date(classEndTime.getTime() + 3 * 60 * 60 * 1000); // 3 hours after
+      
+      // TRAINER PRESENCE OVERRIDES THE CLOCK
+      if (batchLiveStatus?.isLive && batchLiveStatus?.trainerPresent) {
+        return {
+          status: 'live',
+          canJoin: false, // Admin join logic is handled separately in the UI
+          label: 'Live Now',
+          color: 'bg-red-600',
+          message: 'Trainer has started the class - admin can join for monitoring'
+        };
       }
-    } catch (error) {
-      console.error('Error deleting class:', error);
-      toast.error('Failed to delete class');
-    }
-  };
 
-  const handleViewDetails = async (cls: LiveClass) => {
-    setSelectedClass(cls);
-
-    // Fetch sessions for this class
-    try {
-      const params = new URLSearchParams();
-      params.set('liveClassId', cls._id);
-
-      const response = await fetch(`/api/lms/live-classes/sessions?${params}`);
-      const data = await response.json();
-
-      if (data.success) {
-        setSessions(data.data || []);
+      // Check if we're within the class time window (including extended grace period)
+      if (istNow >= istClassDateTime && istNow <= extendedGracePeriodEnd) {
+        return {
+          status: 'waiting-for-trainer',
+          canJoin: false,
+          label: 'Waiting for Trainer',
+          color: 'bg-orange-500',
+          message: 'Class time reached but trainer has not started the session'
+        };
       }
+
+      // For time-based classes, we should NEVER show "Time Up" 
+      // because the class generation logic already switched to next day's class
+      // after the extended grace period. So anything beyond that is "upcoming".
+
+      if (istNow >= joinWindowStart && istNow < istClassDateTime) {
+        return {
+          status: 'starting-soon',
+          canJoin: false,
+          label: 'Starting Soon',
+          color: 'bg-blue-500',
+          message: 'Class starts soon - waiting for trainer'
+        };
+      }
+
+      return {
+        status: 'upcoming',
+        canJoin: false,
+        label: 'Upcoming',
+        color: 'bg-blue-500',
+        message: 'Scheduled for future'
+      };
+      
     } catch (error) {
-      console.error('Error fetching sessions:', error);
-    }
-
-    setShowDetailsModal(true);
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'live':
-        return <Badge className="bg-red-500"><Circle className="w-3 h-3 mr-1 animate-pulse" /> Live</Badge>;
-      case 'scheduled':
-        return <Badge className="bg-blue-500">Scheduled</Badge>;
-      case 'completed':
-        return <Badge className="bg-green-500">Completed</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-gray-500">Cancelled</Badge>;
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+      console.error('Error calculating time status:', error);
+      return {
+        status: 'unknown',
+        canJoin: false,
+        label: 'Unknown',
+        color: 'bg-gray-500',
+        message: 'Could not determine class status'
+      };
     }
   };
 
-  const filteredClasses = classes.filter(cls => {
-    const matchesSearch = cls.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cls.batchName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cls.trainerName.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch;
+  // Get status badge for display
+  const getStatusBadge = (cls: ScheduledClass) => {
+    const status = getClassStatus(cls);
+    return <Badge className={status.color}>{status.label}</Badge>;
+  };
+
+  useEffect(() => {
+    fetchAllBatchClasses();
+    // Set initial regeneration time to avoid immediate regeneration
+    setLastRegenerationTime(Date.now());
+  }, [fetchAllBatchClasses]);
+
+  // Check live status after batches are loaded
+  useEffect(() => {
+    if (availableBatches.length > 0) {
+      checkAllBatchesLiveStatus();
+    }
+  }, [availableBatches, checkAllBatchesLiveStatus]);
+
+  // Poll live status continuously AND regenerate classes periodically
+  useEffect(() => {
+    if (availableBatches.length === 0) return;
+
+    const interval = setInterval(async () => {
+      console.log('📡 Auto-polling live status and checking for class regeneration');
+      
+      // Check live status for real-time updates
+      checkAllBatchesLiveStatus();
+      
+      // Also regenerate classes every 5 minutes to catch time transitions
+      const now = Date.now();
+      const FIVE_MINUTES = 5 * 60 * 1000;
+      
+      if (now - lastRegenerationTime > FIVE_MINUTES) {
+        console.log('🔄 Regenerating time-based classes due to time progression');
+        fetchAllBatchClasses();
+        setLastRegenerationTime(now);
+      }
+    }, 15000); // Check every 15 seconds
+
+    return () => clearInterval(interval);
+  }, [availableBatches.length, checkAllBatchesLiveStatus, fetchAllBatchClasses, lastRegenerationTime]);
+
+  // Filter classes based on search and status
+  const filteredClasses = allClasses.filter(cls => {
+    const matchesSearch = cls.moduleTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cls.batchName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (statusFilter === 'all') return matchesSearch;
+    
+    const status = getClassStatus(cls);
+    
+    // Map our status to filter options
+    const statusMapping: Record<string, string[]> = {
+      'scheduled': ['upcoming', 'starting-soon'],
+      'live': ['live'],
+      'waiting': ['waiting-for-trainer'],
+      'cancelled': ['cancelled']
+    };
+    
+    const matchingStatuses = statusMapping[statusFilter] || [];
+    return matchesSearch && matchingStatuses.includes(status.status);
   });
 
+  // Calculate stats
   const stats = {
-    total: classes.length,
-    scheduled: classes.filter(c => c.status === 'scheduled').length,
-    live: classes.filter(c => c.status === 'live').length,
-    completed: classes.filter(c => c.status === 'completed').length
+    total: allClasses.length,
+    scheduled: allClasses.filter(cls => {
+      const status = getClassStatus(cls);
+      return ['upcoming', 'starting-soon'].includes(status.status);
+    }).length,
+    live: allClasses.filter(cls => {
+      const status = getClassStatus(cls);
+      return status.status === 'live';
+    }).length,
+    waiting: allClasses.filter(cls => {
+      const status = getClassStatus(cls);
+      return status.status === 'waiting-for-trainer';
+    }).length
   };
 
   return (
@@ -333,7 +484,14 @@ const LMSLiveClasses = () => {
               <Video className="h-8 w-8" />
               Live Classes
             </h1>
-            <p className="text-gray-500 mt-1">Manage all live class sessions across batches</p>
+            <p className="text-gray-500 mt-1">
+              Manage all live class sessions
+              {allClasses.length > 0 && (
+                <span className="ml-2 text-green-600">
+                  • {allClasses.length} classes loaded
+                </span>
+              )}
+            </p>
           </div>
         </div>
 
@@ -376,10 +534,10 @@ const LMSLiveClasses = () => {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-500">Completed</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.completed}</p>
+                  <p className="text-sm text-gray-500">Waiting for Trainer</p>
+                  <p className="text-2xl font-bold text-orange-600">{stats.waiting}</p>
                 </div>
-                <CheckCircle className="h-8 w-8 text-green-400" />
+                <Clock className="h-8 w-8 text-orange-400" />
               </div>
             </CardContent>
           </Card>
@@ -404,13 +562,13 @@ const LMSLiveClasses = () => {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="live">Live</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="waiting">Waiting for Trainer</SelectItem>
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={fetchClasses}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
+          <Button variant="outline" onClick={handleRefreshAll} disabled={loading || checkingLiveStatus}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading || checkingLiveStatus ? 'animate-spin' : ''}`} />
+            Refresh All
           </Button>
         </div>
 
@@ -442,138 +600,110 @@ const LMSLiveClasses = () => {
                       <th className="text-left p-3 text-sm font-medium text-gray-500">Trainer</th>
                       <th className="text-left p-3 text-sm font-medium text-gray-500">Schedule</th>
                       <th className="text-left p-3 text-sm font-medium text-gray-500">Status</th>
+                      <th className="text-left p-3 text-sm font-medium text-gray-500">Time Status</th>
                       <th className="text-left p-3 text-sm font-medium text-gray-500">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredClasses.map(cls => (
-                      <tr key={cls._id} className="border-b hover:bg-gray-50">
-                        <td className="p-3">
-                          <div>
-                            <p className="font-medium">{cls.title}</p>
-                            <p className="text-xs text-gray-500">{cls.duration} min</p>
-                          </div>
-                        </td>
-                        <td className="p-3 text-sm">{cls.batchName}</td>
-                        <td className="p-3 text-sm">{cls.trainerName}</td>
-                        <td className="p-3 text-sm">
-                          <div>
-                            <p>{new Date(cls.scheduledDate).toLocaleDateString()}</p>
-                            <p className="text-gray-500">{cls.scheduledTime}</p>
-                          </div>
-                        </td>
-                        <td className="p-3">{getStatusBadge(cls.status)}</td>
-                        <td className="p-3">
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleViewDetails(cls)}>
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            {cls.status === 'live' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEndClass(cls._id)}
-                              >
-                                <XCircle className="w-4 h-4 text-red-500" />
-                              </Button>
+                    {filteredClasses.map(cls => {
+                      const status = getClassStatus(cls);
+                      return (
+                        <tr key={cls._id} className="border-b hover:bg-gray-50">
+                          <td className="p-3">
+                            <div>
+                              <p className="font-medium">{cls.moduleTitle}</p>
+                              <p className="text-xs text-gray-500">{cls.duration} min</p>
+                            </div>
+                          </td>
+                          <td className="p-3 text-sm">{cls.batchName}</td>
+                          <td className="p-3 text-sm">
+                            {availableBatches.find(b => b.batchName === cls.batchName)?.trainerName || 'Unknown'}
+                          </td>
+                          <td className="p-3 text-sm">
+                            <div>
+                              <p>{new Date(cls.scheduledDate).toLocaleDateString()}</p>
+                              <p className="text-gray-500">{cls.scheduledTime}</p>
+                            </div>
+                          </td>
+                          <td className="p-3">{getStatusBadge(cls)}</td>
+                          <td className="p-3">
+                            {status.status === 'live' ? (
+                              <TimeStatusIndicator 
+                                scheduledTime={cls.scheduledTime}
+                                duration={cls.duration}
+                                actualStart={new Date().toISOString()}
+                              />
+                            ) : (
+                              <span className={`text-sm ${
+                                status.status === 'waiting-for-trainer' ? 'text-orange-600' : 
+                                status.status === 'time-up' ? 'text-red-600 font-semibold animate-pulse' : 
+                                'text-gray-400'
+                              }`}>
+                                {status.status === 'waiting-for-trainer' ? 'Waiting for Trainer' :
+                                 status.status === 'time-up' ? 'Time Up' :
+                                 status.status === 'starting-soon' ? 'Starting Soon' :
+                                 status.status === 'upcoming' ? 'Upcoming' :
+                                 'Not started'}
+                              </span>
                             )}
-                            {cls.status === 'scheduled' && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleCancelClass(cls._id)}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                onClick={() => {
+                                  toast.info(`Class: ${cls.moduleTitle}\nStatus: ${status.message}`);
+                                }}
                               >
-                                <XCircle className="w-4 h-4 text-orange-500" />
+                                <Eye className="w-4 h-4" />
                               </Button>
-                            )}
-                            {(cls.status === 'cancelled' || cls.status === 'completed') && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteClass(cls._id)}
-                              >
-                                <Trash2 className="w-4 h-4 text-red-500" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                              
+                              {/* Admin Enter Class Button - ONLY when there's a verified live meeting */}
+                              {(() => {
+                                // Extract batch ID from timing-based class ID
+                                const batchId = cls._id.includes('timing-') ? 
+                                  cls._id.split('-')[1] : 
+                                  cls.batchName;
+                                
+                                // Check if this batch has a verified live meeting with trainer present
+                                const batchLiveStatus = liveStatusMap[batchId];
+                                const hasLiveMeeting = batchLiveStatus?.isLive && batchLiveStatus?.trainerPresent && batchLiveStatus?.liveClass;
+                                
+                                if (hasLiveMeeting) {
+                                  return (
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      onClick={() => {
+                                        // Use the REAL class ID from live status, not the timing-based ID
+                                        const realClass: ScheduledClass = {
+                                          ...cls,
+                                          _id: batchLiveStatus.liveClass._id, // Use real class ID
+                                          moduleTitle: batchLiveStatus.liveClass.moduleTitle
+                                        };
+                                        handleAdminJoin(realClass);
+                                      }}
+                                      className="bg-green-600 hover:bg-green-700 text-white"
+                                      title="Join live class for attendance monitoring"
+                                    >
+                                      Enter Class
+                                    </Button>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Details Modal */}
-        <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>{selectedClass?.title} - Details</DialogTitle>
-            </DialogHeader>
-            {selectedClass && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-gray-500">Batch</Label>
-                    <p className="font-medium">{selectedClass.batchName}</p>
-                  </div>
-                  <div>
-                    <Label className="text-gray-500">Trainer</Label>
-                    <p className="font-medium">{selectedClass.trainerName}</p>
-                  </div>
-                  <div>
-                    <Label className="text-gray-500">Scheduled</Label>
-                    <p className="font-medium">
-                      {new Date(selectedClass.scheduledDate).toLocaleDateString()} at {selectedClass.scheduledTime}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="text-gray-500">Duration</Label>
-                    <p className="font-medium">{selectedClass.duration} minutes</p>
-                  </div>
-                </div>
-
-                {selectedClass.description && (
-                  <div>
-                    <Label className="text-gray-500">Description</Label>
-                    <p>{selectedClass.description}</p>
-                  </div>
-                )}
-
-                {sessions.length > 0 && (
-                  <div>
-                    <Label className="text-gray-500">Sessions ({sessions.length})</Label>
-                    <div className="mt-2 space-y-2">
-                      {sessions.map(session => (
-                        <div key={session._id} className="p-3 bg-gray-50 rounded-lg">
-                          <div className="flex justify-between items-center">
-                            <span className="font-medium">Session #{session.sessionNumber}</span>
-                            {getStatusBadge(session.status)}
-                          </div>
-                          <div className="text-sm text-gray-500 mt-1">
-                            {session.actualStart && (
-                              <span>
-                                Duration: {session.duration || 'N/A'} min | Attendance: {session.attendanceSummary?.attendancePercentage || 0}%
-                              </span>
-                            )}
-                          </div>
-                          {session.recording?.recordingUrl && (
-                            <Button variant="link" size="sm" className="mt-1 p-0">
-                              <FileVideo className="w-4 h-4 mr-1" />
-                              View Recording
-                            </Button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
     </LMSLayout>
   );

@@ -139,6 +139,12 @@ export async function GET() {
       startDate: batch.startDate,
       endDate: batch.endDate,
       timing: batch.timing || '',
+      // Schedule fields (used for time-based class status and the edit form)
+      startTime: batch.startTime || '',
+      endTime: batch.endTime || '',
+      daysOfWeek: batch.daysOfWeek || [],
+      classFrequency: batch.classFrequency || '',
+      classDuration: batch.classDuration || 60,
       capacity: batch.capacity || 30,
       status: batch.status || 'active',
       meetingLink: batch.meetingLink || '',

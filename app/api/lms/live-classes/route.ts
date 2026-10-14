@@ -60,10 +60,36 @@ export async function GET(request: Request) {
       const [hours, minutes] = (cls.scheduledTime || '10:00').split(':');
       scheduledDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       
+      console.log('🔍 Transforming class:', {
+        id: cls._id,
+        rawBatchId: cls.batchId,
+        batchIdType: typeof cls.batchId,
+        batchObject: cls.batchId,
+        extractedBatchId: cls.batchId?._id || cls.batchId
+      });
+      
+      // Safely extract batchId - handle both populated and non-populated cases
+      let safeBatchId = null;
+      if (cls.batchId) {
+        if (typeof cls.batchId === 'object' && cls.batchId._id) {
+          // Populated object
+          safeBatchId = String(cls.batchId._id);
+        } else if (typeof cls.batchId === 'string') {
+          // Already a string ID
+          safeBatchId = cls.batchId;
+        } else {
+          // ObjectId instance
+          safeBatchId = String(cls.batchId);
+        }
+      }
+      
+      console.log('🔧 Extracted safeBatchId:', safeBatchId);
+      
       return {
         _id: cls._id,
         title: cls.moduleTitle || 'Live Class',
         description: cls.description || cls.moduleTitle || '',
+        batchId: safeBatchId, // Use safely extracted batchId
         batchName: cls.batchId?.batchName || 'Unknown Batch',
         trainerName: cls.trainerId?.name || 'Unknown Trainer',
         scheduledDate: cls.scheduledDate,

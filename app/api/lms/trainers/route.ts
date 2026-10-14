@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { connectMongo } from "@/utils/mongodb";
+import { withAuth } from "@/lib/auth";
 import { nextTrainerId, parseTrainerIdNumber, formatTrainerId } from "@/utils/nextTrainerId";
 const Trainer = require("@/models/Trainer");
 const Batch = require("@/models/Batch");
 const bcrypt = require('bcryptjs');
 
-export async function GET() {
+async function handleGet() {
   try {
     await connectMongo();
     
@@ -46,7 +47,11 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export const GET = withAuth(async (req: NextRequest, authContext) => {
+  return handleGet();
+}, { roles: ['admin'] });
+
+async function handlePost(req: NextRequest) {
   try {
     await connectMongo();
     
@@ -178,3 +183,7 @@ export async function POST(req: Request) {
     );
   }
 }
+
+export const POST = withAuth(async (req: NextRequest, authContext) => {
+  return handlePost(req);
+}, { roles: ['admin'] });

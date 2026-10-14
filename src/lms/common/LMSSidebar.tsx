@@ -64,7 +64,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
   };
 
   return (
-    <div className="bg-[#0F1419] h-screen w-72 flex flex-col items-center justify-start py-4 px-6 border-r border-gray-800 flex-shrink-0">
+    <div className="bg-[#0F1419] h-full w-72 max-w-[85vw] flex flex-col items-center justify-start py-4 px-4 sm:px-6 border-r border-gray-800 flex-shrink-0">
 
       {/* Mobile Close Button */}
       <div className="lg:hidden w-full flex justify-end mb-2">
@@ -77,7 +77,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
       </div>
 
       {/* Logo */}
-      <div className='w-auto flex flex-row gap-4 items-center justify-start mb-8'>
+      <div className='w-auto flex flex-row gap-4 items-center justify-start mb-6 flex-shrink-0'>
         <Link href={'/'} aria-label='Techpratham LMS'>
           <div className="relative w-36">
             <Image
@@ -93,7 +93,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
       </div>
 
       {/* Scrollable Navigation Menu */}
-      <div className='w-full flex-1 min-h-0 overflow-y-auto flex flex-col gap-1'>
+      <div className='w-full flex-1 min-h-0 overflow-y-auto flex flex-col gap-1 pr-1 [scrollbar-width:thin] [scrollbar-color:#374151_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-track]:bg-transparent'>
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = router.pathname === item.href ||
@@ -103,6 +103,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={`text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 ${
                 isActive && 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg'
               }`}
@@ -115,7 +116,7 @@ const LMSSidebar: React.FC<LMSSidebarProps> = ({ onClose }) => {
       </div>
 
       {/* Sticky footer: Back to Admin & Sign Out */}
-      <div className='w-full border-t border-gray-800 pt-4 mt-4 space-y-2 flex-shrink-0'>
+      <div className='w-full border-t border-gray-800 pt-3 mt-3 space-y-1 flex-shrink-0 bg-[#0F1419]'>
         <Link
           href='/admin/dashboard'
           className='text-gray-400 hover:text-white hover:bg-gray-800 flex flex-row gap-3 items-center rounded-lg justify-start text-sm py-3 px-4 cursor-pointer transition-all duration-200 w-full'

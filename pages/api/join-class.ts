@@ -241,6 +241,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           });
         }
         
+        // Admins also cannot create classes - they should only monitor existing ones
+        if (userType === 'admin') {
+          console.log('🚫 Admin trying to join non-existent timing-based class - BLOCKED');
+          return res.status(400).json({
+            success: false,
+            error: 'No active class session found. The trainer must start the class before admins can join for monitoring.',
+            meetingNotStarted: true,
+            userType: 'admin',
+            timingBased: true,
+            message: 'Admins can only join active meetings for attendance monitoring'
+          });
+        }
+        
         // Only trainers can create real classes from timing-based ones
         console.log('🆕 Trainer creating new real class from timing-based class');
         
@@ -776,9 +789,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Only create meeting if it doesn't exist
     if (!meetingExists) {
-      // IMPORTANT: For students, don't create meetings - they should only join existing ones
-      if (userType === 'student') {
-        console.log('🚫 Student trying to join non-existent meeting - blocking');
+      // IMPORTANT: For students and admins, don't create meetings - they should only join existing ones
+      if (userType === 'student' || userType === 'admin') {
+        console.log(`🚫 ${userType === 'admin' ? 'Admin' : 'Student'} trying to join non-existent meeting - blocking`);
         
         // ENHANCED: Check if trainer might be in a different meeting by scanning all active meetings
         let trainerFound = false;
@@ -1113,10 +1126,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    // Determine password based on user type
+    // Determine password based on user type (admin gets attendee password like students)
     const password = (userType === 'trainer' || userType === 'moderator') 
       ? moderatorPassword 
-      : attendeePassword;
+      : attendeePassword; // Students and admins both use attendee password
 
     console.log('Using password for', userType, ':', password ? 'SET' : 'NOT SET');
 
@@ -1308,12 +1321,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     joinUrl = createJoinUrl(finalJoinMeetingId);
 
     // Track session token in database to prevent duplicates and enable rejoining
-    if (sessionToken && userType === 'student') {
+    if (sessionToken && (userType === 'student' || userType === 'admin')) {
       try {
         // Add to set of tokens
         await ModuleClass.findByIdAndUpdate(classId, {
           $addToSet: { joinedSessionTokens: sessionToken }
         });
+
+        // Track admin entries for audit trail
+        if (userType === 'admin') {
+          try {
+            await ModuleClass.findByIdAndUpdate(classId, {
+              $push: { 
+                adminEntries: {
+                  adminName: userName,
+                  joinedAt: new Date(),
+                  purpose: 'attendance-monitoring',
+                  sessionToken: sessionToken
+                }
+              }
+            });
+            console.log('✅ Logged admin entry for audit trail:', userName);
+          } catch (adminLogErr) {
+            console.log('❌ Failed to log admin entry:', adminLogErr);
+          }
+        }
 
         // Also store mapping studentId -> sessionToken so the same student reuses token later
         if (studentId) {

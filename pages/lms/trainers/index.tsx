@@ -39,7 +39,8 @@ import {
   Eye,
   EyeOff,
   Key,
-  RefreshCw
+  RefreshCw,
+  Search
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
@@ -85,6 +86,9 @@ interface NewTrainerForm {
 const TrainersManagement = () => {
   
   const [trainers, setTrainers] = useState<Trainer[]>([]);
+  const [filteredTrainers, setFilteredTrainers] = useState<Trainer[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -187,7 +191,7 @@ const TrainersManagement = () => {
         setIsEditDialogOpen(false);
         setSelectedTrainer(null);
         setEditTrainer(null);
-        fetchTrainers();
+        await fetchTrainers();
       } else {
         toast.error(responseData.error || 'Failed to update trainer');
       }
@@ -216,7 +220,7 @@ const TrainersManagement = () => {
         toast.success('Trainer deleted successfully!');
         setIsDeleteDialogOpen(false);
         setSelectedTrainer(null);
-        fetchTrainers();
+        await fetchTrainers();
       } else {
         toast.error(responseData.error || 'Failed to delete trainer');
       }
@@ -238,7 +242,9 @@ const TrainersManagement = () => {
       const data = await res.json();
       
       if (res.ok) {
-        setTrainers(Array.isArray(data) ? data : []);
+        const trainersData = Array.isArray(data) ? data : [];
+        setTrainers(trainersData);
+        setFilteredTrainers(trainersData);
       } else {
         throw new Error(data.message || 'Failed to fetch trainers');
       }
@@ -249,6 +255,40 @@ const TrainersManagement = () => {
       setIsLoading(false);
     }
   };
+
+  // Filter trainers based on search term and status
+  const filterTrainers = () => {
+    let filtered = [...trainers];
+    
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((trainer) => 
+        trainer.name.toLowerCase().includes(searchLower) ||
+        trainer.email.toLowerCase().includes(searchLower) ||
+        trainer.trainerId.toLowerCase().includes(searchLower) ||
+        trainer.expertise.some(skill => skill.toLowerCase().includes(searchLower)) ||
+        trainer.experience.toLowerCase().includes(searchLower) ||
+        (trainer.bio && trainer.bio.toLowerCase().includes(searchLower))
+      );
+    }
+    
+    // Filter by status
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'active') {
+        filtered = filtered.filter(trainer => trainer.isActive);
+      } else if (filterStatus === 'inactive') {
+        filtered = filtered.filter(trainer => !trainer.isActive);
+      }
+    }
+    
+    setFilteredTrainers(filtered);
+  };
+
+  // Effect to filter trainers when search term or filter status changes
+  useEffect(() => {
+    filterTrainers();
+  }, [searchTerm, filterStatus, trainers]);
 
   const handleCreateTrainer = async () => {
     // Validate required fields
@@ -282,7 +322,7 @@ const TrainersManagement = () => {
       if (res.ok) {
         toast.success(`Trainer added successfully! Trainer ID: ${responseData.trainer.trainerId}`);
         setIsCreateDialogOpen(false);
-        fetchTrainers();
+        await fetchTrainers(); // This will also update filteredTrainers
         // Reset form
         setNewTrainer({
           name: '',
@@ -654,18 +694,74 @@ const TrainersManagement = () => {
           </Card>
         </div>
 
+        {/* Search and Filter Section */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <div className="flex flex-col md:flex-row gap-4 flex-1">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search trainers by name, email, skills, or experience..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 bg-gray-800 border-gray-700 text-white placeholder-gray-400 focus:border-blue-500"
+              />
+            </div>
+            
+            {/* Status Filter */}
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full md:w-48 bg-gray-800 border-gray-700 text-white">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-800 border-gray-700">
+                <SelectItem value="all">All Trainers</SelectItem>
+                <SelectItem value="active">Active Only</SelectItem>
+                <SelectItem value="inactive">Inactive Only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          {/* Results Count */}
+          <div className="text-gray-400 text-sm">
+            Showing {filteredTrainers.length} of {trainers.length} trainers
+            {searchTerm && (
+              <span className="text-blue-400 ml-2">
+                for "{searchTerm}"
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Trainers Grid */}
         {isLoading ? (
           <div className="text-center py-8">
             <p className="text-gray-400">Loading trainers...</p>
           </div>
-        ) : trainers.length === 0 ? (
+        ) : filteredTrainers.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-gray-400">No trainers added yet</p>
+            {searchTerm || filterStatus !== 'all' ? (
+              <div className="space-y-2">
+                <p className="text-gray-400">No trainers found matching your search criteria</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setFilterStatus('all');
+                  }}
+                  className="text-blue-400 hover:text-blue-300"
+                >
+                  Clear filters
+                </Button>
+              </div>
+            ) : (
+              <p className="text-gray-400">No trainers added yet</p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {trainers.map((trainer) => (
+            {filteredTrainers.map((trainer) => (
               <Card key={trainer._id} className="bg-gray-800 border-gray-700 hover:border-gray-600 transition-colors">
                 <CardHeader>
                   <div className="flex items-center gap-4">

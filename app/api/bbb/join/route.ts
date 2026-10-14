@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth';
 import { getJoinUrl, isMeetingRunning, createMeeting } from '@/lib/bigbluebutton';
 
 // POST /api/bbb/join - Generate a join URL for a participant
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest, authContext: any) {
   try {
     const body = await request.json();
     const { meetingId, userName, password, role, skipRunningCheck, meetingName } = body;
@@ -13,6 +14,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Verify user can join this meeting based on their role
+    // Additional business logic can be added here to check if user is enrolled in the batch/course
 
     // Check if meeting exists and is running
     let running = false;
@@ -57,8 +61,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export const POST = withAuth(handlePost, { roles: ['admin', 'trainer', 'student'] });
+
 // GET /api/bbb/join - Check if meeting is running
-export async function GET(request: NextRequest) {
+async function handleGet(request: NextRequest, authContext: any) {
   try {
     const { searchParams } = new URL(request.url);
     const meetingId = searchParams.get('meetingId');
@@ -87,3 +93,5 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+
+export const GET = withAuth(handleGet, { roles: ['admin', 'trainer', 'student'] });

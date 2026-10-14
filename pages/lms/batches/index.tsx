@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import LMSLayout from '@/src/lms/common/LMSLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,6 +78,8 @@ interface Batch {
   startDate: string;
   endDate: string;
   timing?: string;
+  startTime?: string;
+  endTime?: string;
   capacity: number;
   studentIds: string[];
   studentCount?: number;
@@ -90,8 +92,148 @@ interface Batch {
   createdAt: string;
 }
 
+// ---------------------------------------------------------------------------
+// Time-based class status (same rules as /lms/live-classes):
+//   live          - trainer is in the BBB meeting (overrides the clock)
+//   waiting       - class time has started, trainer not in the meeting yet
+//   starting-soon - within 15 minutes before class start
+//   later-today   - class is scheduled later today
+//   next          - next class is on another day
+// All times are IST, because batch timings are entered in IST.
+// ---------------------------------------------------------------------------
+
+type ClassStatusKey = 'live' | 'waiting' | 'starting-soon' | 'later-today' | 'next' | 'none';
+
+interface ClassStatus {
+  key: ClassStatusKey;
+  label: string;
+  color: string;
+}
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const START_SOON_MINUTES = 15;
+
+// Current IST weekday (0=Sun) and minutes since midnight.
+const getISTNow = (now: Date) => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(now);
+  const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+  return {
+    day: DAY_NAMES.indexOf(get('weekday')),
+    minutes: (parseInt(get('hour')) || 0) * 60 + (parseInt(get('minute')) || 0)
+  };
+};
+
+// "08:00" / "20:30" -> minutes since midnight
+const parse24h = (value?: string): number | null => {
+  const m = value?.match(/^(\d{1,2}):(\d{2})$/);
+  return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null;
+};
+
+// All "8:00 AM" style times in a timing string -> minutes since midnight
+const parse12hAll = (timing?: string): number[] => {
+  const out: number[] = [];
+  const re = /(\d{1,2}):(\d{2})\s*(AM|PM)/gi;
+  let m: RegExpExecArray | null;
+  while (timing && (m = re.exec(timing))) {
+    let h = parseInt(m[1]) % 12;
+    if (m[3].toUpperCase() === 'PM') h += 12;
+    out.push(h * 60 + parseInt(m[2]));
+  }
+  return out;
+};
+
+// Class start/end in minutes. Prefers stored startTime/endTime, falls back to
+// the timing string, then to start + classDuration.
+const getClassWindow = (batch: Batch): { start: number; end: number } | null => {
+  const fromTiming = parse12hAll(batch.timing);
+  const start = parse24h(batch.startTime) ?? fromTiming[0] ?? null;
+  if (start === null) return null;
+  let end = parse24h(batch.endTime) ?? fromTiming[1] ?? start + (batch.classDuration || 60);
+  if (end <= start) end += 24 * 60; // crosses midnight
+  return { start, end };
+};
+
+// Scheduled weekdays (0=Sun). Defaults to Mon-Sat like the live-classes page.
+const getClassDays = (batch: Batch): number[] => {
+  const days = (batch.daysOfWeek || [])
+    .map(d => DAY_NAMES.findIndex(n => n.toLowerCase() === String(d).trim().toLowerCase()))
+    .filter(n => n >= 0);
+  return days.length ? days : [1, 2, 3, 4, 5, 6];
+};
+
+const formatMinutes = (mins: number) => {
+  const m = ((mins % 1440) + 1440) % 1440;
+  const h = Math.floor(m / 60);
+  const min = m % 60;
+  return `${h % 12 === 0 ? 12 : h % 12}:${min.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+};
+
+// Short day list, e.g. "Mon–Fri" or "Sat, Sun"
+const formatClassDays = (batch: Batch): string => {
+  if (!batch.daysOfWeek?.length) return '';
+  const days = Array.from(new Set(getClassDays(batch))).sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  const short = (d: number) => DAY_NAMES[d].slice(0, 3);
+  const mondayIdx = days.map(d => (d + 6) % 7);
+  const consecutive = mondayIdx.every((d, i) => i === 0 || d === mondayIdx[i - 1] + 1);
+  if (days.length >= 3 && consecutive) return `${short(days[0])}–${short(days[days.length - 1])}`;
+  return days.map(short).join(', ');
+};
+
+const getClassStatus = (
+  batch: Batch,
+  dateStatus: string,
+  liveInfo: any,
+  now: Date
+): ClassStatus => {
+  if (liveInfo?.isLive && liveInfo?.trainerPresent) {
+    return { key: 'live', label: 'Live Now', color: 'bg-red-600 animate-pulse' };
+  }
+  if (dateStatus !== 'ongoing') return { key: 'none', label: '', color: '' };
+
+  const slot = getClassWindow(batch);
+  if (!slot) return { key: 'none', label: '', color: '' };
+
+  const ist = getISTNow(now);
+  const days = getClassDays(batch);
+
+  // A class that crosses midnight and started yesterday is still running.
+  const yesterday = (ist.day + 6) % 7;
+  if (slot.end > 1440 && days.includes(yesterday) && ist.minutes < slot.end - 1440) {
+    return { key: 'waiting', label: 'Waiting for Trainer', color: 'bg-orange-500' };
+  }
+
+  if (days.includes(ist.day)) {
+    if (ist.minutes >= slot.start && ist.minutes < slot.end) {
+      return { key: 'waiting', label: 'Waiting for Trainer', color: 'bg-orange-500' };
+    }
+    if (ist.minutes >= slot.start - START_SOON_MINUTES && ist.minutes < slot.start) {
+      return { key: 'starting-soon', label: `Starts in ${slot.start - ist.minutes} min`, color: 'bg-blue-500' };
+    }
+    if (ist.minutes < slot.start) {
+      return { key: 'later-today', label: `Today ${formatMinutes(slot.start)}`, color: 'bg-sky-700' };
+    }
+  }
+
+  // Next scheduled day after today
+  for (let i = 1; i <= 7; i++) {
+    const d = (ist.day + i) % 7;
+    if (days.includes(d)) {
+      const when = i === 1 ? 'Tomorrow' : DAY_NAMES[d].slice(0, 3);
+      return { key: 'next', label: `Next: ${when} ${formatMinutes(slot.start)}`, color: 'bg-gray-600' };
+    }
+  }
+  return { key: 'none', label: '', color: '' };
+};
+
 const BatchesManagement = () => {
-  
+
+
   const [batches, setBatches] = useState<Batch[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -135,6 +277,16 @@ const BatchesManagement = () => {
 
   // Bulk actions state
   const [isBulkApproving, setIsBulkApproving] = useState(false);
+
+  // Batch list search / filter / sort
+  const [batchSearchTerm, setBatchSearchTerm] = useState('');
+  const [batchStatusFilter, setBatchStatusFilter] = useState('all');
+  const [batchSortBy, setBatchSortBy] = useState('newest');
+
+  // Live class status: batchId -> /api/batch-live-status response (trainer present only)
+  const [liveStatusMap, setLiveStatusMap] = useState<Record<string, any>>({});
+  // Ticks so time-based statuses (waiting / starting soon) update without a reload
+  const [now, setNow] = useState(() => new Date());
 
   // Restrict student dialog state
   const [isRestrictDialogOpen, setIsRestrictDialogOpen] = useState(false);
@@ -794,7 +946,7 @@ const BatchesManagement = () => {
       endTime: endTime,
       classFrequency: batch.classFrequency || 'daily',
       classDuration: batch.classDuration || 60,
-      daysOfWeek: batch.daysOfWeek || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      daysOfWeek: batch.daysOfWeek?.length ? batch.daysOfWeek : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
       capacity: batch.capacity || 30,
       description: batch.description || ''
     };
@@ -1091,6 +1243,121 @@ const BatchesManagement = () => {
     fetchExistingCertificates();
   }, []);
 
+  // Check which ongoing batches have the trainer in a live BBB meeting.
+  // Requests run a few at a time so 50+ batches don't flood the server.
+  const checkLiveStatus = useCallback(async () => {
+    const ongoing = batches.filter(b => b.status === 'ongoing');
+    if (ongoing.length === 0) {
+      setLiveStatusMap({});
+      return;
+    }
+    const map: Record<string, any> = {};
+    const CONCURRENCY = 6;
+    for (let i = 0; i < ongoing.length; i += CONCURRENCY) {
+      await Promise.all(ongoing.slice(i, i + CONCURRENCY).map(async (b) => {
+        try {
+          const res = await fetch(`/api/batch-live-status?batchId=${b._id}`);
+          const data = await res.json();
+          if (data.success && data.isLive && data.trainerPresent) map[b._id] = data;
+        } catch {
+          // ignore a single batch failing
+        }
+      }));
+    }
+    setLiveStatusMap(map);
+  }, [batches]);
+
+  useEffect(() => {
+    if (batches.length === 0) return;
+    checkLiveStatus();
+    const interval = setInterval(checkLiveStatus, 60000);
+    return () => clearInterval(interval);
+  }, [batches, checkLiveStatus]);
+
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(tick);
+  }, []);
+
+  const classStatusById = useMemo(() => {
+    const map: Record<string, ClassStatus> = {};
+    for (const b of batches) map[b._id] = getClassStatus(b, b.status, liveStatusMap[b._id], now);
+    return map;
+  }, [batches, liveStatusMap, now]);
+
+  const liveStats = useMemo(() => {
+    const values = Object.values(classStatusById);
+    return {
+      live: values.filter(s => s.key === 'live').length,
+      waiting: values.filter(s => s.key === 'waiting').length,
+      startingSoon: values.filter(s => s.key === 'starting-soon').length
+    };
+  }, [classStatusById]);
+
+  const visibleBatches = useMemo(() => {
+    const q = batchSearchTerm.trim().toLowerCase();
+    const trainerOf = (b: Batch) => (b.trainer?.name || b.trainerName || '').toLowerCase();
+
+    let list = batches.filter((b) => {
+      if (q) {
+        const haystack = [
+          b.batchName, b.batchId, b.batchCode, b.course_title,
+          b.trainer?.name, b.trainerName, b.timing, formatClassDays(b)
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      if (batchStatusFilter === 'all') return true;
+      if (['upcoming', 'ongoing', 'completed'].includes(batchStatusFilter)) {
+        return b.status === batchStatusFilter;
+      }
+      return classStatusById[b._id]?.key === batchStatusFilter;
+    });
+
+    const startOf = (b: Batch) => getClassWindow(b)?.start ?? Number.MAX_SAFE_INTEGER;
+    const dateOf = (b: Batch) => new Date(b.startDate).getTime() || 0;
+    const liveRank: Record<ClassStatusKey, number> = {
+      live: 0, waiting: 1, 'starting-soon': 2, 'later-today': 3, next: 4, none: 5
+    };
+
+    switch (batchSortBy) {
+      case 'name-asc':
+        list = [...list].sort((a, b) => a.batchName.localeCompare(b.batchName));
+        break;
+      case 'name-desc':
+        list = [...list].sort((a, b) => b.batchName.localeCompare(a.batchName));
+        break;
+      case 'trainer-asc':
+        list = [...list].sort((a, b) => trainerOf(a).localeCompare(trainerOf(b)));
+        break;
+      case 'time-asc':
+        list = [...list].sort((a, b) => startOf(a) - startOf(b));
+        break;
+      case 'time-desc':
+        list = [...list].sort((a, b) => {
+          const sa = getClassWindow(a)?.start ?? -1;
+          const sb = getClassWindow(b)?.start ?? -1;
+          return sb - sa;
+        });
+        break;
+      case 'start-date-desc':
+        list = [...list].sort((a, b) => dateOf(b) - dateOf(a));
+        break;
+      case 'start-date-asc':
+        list = [...list].sort((a, b) => dateOf(a) - dateOf(b));
+        break;
+      case 'live-first':
+        list = [...list].sort((a, b) =>
+          liveRank[classStatusById[a._id]?.key || 'none'] - liveRank[classStatusById[b._id]?.key || 'none'] ||
+          startOf(a) - startOf(b)
+        );
+        break;
+      default:
+        // 'newest' - API order (createdAt desc), unchanged
+        break;
+    }
+    return list;
+  }, [batches, batchSearchTerm, batchStatusFilter, batchSortBy, classStatusById]);
+
   const fetchExistingCertificates = async () => {
     try {
       const res = await fetch('/api/lms/certificates');
@@ -1378,7 +1645,7 @@ const BatchesManagement = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
           <Card className="bg-gray-800 border-gray-700">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
@@ -1426,7 +1693,95 @@ const BatchesManagement = () => {
               </div>
             </CardContent>
           </Card>
+
+          <Card
+            className="bg-gray-800 border-gray-700 cursor-pointer hover:border-red-500 transition-colors"
+            onClick={() => setBatchStatusFilter('live')}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Live Now</p>
+                  <p className="text-2xl font-bold text-red-500">{liveStats.live}</p>
+                </div>
+                <Video className="h-8 w-8 text-red-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="bg-gray-800 border-gray-700 cursor-pointer hover:border-orange-500 transition-colors"
+            onClick={() => setBatchStatusFilter('waiting')}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-400 text-sm">Waiting for Trainer</p>
+                  <p className="text-2xl font-bold text-orange-400">{liveStats.waiting}</p>
+                </div>
+                <Clock className="h-8 w-8 text-orange-400" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Search / Filter / Sort */}
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Input
+              placeholder="Search by batch title, trainer, course, timing or ID..."
+              value={batchSearchTerm}
+              onChange={(e) => setBatchSearchTerm(e.target.value)}
+              className="pl-9 bg-gray-800 border-gray-700 text-white"
+            />
+          </div>
+          <Select value={batchStatusFilter} onValueChange={setBatchStatusFilter}>
+            <SelectTrigger className="lg:w-56 bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="live">Live Now ({liveStats.live})</SelectItem>
+              <SelectItem value="waiting">Waiting for Trainer ({liveStats.waiting})</SelectItem>
+              <SelectItem value="starting-soon">Starting Soon ({liveStats.startingSoon})</SelectItem>
+              <SelectItem value="later-today">Later Today</SelectItem>
+              <SelectItem value="ongoing">Ongoing ({stats.ongoingBatches})</SelectItem>
+              <SelectItem value="upcoming">Upcoming ({stats.upcomingBatches})</SelectItem>
+              <SelectItem value="completed">Completed ({stats.completedBatches})</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={batchSortBy} onValueChange={setBatchSortBy}>
+            <SelectTrigger className="lg:w-56 bg-gray-800 border-gray-700 text-white">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent className="bg-gray-800 border-gray-700">
+              <SelectItem value="newest">Newest created</SelectItem>
+              <SelectItem value="live-first">Live / Waiting first</SelectItem>
+              <SelectItem value="time-asc">Batch time (earliest first)</SelectItem>
+              <SelectItem value="time-desc">Batch time (latest first)</SelectItem>
+              <SelectItem value="name-asc">Batch title (A–Z)</SelectItem>
+              <SelectItem value="name-desc">Batch title (Z–A)</SelectItem>
+              <SelectItem value="trainer-asc">Trainer name (A–Z)</SelectItem>
+              <SelectItem value="start-date-desc">Start date (newest)</SelectItem>
+              <SelectItem value="start-date-asc">Start date (oldest)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {batches.length > 0 && (
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-400 -mt-2">
+            <span>Showing {visibleBatches.length} of {batches.length} batches</span>
+            {(batchSearchTerm || batchStatusFilter !== 'all' || batchSortBy !== 'newest') && (
+              <button
+                type="button"
+                className="text-blue-400 hover:underline"
+                onClick={() => { setBatchSearchTerm(''); setBatchStatusFilter('all'); setBatchSortBy('newest'); }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Batches Grid */}
         {isLoading ? (
@@ -1437,23 +1792,36 @@ const BatchesManagement = () => {
           <div className="text-center py-8">
             <p className="text-gray-400">No batches created yet</p>
           </div>
+        ) : visibleBatches.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-gray-400">No batches match your search or filter</p>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {batches.map((batch) => {
+            {visibleBatches.map((batch) => {
               const capacityPercentage = getCapacityPercentage(batch.studentIds.length, batch.capacity);
-              
+              const classStatus = classStatusById[batch._id];
+              const classDays = formatClassDays(batch);
+
               return (
-                <Card key={batch._id} className="bg-gray-800 border-gray-700 hover:border-gray-600 transition-colors">
+                <Card key={batch._id} className="bg-gray-800 border-gray-700 hover:border-gray-600 transition-colors min-w-0">
                   <CardHeader>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-white text-lg">{batch.batchName}</CardTitle>
-                        <p className="text-gray-400 text-sm">{batch.batchId}</p>
+                    <div className="flex justify-between items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-white text-lg break-words">{batch.batchName}</CardTitle>
+                        <p className="text-gray-400 text-sm break-all">{batch.batchId}</p>
                       </div>
-                      <Badge className={getStatusColor(batch.status)}>
+                      <Badge className={`${getStatusColor(batch.status)} shrink-0`}>
                         {batch.status}
                       </Badge>
                     </div>
+                    {classStatus && classStatus.key !== 'none' && (
+                      <div className="mt-2">
+                        <Badge className={`${classStatus.color} max-w-full whitespace-normal break-words`}>
+                          {classStatus.label}
+                        </Badge>
+                      </div>
+                    )}
                   </CardHeader>
                   
                   <CardContent className="space-y-4">
@@ -1482,9 +1850,10 @@ const BatchesManagement = () => {
                       </div>
                       
                       {batch.timing && (
-                        <div className="flex items-center gap-2 text-gray-300">
-                          <Clock className="h-4 w-4" />
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-300">
+                          <Clock className="h-4 w-4 shrink-0" />
                           <span>{batch.timing}</span>
+                          {classDays && <span className="text-gray-400">· {classDays}</span>}
                         </div>
                       )}
                     </div>

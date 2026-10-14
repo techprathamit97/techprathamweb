@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
+import { withAuth } from '@/lib/auth';
 const Trainer = require('@/models/Trainer');
 const Assignment = require('@/models/Assignment');
 const Batch = require('@/models/Batch');
 import { notifyBatchStudents, NotificationTemplates } from '@/lib/notificationService';
 
-export async function GET(req: NextRequest) {
+async function handleGet(req: NextRequest, authContext: any) {
   try {
     await connectMongo();
     
@@ -16,6 +17,14 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         { error: 'Trainer ID is required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is the same trainer or admin
+    if (authContext.user.role === 'trainer' && authContext.user.trainerId !== trainerId) {
+      return NextResponse.json(
+        { error: 'You can only access your own assignments' },
+        { status: 403 }
       );
     }
     
@@ -126,7 +135,9 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export const GET = withAuth(handleGet, { roles: ['admin', 'trainer'] });
+
+async function handlePost(req: NextRequest, authContext: any) {
   try {
     await connectMongo();
 
@@ -136,6 +147,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'All fields are required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is the same trainer or admin
+    if (authContext.user.role === 'trainer' && authContext.user.trainerId !== trainerId) {
+      return NextResponse.json(
+        { error: 'You can only create assignments for your own batches' },
+        { status: 403 }
       );
     }
 
@@ -216,8 +235,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export const POST = withAuth(handlePost, { roles: ['admin', 'trainer'] });
+
 // PUT - Update assignment (e.g., add attachments)
-export async function PUT(req: NextRequest) {
+async function handlePut(req: NextRequest, authContext: any) {
   try {
     await connectMongo();
 
@@ -227,6 +248,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json(
         { error: 'Assignment ID is required' },
         { status: 400 }
+      );
+    }
+
+    // Verify the authenticated user is the same trainer or admin
+    if (authContext.user.role === 'trainer' && authContext.user.trainerId !== trainerId) {
+      return NextResponse.json(
+        { error: 'You can only update your own assignments' },
+        { status: 403 }
       );
     }
 
@@ -267,3 +296,5 @@ export async function PUT(req: NextRequest) {
     );
   }
 }
+
+export const PUT = withAuth(handlePut, { roles: ['admin', 'trainer'] });

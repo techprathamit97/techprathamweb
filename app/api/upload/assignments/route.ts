@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { withAuth } from '@/lib/auth';
 
 const s3Client = new S3Client({
   region: process.env.REGION || 'us-east-1',
@@ -11,7 +12,7 @@ const s3Client = new S3Client({
 
 const BUCKET_NAME = process.env.BUCKET_NAME || '';
 
-export async function POST(req: NextRequest) {
+async function handleUpload(req: NextRequest, authContext: any) {
   try {
     if (!BUCKET_NAME) {
       return NextResponse.json(
@@ -33,8 +34,12 @@ export async function POST(req: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Generate unique filename
-    const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    // Generate unique filename with user identifier
+    const userPrefix = authContext.user.role === 'student' 
+      ? authContext.user.studentId 
+      : authContext.user.userId || 'admin';
+    
+    const fileName = `${Date.now()}-${userPrefix}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
     const key = `assignments/${fileName}`;
 
     const command = new PutObjectCommand({
@@ -64,3 +69,6 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Students CAN upload assignments, Trainers CANNOT
+export const POST = withAuth(handleUpload, { roles: ['admin', 'student'] });
