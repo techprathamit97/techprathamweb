@@ -526,7 +526,7 @@ const StudentBatchManagement = () => {
     setLoadingRecordings(true);
     try {
       const studentIdToUse = studentInfo._id || studentInfo.studentId;
-      console.log('Fetching recordings for batch:', batch.batchName, 'Batch ID:', batch._id);
+  
       
       const res = await fetch(`/api/student-batch-recordings?studentId=${studentIdToUse}&batchId=${batch._id}`);
       const data = await res.json();
@@ -1125,6 +1125,14 @@ const StudentBatchManagement = () => {
       return;
     }
 
+    // Create a proper filename from the recording name
+    const recordingName = recording.name || 'Class Recording';
+    const sanitizedName = recordingName
+      .replace(/[<>:"/\\|?*]/g, '-') // Replace invalid filename characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .trim();
+
     // Manual (uploaded) recordings download via the manual download API, which
     // presigns a GetObject for the stored S3 key (no ListBucket needed).
     if (recording.recordId.startsWith('manual-')) {
@@ -1135,7 +1143,9 @@ const StudentBatchManagement = () => {
     }
 
     // BBB recordings are streamed via our BBB download API (resolves the MP4).
-    window.location.href = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
+    // Pass the recording name as a filename parameter
+    const downloadUrl = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download?filename=${encodeURIComponent(sanitizedName)}`;
+    window.location.href = downloadUrl;
     toast.success('Preparing download…');
   };
 

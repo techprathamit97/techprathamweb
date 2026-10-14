@@ -452,7 +452,13 @@ const LMSRecordingsManagement = () => {
       return;
     }
 
-   
+    // Create a proper filename from the recording name
+    const recordingName = recording.name || 'Class Recording';
+    const sanitizedName = recordingName
+      .replace(/[<>:"/\\|?*]/g, '-') // Replace invalid filename characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .trim();
 
     // Manual (uploaded) recordings download via the manual download API, which
     // presigns a GetObject for the stored S3 key.
@@ -464,7 +470,9 @@ const LMSRecordingsManagement = () => {
     }
 
     // BBB recordings: the API resolves the combined MP4 on the BBB server.
-    window.location.href = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download`;
+    // Pass the recording name as a filename parameter
+    const downloadUrl = `/api/lms/recordings/${encodeURIComponent(recording.recordId)}/download?filename=${encodeURIComponent(sanitizedName)}`;
+    window.location.href = downloadUrl;
     toast.success('Preparing download…');
   };
 

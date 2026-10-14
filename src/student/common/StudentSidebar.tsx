@@ -135,24 +135,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ onClose }) => {
       )}
 
       {/* Course Progress Circle */}
-      {courseStats && (
-        <div className="p-3 lg:p-4 border-b border-gray-200 bg-gradient-to-br from-blue-50 to-indigo-50">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-center sm:text-left">
-              <p className="text-xs font-medium text-gray-600">Course Progress</p>
-              <div className="flex items-center justify-center sm:justify-start gap-2 lg:gap-3 mt-1">
-                <TrendingUp className="h-3 w-3 lg:h-4 lg:w-4 text-green-600" />
-                <span className="text-xs lg:text-sm">
-                  <span className="font-bold text-green-600">{courseStats.completedCourses}</span>
-                  <span className="text-gray-500">/{courseStats.totalCourses}</span>
-                  <span className="text-gray-500 text-xs ml-1 hidden sm:inline">completed</span>
-                </span>
-              </div>
-            </div>
-            <CircularProgress percentage={courseStats.avgProgress} size={60} strokeWidth={5} />
-          </div>
-        </div>
-      )}
+    
 
       {/* Navigation Menu */}
       <div className="flex-1 overflow-y-auto py-4">
