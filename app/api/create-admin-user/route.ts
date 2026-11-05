@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
+import { getRequestAdmin, anyAdminExists } from '@/lib/adminApiAuth';
 const User = require('@/models/User');
 const bcrypt = require('bcryptjs');
 
 export async function POST(req: NextRequest) {
   try {
     await connectMongo();
-    
+
+    // Protect this seeding endpoint. It may only run for the very first admin
+    // (bootstrap); once any admin exists, a logged-in admin is required.
+    if (await anyAdminExists()) {
+      const requester = await getRequestAdmin(req);
+      if (!requester) {
+        return NextResponse.json(
+          { error: 'Authentication required. Only a logged-in admin can use this endpoint.' },
+          { status: 401 }
+        );
+      }
+    }
+
     console.log('=== CREATING ADMIN USER ===');
     
     // Check if admin already exists
@@ -136,7 +149,16 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     await connectMongo();
-    
+
+    // Listing admin accounts is sensitive — require a logged-in admin.
+    const requester = await getRequestAdmin(req);
+    if (!requester) {
+      return NextResponse.json(
+        { error: 'Authentication required. Only a logged-in admin can view admin accounts.' },
+        { status: 401 }
+      );
+    }
+
     // Check current admin users
     const adminUsers = await User.find({ role: 'admin' }, { password: 0 });
     

@@ -92,6 +92,8 @@ export async function GET(req: NextRequest) {
       capacity: batch.capacity || 30,
       enrolled_students: (batch.studentIds || []).map((student: any) => student._id),
       status: batch.status || 'active',
+      // Trainer-driven completion workflow status: 'none' | 'pending' | 'approved'
+      completionStatus: batch.completionRequest?.status || 'none',
       meetingLink: batch.meetingLink || ''
     }));
     

@@ -90,6 +90,12 @@ interface Batch {
   meetingLink?: string;
   description?: string;
   createdAt: string;
+  // Trainer-driven completion request awaiting admin approval
+  completionRequest?: {
+    status?: 'none' | 'pending' | 'approved';
+    requestedAt?: string;
+    approvedAt?: string;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -283,6 +289,11 @@ const BatchesManagement = () => {
   const [batchStatusFilter, setBatchStatusFilter] = useState('all');
   const [batchSortBy, setBatchSortBy] = useState('newest');
 
+  // Batch-completion approval popup (admin sets the final end date)
+  const [approveDialog, setApproveDialog] = useState<{ open: boolean; batch: Batch | null }>({ open: false, batch: null });
+  const [approveEndDate, setApproveEndDate] = useState('');
+  const [isApprovingCompletion, setIsApprovingCompletion] = useState(false);
+
   // Live class status: batchId -> /api/batch-live-status response (trainer present only)
   const [liveStatusMap, setLiveStatusMap] = useState<Record<string, any>>({});
   // Ticks so time-based statuses (waiting / starting soon) update without a reload
@@ -400,13 +411,83 @@ const BatchesManagement = () => {
       await fetch(`/api/lms/batches/${batchId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           statusOnly: true,
-          status: status 
+          status: status
         })
       });
     } catch (error) {
       console.error('Failed to update batch status:', error);
+    }
+  };
+
+  // Open the "set end date" popup when approving a completion request.
+  const openApproveDialog = (batch: Batch) => {
+    const today = new Date();
+    const defaultDate = today.toISOString().split('T')[0];
+    setApproveEndDate(defaultDate);
+    setApproveDialog({ open: true, batch });
+  };
+
+  // Reject a trainer's completion request.
+  const rejectCompletion = async (batch: Batch) => {
+    const ok = window.confirm(
+      `Reject the completion request for "${batch.batchName}"? The trainer can request again later.`
+    );
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/lms/batches/${batch._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completionAction: 'reject' })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success('Completion request rejected');
+        await fetchBatches();
+      } else {
+        toast.error(data.error || 'Failed to reject request');
+      }
+    } catch (error: any) {
+      console.error('Reject completion error:', error);
+      toast.error('Failed to reject request: ' + error.message);
+    }
+  };
+
+  // Confirm approval from the popup, sending the admin-chosen end date.
+  const confirmApproveCompletion = async () => {
+    const batch = approveDialog.batch;
+    if (!batch) return;
+
+    if (!approveEndDate) {
+      toast.error('Please choose an end date');
+      return;
+    }
+
+    setIsApprovingCompletion(true);
+    try {
+      const res = await fetch(`/api/lms/batches/${batch._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completionAction: 'approve', endDate: approveEndDate })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success('Batch marked as completed');
+        setApproveDialog({ open: false, batch: null });
+        setApproveEndDate('');
+        await fetchBatches();
+      } else {
+        toast.error(data.error || 'Failed to approve completion');
+      }
+    } catch (error: any) {
+      console.error('Approve completion error:', error);
+      toast.error('Failed to approve completion: ' + error.message);
+    } finally {
+      setIsApprovingCompletion(false);
     }
   };
 
@@ -1822,6 +1903,31 @@ const BatchesManagement = () => {
                         </Badge>
                       </div>
                     )}
+                    {batch.completionRequest?.status === 'pending' && (
+                      <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                        <div className="flex items-center gap-2 text-sm font-medium text-amber-300">
+                          <Clock className="h-4 w-4 shrink-0" />
+                          Trainer requested completion
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => openApproveDialog(batch)}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-red-500 text-red-400 hover:bg-red-600 hover:text-white"
+                            onClick={() => rejectCompletion(batch)}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                      </div>
+                    )}
                   </CardHeader>
                   
                   <CardContent className="space-y-4">
@@ -2532,6 +2638,63 @@ const BatchesManagement = () => {
               onClick={handleRestrictStudent}
             >
               Confirm Restriction
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Batch Completion Dialog (set end date) */}
+      <Dialog
+        open={approveDialog.open}
+        onOpenChange={(open) => {
+          if (!open) {
+            setApproveDialog({ open: false, batch: null });
+            setApproveEndDate('');
+          }
+        }}
+      >
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-white">Approve Batch Completion</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <p className="text-sm text-gray-300">
+              Approving completion for{' '}
+              <span className="font-semibold text-white break-words">
+                {approveDialog.batch?.batchName}
+              </span>{' '}
+              will mark it as <span className="font-semibold">completed</span>. Set the batch
+              end date below.
+            </p>
+            <div>
+              <Label className="text-white">Batch End Date *</Label>
+              <Input
+                type="date"
+                value={approveEndDate}
+                onChange={(e) => setApproveEndDate(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setApproveDialog({ open: false, batch: null });
+                setApproveEndDate('');
+              }}
+              disabled={isApprovingCompletion}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={confirmApproveCompletion}
+              disabled={isApprovingCompletion || !approveEndDate}
+            >
+              {isApprovingCompletion ? 'Approving…' : 'Approve & Complete'}
             </Button>
           </div>
         </DialogContent>

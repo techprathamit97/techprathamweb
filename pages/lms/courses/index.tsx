@@ -109,6 +109,9 @@ const CoursesManagement = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  // When true, the Add-Course category field is a free-text input for a new
+  // category instead of a dropdown of existing ones.
+  const [addingNewCategory, setAddingNewCategory] = useState(false);
 
   // Module management state
   const [isModuleDialogOpen, setIsModuleDialogOpen] = useState(false);
@@ -174,6 +177,7 @@ const CoursesManagement = () => {
       if (res.ok) {
         toast.success('Course created successfully');
         setIsCreateDialogOpen(false);
+        setAddingNewCategory(false);
         setNewCourse({
           courseId: '',
           title: '',
@@ -198,10 +202,24 @@ const CoursesManagement = () => {
     if (!editingCourse) return;
 
     try {
+      // Send only the editable fields. Sending the whole course object would
+      // include `modules`, which the API treats as a modules-only update and
+      // then ignores these field changes.
+      const payload = {
+        courseId: editingCourse.courseId,
+        title: editingCourse.title,
+        slug: editingCourse.slug,
+        category: editingCourse.category,
+        description: editingCourse.description,
+        duration: editingCourse.duration,
+        price: editingCourse.price,
+        isActive: editingCourse.isActive
+      };
+
       const res = await fetch(`/api/lms/courses/${editingCourse._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingCourse)
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
@@ -373,7 +391,13 @@ const CoursesManagement = () => {
             <p className="text-gray-400 mt-2">Manage all courses and programs</p>
           </div>
           
-          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <Dialog
+            open={isCreateDialogOpen}
+            onOpenChange={(open) => {
+              setIsCreateDialogOpen(open);
+              if (!open) setAddingNewCategory(false);
+            }}
+          >
             <DialogTrigger asChild>
               <Button className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700">
                 <Plus className="mr-2 h-4 w-4" />
@@ -397,12 +421,51 @@ const CoursesManagement = () => {
                   </div>
                   <div>
                     <Label>Category *</Label>
-                    <Input
-                      placeholder="e.g., IT, Business"
-                      value={newCourse.category}
-                      onChange={(e) => setNewCourse({...newCourse, category: e.target.value})}
-                      className="bg-gray-800 border-gray-700"
-                    />
+                    {addingNewCategory ? (
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Enter new category"
+                          value={newCourse.category}
+                          onChange={(e) => setNewCourse({...newCourse, category: e.target.value})}
+                          className="bg-gray-800 border-gray-700"
+                          autoFocus
+                        />
+                        {categories.filter(Boolean).length > 0 && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                              setAddingNewCategory(false);
+                              setNewCourse({...newCourse, category: ''});
+                            }}
+                          >
+                            Pick existing
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <Select
+                        value={newCourse.category}
+                        onValueChange={(value) => {
+                          if (value === '__new__') {
+                            setAddingNewCategory(true);
+                            setNewCourse({...newCourse, category: ''});
+                          } else {
+                            setNewCourse({...newCourse, category: value});
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="bg-gray-800 border-gray-700 text-white">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-700">
+                          {categories.filter(Boolean).map(cat => (
+                            <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                          ))}
+                          <SelectItem value="__new__">➕ Add new category</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
                 </div>
                 

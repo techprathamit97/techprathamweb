@@ -21,7 +21,8 @@ import {
   RefreshCw,
   Circle,
   XCircle,
-  Edit
+  Edit,
+  CheckCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -56,7 +57,31 @@ interface Batch {
   startDate?: string;
   endDate?: string;
   daysOfWeek?: string[];
+  status?: 'upcoming' | 'ongoing' | 'completed';
+  // Trainer-driven completion workflow: 'none' | 'pending' | 'approved'
+  completionStatus?: 'none' | 'pending' | 'approved';
 }
+
+// Determine a batch's lifecycle status from its dates. Mirrors the LMS batches
+// page (pages/lms/batches/index.tsx -> getBatchStatus) so trainer and admin
+// views agree on what "completed" means:
+//   - today is past endDate            -> completed
+//   - today is between start and end   -> ongoing
+//   - otherwise (or dates missing)     -> upcoming
+// Missing/invalid dates never classify as completed, so a batch is never hidden
+// by accident.
+const computeBatchStatus = (batch: Batch): 'upcoming' | 'ongoing' | 'completed' => {
+  const today = new Date();
+  const start = batch.startDate ? new Date(batch.startDate) : null;
+  const end = batch.endDate ? new Date(batch.endDate) : null;
+
+  const endValid = end && !isNaN(end.getTime());
+  const startValid = start && !isNaN(start.getTime());
+
+  if (endValid && today > (end as Date)) return 'completed';
+  if (startValid && endValid && today >= (start as Date) && today <= (end as Date)) return 'ongoing';
+  return 'upcoming';
+};
 
 interface BBBRecording {
   recordId: string;
@@ -76,7 +101,7 @@ interface BBBRecording {
   canDownload: boolean;
   status: string;
 }
-const TrainerBatchManagement = () => {
+const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing' | 'completed' }) => {
   const router = useRouter();
   const [trainerInfo, setTrainerInfo] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -110,6 +135,11 @@ const TrainerBatchManagement = () => {
   const [customClassTitle, setCustomClassTitle] = useState('');
   const [creatingCustomClass, setCreatingCustomClass] = useState(false);
   const [endingSession, setEndingSession] = useState(false);
+
+  // Batch completion request (trainer marks complete -> admin approves)
+  const [completionTarget, setCompletionTarget] = useState<Batch | null>(null);
+  const [completionConfirmText, setCompletionConfirmText] = useState('');
+  const [submittingCompletion, setSubmittingCompletion] = useState(false);
 
   // Ask the server whether this batch genuinely has a live class right now
   const fetchLiveStatus = async (batch: Batch) => {
@@ -219,13 +249,30 @@ const TrainerBatchManagement = () => {
             timing: batch.schedule?.timing || batch.timing || 'TBD',
             startDate: batch.schedule?.startDate || batch.startDate || '',
             endDate: batch.schedule?.endDate || batch.endDate || '',
-            daysOfWeek: batch.daysOfWeek || batch.schedule?.days || []
+            daysOfWeek: batch.daysOfWeek || batch.schedule?.days || [],
+            completionStatus: batch.completionStatus || 'none'
           };
         });
         
-        setAvailableBatches(batchesWithCounts);
-        console.log(`Loaded ${batchesWithCounts.length} batches:`, batchesWithCounts);
-        toast.success(`Found ${batchesWithCounts.length} batches`);
+        // Tag each batch with its lifecycle status, then show only the batches
+        // relevant to this view: the Completed Batches page shows completed ones,
+        // Batch Management shows everything still active (ongoing + upcoming).
+        const batchesWithStatus: Batch[] = batchesWithCounts.map((batch: Batch) => ({
+          ...batch,
+          status: computeBatchStatus(batch)
+        }));
+
+        const filteredBatches = batchesWithStatus.filter((batch) =>
+          viewMode === 'completed'
+            ? batch.status === 'completed'
+            : batch.status !== 'completed'
+        );
+
+        setAvailableBatches(filteredBatches);
+        console.log(`Loaded ${filteredBatches.length}/${batchesWithStatus.length} batches (view: ${viewMode}):`, filteredBatches);
+        toast.success(
+          `Found ${filteredBatches.length} ${viewMode === 'completed' ? 'completed' : 'active'} batch${filteredBatches.length !== 1 ? 'es' : ''}`
+        );
       } else {
         console.error('Failed to load batches:', data);
         toast.error('Failed to load batches');
@@ -497,7 +544,58 @@ const TrainerBatchManagement = () => {
     setCustomClassTitle('');
     setActiveTab('classes');
   };
-  
+
+  // Open the "type completed to confirm" modal for a batch.
+  const requestBatchCompletion = (batch: Batch) => {
+    if (batch.completionStatus === 'pending' || batch.completionStatus === 'approved') return;
+    setCompletionTarget(batch);
+    setCompletionConfirmText('');
+  };
+
+  // Submit the completion request after the trainer typed "completed".
+  const submitBatchCompletion = async () => {
+    if (!completionTarget || !trainerInfo || submittingCompletion) return;
+
+    if (completionConfirmText.trim().toLowerCase() !== 'completed') {
+      toast.error('Please type "completed" to confirm.');
+      return;
+    }
+
+    setSubmittingCompletion(true);
+    try {
+      const res = await fetch('/api/trainer/batch-completion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          batchId: completionTarget._id,
+          trainerId: trainerInfo._id || trainerInfo.trainerId,
+          confirmText: completionConfirmText
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success(data.message || 'Completion request submitted for admin approval.');
+        // Reflect the pending state locally without a full refetch.
+        setAvailableBatches((prev) =>
+          prev.map((b) =>
+            b._id === completionTarget._id ? { ...b, completionStatus: 'pending' } : b
+          )
+        );
+        setCompletionTarget(null);
+        setCompletionConfirmText('');
+      } else {
+        toast.error(data.error || 'Failed to submit completion request');
+      }
+    } catch (error: any) {
+      console.error('Batch completion request error:', error);
+      toast.error(error.message || 'Something went wrong');
+    } finally {
+      setSubmittingCompletion(false);
+    }
+  };
+
   // Handle creating next class manually
   const handleCreateNextClass = async (batch: Batch) => {
     try {
@@ -1152,6 +1250,56 @@ const TrainerBatchManagement = () => {
         </div>
       )}
 
+      {/* Batch Completion Confirmation Modal */}
+      {completionTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Mark Batch as Completed</h2>
+            </div>
+            <p className="text-sm text-gray-600">
+              You are about to mark{' '}
+              <span className="font-semibold text-gray-900 break-words">
+                {completionTarget.batchName}
+              </span>{' '}
+              as completed. This sends a request to the admin for approval. Once approved,
+              the batch will be closed and moved to your Completed Batches.
+            </p>
+            <div>
+              <label htmlFor="completion-confirm" className="mb-1 block text-sm font-medium text-gray-700">
+                Type <span className="font-semibold">completed</span> to confirm
+              </label>
+              <input
+                id="completion-confirm"
+                type="text"
+                value={completionConfirmText}
+                onChange={(e) => setCompletionConfirmText(e.target.value)}
+                placeholder="completed"
+                className="w-full border border-gray-300 rounded-md px-3 py-2 bg-white text-gray-900 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => { setCompletionTarget(null); setCompletionConfirmText(''); }}
+                disabled={submittingCompletion}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={submitBatchCompletion}
+                disabled={submittingCompletion || completionConfirmText.trim().toLowerCase() !== 'completed'}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                {submittingCompletion ? 'Submitting…' : 'Confirm Completion'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
@@ -1166,15 +1314,21 @@ const TrainerBatchManagement = () => {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <Users className="h-8 w-8" />
-                {selectedBatch ? `${selectedBatch.batchName} Management` : 'Batch-wise Class & Recording Management'}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-3xl font-bold flex items-center gap-2 break-words">
+                <Users className="h-8 w-8 shrink-0" />
+                {selectedBatch
+                  ? `${selectedBatch.batchName} Management`
+                  : viewMode === 'completed'
+                    ? 'Completed Batches'
+                    : 'Batch-wise Class & Recording Management'}
               </h1>
               <p className="text-purple-100 mt-2">
-                {selectedBatch 
+                {selectedBatch
                   ? `Manage classes and recordings for ${selectedBatch.batchName} - ${selectedBatch.courseTitle}`
-                  : 'Select a batch to view and manage its classes and recordings'
+                  : viewMode === 'completed'
+                    ? 'Your completed batches — view their classes and recordings'
+                    : 'Select a batch to view and manage its classes and recordings'
                 }
               </p>
             </div>
@@ -1185,9 +1339,11 @@ const TrainerBatchManagement = () => {
         {/* Main Content */}
         {!selectedBatch ? (
           // Batch Selection View
-          <BatchSelector 
+          <BatchSelector
             batches={availableBatches}
             onBatchSelect={handleBatchSelect}
+            onRequestComplete={requestBatchCompletion}
+            viewMode={viewMode}
           />
         ) : (
           // Selected Batch Management View
@@ -1195,12 +1351,12 @@ const TrainerBatchManagement = () => {
             {/* Batch Info Card */}
             <Card className="border-purple-200 bg-purple-50">
               <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-gray-900">{selectedBatch.batchName}</h2>
-                    <p className="text-gray-600">{selectedBatch.courseTitle}</p>
+                <div className="flex items-center justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-2xl font-bold text-gray-900 break-words">{selectedBatch.batchName}</h2>
+                    <p className="text-gray-600 break-words">{selectedBatch.courseTitle}</p>
                   </div>
-                  <div className="flex gap-4 text-sm">
+                  <div className="flex gap-4 text-sm shrink-0">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-purple-600">{selectedBatch.studentCount}</div>
                       <div className="text-gray-600">Students</div>
@@ -1387,10 +1543,12 @@ const TrainerBatchManagement = () => {
   );
 };
 // Batch Selector Component
-const BatchSelector: React.FC<{ 
-  batches: Batch[], 
-  onBatchSelect: (batch: Batch) => void 
-}> = ({ batches, onBatchSelect }) => {
+const BatchSelector: React.FC<{
+  batches: Batch[],
+  onBatchSelect: (batch: Batch) => void,
+  onRequestComplete: (batch: Batch) => void,
+  viewMode: 'ongoing' | 'completed'
+}> = ({ batches, onBatchSelect, onRequestComplete, viewMode }) => {
   if (batches.length === 0) {
     return (
       <Card className="border-2 border-dashed border-gray-300">
@@ -1416,7 +1574,13 @@ const BatchSelector: React.FC<{
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {batches.map((batch) => (
-          <BatchCard key={batch._id} batch={batch} onSelect={() => onBatchSelect(batch)} />
+          <BatchCard
+            key={batch._id}
+            batch={batch}
+            onSelect={() => onBatchSelect(batch)}
+            onRequestComplete={() => onRequestComplete(batch)}
+            viewMode={viewMode}
+          />
         ))}
       </div>
     </div>
@@ -1424,7 +1588,12 @@ const BatchSelector: React.FC<{
 };
 
 // Batch Card Component
-const BatchCard: React.FC<{ batch: Batch, onSelect: () => void }> = ({ batch, onSelect }) => {
+const BatchCard: React.FC<{
+  batch: Batch,
+  onSelect: () => void,
+  onRequestComplete: () => void,
+  viewMode: 'ongoing' | 'completed'
+}> = ({ batch, onSelect, onRequestComplete, viewMode }) => {
   const hasLiveClasses = batch.liveClasses > 0;
   const hasUpcomingClasses = batch.upcomingClasses > 0;
   
@@ -1435,18 +1604,18 @@ const BatchCard: React.FC<{ batch: Batch, onSelect: () => void }> = ({ batch, on
     }`}>
       <CardContent className="p-6">
         <div className="space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors break-words">
                 {batch.batchName}
               </h3>
-              <p className="text-sm text-gray-600 mt-1">{batch.courseTitle}</p>
+              <p className="text-sm text-gray-600 mt-1 break-words">{batch.courseTitle}</p>
               {batch.timing && (
-                <p className="text-xs text-gray-500 mt-1">📅 {batch.timing}</p>
+                <p className="text-xs text-gray-500 mt-1 break-words">📅 {batch.timing}</p>
               )}
             </div>
             {hasLiveClasses && (
-              <Badge className="bg-red-600 animate-pulse">
+              <Badge className="bg-red-600 animate-pulse shrink-0">
                 <PlayCircle className="h-3 w-3 mr-1" />
                 Live
               </Badge>
@@ -1490,6 +1659,37 @@ const BatchCard: React.FC<{ batch: Batch, onSelect: () => void }> = ({ batch, on
               </span>
             </div>
           )}
+
+          {/* Batch completion. "Completed" is driven by the end date (batch.status),
+              never by the approval flag — if the end date hasn't passed, the batch
+              is not completed and the trainer can (re)request completion. A pending
+              request shows the waiting message instead of the checkbox. */}
+          {batch.status === 'completed' ? (
+            <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-md">
+              <CheckCircle className="h-4 w-4 text-gray-600" />
+              <span className="text-sm text-gray-700 font-medium">Batch completed</span>
+            </div>
+          ) : batch.completionStatus === 'pending' ? (
+            <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-md">
+              <Clock className="h-4 w-4 text-amber-600" />
+              <span className="text-sm text-amber-700 font-medium">
+                Completion pending admin approval
+              </span>
+            </div>
+          ) : viewMode !== 'completed' ? (
+            <label
+              className="flex items-center gap-2 p-2 rounded-md border border-dashed border-gray-300 cursor-pointer hover:bg-gray-50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={false}
+                onChange={onRequestComplete}
+                className="h-4 w-4 accent-green-600 cursor-pointer"
+              />
+              <span className="text-sm text-gray-700">Mark batch as completed</span>
+            </label>
+          ) : null}
 
           <Button
             onClick={onSelect}

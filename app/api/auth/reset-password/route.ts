@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
 const Student = require('@/models/Student');
 const Trainer = require('@/models/Trainer');
+const User = require('@/models/User');
 const bcrypt = require('bcryptjs');
 
 // PUT - Reset password with token
@@ -27,23 +28,29 @@ export async function PUT(req: NextRequest) {
     }
 
     // Determine which collection to search based on type
-    const userType = type === 'trainer' ? 'trainer' : 'student';
+    let userType: 'student' | 'trainer' | 'admin' = 'student';
+    if (type === 'trainer') userType = 'trainer';
+    else if (type === 'admin') userType = 'admin';
 
     let user;
     let userModel;
 
     if (userType === 'student') {
-      user = await Student.findOne({
-        resetToken: token,
-        resetTokenExpiry: { $gt: new Date() }
-      });
       userModel = Student;
-    } else {
-      user = await Trainer.findOne({
-        resetToken: token,
-        resetTokenExpiry: { $gt: new Date() }
-      });
+    } else if (userType === 'trainer') {
       userModel = Trainer;
+    } else {
+      userModel = User;
+    }
+
+    user = await userModel.findOne({
+      resetToken: token,
+      resetTokenExpiry: { $gt: new Date() }
+    });
+
+    // Admin reset tokens must belong to an account with the admin role
+    if (user && userType === 'admin' && user.role !== 'admin') {
+      user = null;
     }
 
     if (!user) {

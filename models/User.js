@@ -44,7 +44,11 @@ const userSchema = new mongoose.Schema({
   // Legacy field mappings for backward compatibility
   studentId: String, // For existing student records
   trainerId: String, // For existing trainer records
-  
+
+  // Password reset tokens
+  resetToken: String,
+  resetTokenExpiry: Date,
+
 }, { timestamps: true });
 
 // Index for efficient queries

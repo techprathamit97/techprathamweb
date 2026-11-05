@@ -9,7 +9,52 @@ export async function PUT(req: Request, { params }: { params: Promise<{ batchId:
     
     const { batchId } = await params;
     const data = await req.json();
-    
+
+    // Handle a trainer-completion approval/rejection by an admin.
+    //   approve -> record the request as approved and set the admin-chosen end
+    //              date. Status stays date-derived, so it is NOT set here.
+    //   reject  -> clear the request so the trainer can request again later.
+    // { strict: false } keeps this working even if the in-memory Batch schema is
+    // stale (a Next.js + Mongoose model-caching quirk).
+    if (data.completionAction) {
+      let update: any;
+
+      if (data.completionAction === 'approve') {
+        // Use the admin-chosen end date, falling back to today if missing/invalid.
+        let endDate = new Date();
+        if (data.endDate) {
+          const parsed = new Date(data.endDate);
+          if (!isNaN(parsed.getTime())) endDate = parsed;
+        }
+        // Dot-notation preserves requestedAt/requestedBy.
+        update = {
+          $set: {
+            'completionRequest.status': 'approved',
+            'completionRequest.approvedAt': new Date(),
+            endDate
+          }
+        };
+      } else if (data.completionAction === 'reject') {
+        update = { $set: { completionRequest: { status: 'none' } } };
+      } else {
+        return NextResponse.json({ error: 'Invalid completionAction' }, { status: 400 });
+      }
+
+      const result = await Batch.updateOne({ _id: batchId }, update, { strict: false });
+      if (result.matchedCount === 0) {
+        return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
+      }
+
+      const updated = await Batch.findById(batchId).lean();
+      return NextResponse.json({
+        success: true,
+        message: data.completionAction === 'approve'
+          ? 'Batch completion approved'
+          : 'Batch completion request rejected',
+        batch: updated
+      });
+    }
+
     // Handle status-only updates (don't require full validation)
     if (data.statusOnly) {
       const updatedBatch = await Batch.findByIdAndUpdate(
@@ -45,25 +90,38 @@ export async function PUT(req: Request, { params }: { params: Promise<{ batchId:
       );
     }
     
+    const updatePayload: any = {
+      batchName: data.batchName,
+      courseId: data.courseId,
+      trainerId: data.trainerId,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      timing: data.timing,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      classFrequency: data.classFrequency || 'daily',
+      classDuration: data.classDuration || 60,
+      daysOfWeek: data.daysOfWeek || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
+      capacity: data.capacity || 30,
+      description: data.description,
+      updatedAt: new Date()
+    };
+
+    // If the admin extends the end date into the future, the batch is no longer
+    // completed (status is date-based), so reset the completion request back to
+    // 'none' — the whole workflow returns to its original state and the trainer
+    // can request completion again.
+    if (data.endDate) {
+      const newEnd = new Date(data.endDate);
+      if (!isNaN(newEnd.getTime()) && newEnd > new Date()) {
+        updatePayload.completionRequest = { status: 'none' };
+      }
+    }
+
     const updatedBatch = await Batch.findByIdAndUpdate(
       batchId,
-      {
-        batchName: data.batchName,
-        courseId: data.courseId,
-        trainerId: data.trainerId,
-        startDate: data.startDate,
-        endDate: data.endDate,
-        timing: data.timing,
-        startTime: data.startTime,
-        endTime: data.endTime,
-        classFrequency: data.classFrequency || 'daily',
-        classDuration: data.classDuration || 60,
-        daysOfWeek: data.daysOfWeek || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        capacity: data.capacity || 30,
-        description: data.description,
-        updatedAt: new Date()
-      },
-      { new: true }
+      updatePayload,
+      { new: true, strict: false }
     );
     
     if (!updatedBatch) {

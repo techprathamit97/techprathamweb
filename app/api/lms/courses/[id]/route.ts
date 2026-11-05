@@ -41,31 +41,17 @@ export async function PUT(
     const { id } = await params;
     const data = await req.json();
 
-    // Handle module operations specifically
-    if (data.modules) {
-      // Reorder modules
-      if (data.reorderModules) {
-        const course = await Course.findById(id);
-        if (!course) {
-          return NextResponse.json({ error: 'Course not found' }, { status: 404 });
-        }
-
-        course.modules = data.modules;
-        await course.save();
-        return NextResponse.json(course);
-      }
-
-      // Update entire modules array
-      const course = await Course.findByIdAndUpdate(
-        id,
-        { modules: data.modules },
-        { new: true, runValidators: true }
-      );
-
+    // Explicit modules reorder. Guard on the `reorderModules` flag so a regular
+    // course update that merely carries a `modules` array is NOT mistaken for a
+    // modules-only update (which would silently drop the other field edits).
+    if (data.reorderModules && data.modules) {
+      const course = await Course.findById(id);
       if (!course) {
         return NextResponse.json({ error: 'Course not found' }, { status: 404 });
       }
 
+      course.modules = data.modules;
+      await course.save();
       return NextResponse.json(course);
     }
 

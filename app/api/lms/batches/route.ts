@@ -147,6 +147,7 @@ export async function GET() {
       classDuration: batch.classDuration || 60,
       capacity: batch.capacity || 30,
       status: batch.status || 'active',
+      completionRequest: batch.completionRequest || { status: 'none' },
       meetingLink: batch.meetingLink || '',
       description: batch.description || '',
       createdAt: batch.createdAt

@@ -26,7 +26,27 @@ const batchSchema = new mongoose.Schema({
   description: String,
   status: String,
   // Course progress - set by trainer for all students at once
-  courseProgress: { type: Number, default: 0 } // 0, 10, 30, 70, 100
+  courseProgress: { type: Number, default: 0 }, // 0, 10, 30, 70, 100
+
+  // Trainer-initiated batch completion, approved by an admin.
+  //   none     - no request (default, existing batches)
+  //   pending  - trainer marked the batch completed; awaiting admin approval
+  //   approved - admin approved; batch status is set to 'completed' and endDate
+  //              is moved to the approval date
+  // Kept separate from `status` on purpose: the admin batches page recomputes
+  // `status` from dates on every load, so storing the request here means that
+  // auto-sync never clobbers a pending/approved request.
+  completionRequest: {
+    status: {
+      type: String,
+      enum: ['none', 'pending', 'approved'],
+      default: 'none'
+    },
+    requestedAt: Date,
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Trainer' },
+    approvedAt: Date,
+    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.models.Batch || mongoose.model('Batch', batchSchema);

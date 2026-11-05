@@ -17,7 +17,8 @@ import {
   BookOpen,
   X,
   FolderOpen,
-  Settings
+  Settings,
+  CheckCircle
 } from 'lucide-react';
 
 interface TrainerSidebarProps {
@@ -31,6 +32,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onClose }) => {
     { icon: LayoutDashboard, label: 'Dashboard', href: '/trainer/dashboard' },
     { icon: User, label: 'Profile', href: '/trainer/profile' },
     { icon: Settings, label: 'Batch Management', href: '/trainer/batch-management' },
+    { icon: CheckCircle, label: 'Completed Batches', href: '/trainer/completed-batches' },
     // { icon: VideoIcon, label: 'Join Classes (Legacy)', href: '/trainer/join-class' },
     { icon: Video, label: 'Class Recording', href: '/trainer/recordings' },
     { icon: BookOpen, label: 'Course Modules', href: '/trainer/course-modules' },

@@ -1,12 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
+import { getRequestAdmin, anyAdminExists } from '@/lib/adminApiAuth';
 const User = require('@/models/User');
 const bcrypt = require('bcryptjs');
 
 export async function POST(req: NextRequest) {
   try {
     await connectMongo();
-    
+
+    // This endpoint resets an admin to a known default password, so it must be
+    // protected. Allow it only during first-time bootstrap (no admin exists), or
+    // for an already logged-in admin.
+    if (await anyAdminExists()) {
+      const requester = await getRequestAdmin(req);
+      if (!requester) {
+        return NextResponse.json(
+          { error: 'Authentication required. Only a logged-in admin can reset the admin password.' },
+          { status: 401 }
+        );
+      }
+    }
+
     console.log('=== RESETTING ADMIN PASSWORD ===');
     
     // Find the admin user
@@ -68,7 +82,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET(req: NextRequest) {
-  // Allow GET requests to reset password for convenience
-  return POST(req);
+export async function GET() {
+  // Resetting a password is a state-changing, sensitive action and must not be
+  // triggerable by a simple GET (link prefetch, crawler, etc.). Use POST.
+  return NextResponse.json(
+    { error: 'Method not allowed. Use POST (authenticated as an admin) to reset the admin password.' },
+    { status: 405 }
+  );
 }

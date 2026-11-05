@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectMongo } from '@/utils/mongodb';
 const Student = require('@/models/Student');
 const Trainer = require('@/models/Trainer');
+const User = require('@/models/User');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -77,7 +78,13 @@ export async function POST(req: NextRequest) {
       userType = 'trainer';
     }
 
-    // If not found in either
+    // If not found in Student/Trainer, check the unified User collection (admins)
+    if (!user) {
+      user = await User.findOne({ email: userEmail, role: 'admin' });
+      userType = 'admin';
+    }
+
+    // If not found in any collection
     if (!user) {
       // Return success anyway to prevent email enumeration
       return NextResponse.json({
@@ -96,8 +103,13 @@ export async function POST(req: NextRequest) {
         resetToken: resetToken,
         resetTokenExpiry: resetTokenExpiry
       });
-    } else {
+    } else if (userType === 'trainer') {
       await Trainer.findByIdAndUpdate(user._id, {
+        resetToken: resetToken,
+        resetTokenExpiry: resetTokenExpiry
+      });
+    } else {
+      await User.findByIdAndUpdate(user._id, {
         resetToken: resetToken,
         resetTokenExpiry: resetTokenExpiry
       });
