@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
       capacity: batch.capacity || 30,
       enrolled_students: batch.studentIds || [],
       status: batch.status || 'active',
+      courseProgress: batch.courseProgress || 0,
       meetingLink: batch.meetingLink || '',
       trainer: batch.trainerId ? {
         trainerId: batch.trainerId.trainerId || '',
@@ -247,8 +248,8 @@ export async function GET(req: NextRequest) {
       course_link: batch.course_title.toLowerCase().replace(/\s+/g, '-'),
       batchId: batch.batchId,
       trainerId: batch.trainer.trainerId,
-      progressPercentage: 0, // You can implement progress tracking later
-      courseCompletion: false,
+      progressPercentage: batch.status === 'completed' ? 100 : (batch.courseProgress || 0),
+      courseCompletion: batch.status === 'completed',
       totalAmount: 0, // You can get this from invoice/payment data
       verifyPayment: true,
       createdAt: batch.startDate || new Date().toISOString(),

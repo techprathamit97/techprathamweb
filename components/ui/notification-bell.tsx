@@ -149,16 +149,53 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     };
   }, [notifications, studentId]);
 
+  // Resolve the id used to query/persist notifications (same logic as fetch).
+  const resolveStudentId = (): string | null => {
+    if (studentId) return studentId;
+    try {
+      const studentData = localStorage.getItem('student');
+      if (studentData) {
+        const student = JSON.parse(studentData);
+        return student.studentId || student._id || null;
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return null;
+  };
+
+  // Persist read status to the server so "seen" survives reloads and syncs
+  // across devices. Optimistic: local state is already updated by the caller.
+  const persistRead = async (opts: { notificationIds?: string[]; markAllRead?: boolean }) => {
+    const id = resolveStudentId();
+    if (!id) return;
+    try {
+      await fetch('/api/student/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: id, ...opts }),
+      });
+    } catch (e) {
+      console.error('Failed to persist read status:', e);
+    }
+  };
+
   const markAsRead = (notificationId: string) => {
-    const updated = notifications.map(n => 
+    const target = notifications.find(n => n.id === notificationId);
+    const updated = notifications.map(n =>
       n.id === notificationId ? { ...n, read: true } : n
     );
     saveNotifications(updated);
+    // Only persist real DB notifications (24-hex ObjectId ids).
+    if (target && !target.read && /^[0-9a-fA-F]{24}$/.test(notificationId)) {
+      persistRead({ notificationIds: [notificationId] });
+    }
   };
 
   const markAllAsRead = () => {
     const updated = notifications.map(n => ({ ...n, read: true }));
     saveNotifications(updated);
+    persistRead({ markAllRead: true });
   };
 
   const deleteNotification = (notificationId: string) => {

@@ -22,7 +22,9 @@ import {
   Circle,
   XCircle,
   Edit,
-  CheckCircle
+  CheckCircle,
+  MessageSquare,
+  Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -140,6 +142,13 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
   const [completionTarget, setCompletionTarget] = useState<Batch | null>(null);
   const [completionConfirmText, setCompletionConfirmText] = useState('');
   const [submittingCompletion, setSubmittingCompletion] = useState(false);
+
+  // WhatsApp message to batch students (same template as the LMS admin page).
+  const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
+  const [whatsAppMessage, setWhatsAppMessage] = useState('');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+  const [whatsAppRecipients, setWhatsAppRecipients] = useState<{ name: string; phone: string }[]>([]);
+  const [loadingWhatsAppStudents, setLoadingWhatsAppStudents] = useState(false);
 
   // Ask the server whether this batch genuinely has a live class right now
   const fetchLiveStatus = async (batch: Batch) => {
@@ -593,6 +602,88 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
       toast.error(error.message || 'Something went wrong');
     } finally {
       setSubmittingCompletion(false);
+    }
+  };
+
+  // --- WhatsApp to batch students -----------------------------------------
+  // Mirrors the LMS admin flow (pages/lms/batches/index.tsx): collect the
+  // batch's students who have a phone number, then send a message through the
+  // approved `tp_custom_message` template via /api/whatsapp/batch-cancel.
+  const openWhatsAppDialog = async (batch: Batch) => {
+    if (!trainerInfo) {
+      toast.error('Trainer not loaded yet');
+      return;
+    }
+    setWhatsAppMessage('');
+    setWhatsAppRecipients([]);
+    setIsWhatsAppDialogOpen(true);
+    setLoadingWhatsAppStudents(true);
+
+    try {
+      const trainerId = trainerInfo.trainerId || trainerInfo._id;
+      const res = await fetch(`/api/trainer/students?trainerId=${trainerId}`);
+      const data = await res.json();
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to load students');
+      }
+
+      // Find this batch within the trainer's batches (batchId === batch._id).
+      const batchEntry = (data.data?.studentsByBatch || []).find(
+        (b: any) => String(b.batchId) === String(batch._id)
+      );
+
+      const recipients = (batchEntry?.students || [])
+        .filter((s: any) => s.phone && String(s.phone).trim())
+        .map((s: any) => ({ name: s.name, phone: s.phone }));
+
+      setWhatsAppRecipients(recipients);
+    } catch (error: any) {
+      console.error('Failed to load WhatsApp recipients:', error);
+      toast.error(error.message || 'Failed to load student phone numbers');
+    } finally {
+      setLoadingWhatsAppStudents(false);
+    }
+  };
+
+  const sendWhatsAppToBatch = async () => {
+    if (!whatsAppMessage.trim()) {
+      toast.error('Please enter a message');
+      return;
+    }
+    if (whatsAppRecipients.length === 0) {
+      toast.error('None of the students in this batch have a phone number');
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+    try {
+      const res = await fetch('/api/whatsapp/batch-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients: whatsAppRecipients,
+          message: whatsAppMessage,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success(`WhatsApp message sent to ${data.sentCount} student(s)`);
+        if (data.skippedCount > 0) {
+          toast.warning(`${data.skippedCount} student(s) skipped (invalid/missing phone)`);
+        }
+        setIsWhatsAppDialogOpen(false);
+        setWhatsAppMessage('');
+      } else {
+        throw new Error(data.error || 'Failed to send WhatsApp message');
+      }
+    } catch (error: any) {
+      console.error('Failed to send WhatsApp:', error);
+      toast.error(error.message || 'Failed to send WhatsApp message');
+    } finally {
+      setIsSendingWhatsApp(false);
     }
   };
 
@@ -1300,6 +1391,93 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
         </div>
       )}
 
+      {/* Send WhatsApp to batch students */}
+      {isWhatsAppDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold text-gray-900">
+                Send WhatsApp to {selectedBatch?.batchName} Students
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-lg bg-green-50 border border-green-100 p-3">
+              <Users className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-gray-800">
+                {loadingWhatsAppStudents
+                  ? 'Loading student phone numbers…'
+                  : `${whatsAppRecipients.length} student(s) with a phone number`}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Message</label>
+              <textarea
+                placeholder="Type your message here..."
+                value={whatsAppMessage}
+                onChange={(e) => setWhatsAppMessage(e.target.value)}
+                rows={5}
+                className="w-full mt-2 p-3 border border-gray-300 rounded-md text-gray-900 placeholder-gray-400 focus:border-green-500 focus:outline-none focus:ring-1 focus:ring-green-500"
+              />
+              <p className="text-gray-500 text-xs mt-2">
+                Sent via the approved <span className="font-medium text-gray-700">tp_custom_message</span> WhatsApp
+                template. Your text fills the message body; the greeting and signature are added automatically.
+                Students without a saved phone number are skipped.
+              </p>
+
+              {/* Preview of how the template wraps the typed text. */}
+              <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                <p className="text-gray-400 text-xs mb-1">Preview</p>
+                <div className="text-sm text-gray-800 whitespace-pre-line leading-relaxed">
+                  {`Hii,\n\n${whatsAppMessage.trim() || '…'}\n\nRegards,\nTechPratham Training Team`}
+                </div>
+              </div>
+            </div>
+
+            {whatsAppRecipients.length > 0 && (
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <p className="text-gray-500 text-sm mb-2">Recipients:</p>
+                <div className="flex flex-wrap gap-2">
+                  {whatsAppRecipients.slice(0, 8).map((r, i) => (
+                    <Badge key={`${r.phone}-${i}`} className="bg-gray-200 text-gray-800">
+                      {r.name}
+                    </Badge>
+                  ))}
+                  {whatsAppRecipients.length > 8 && (
+                    <Badge className="bg-gray-200 text-gray-800">
+                      +{whatsAppRecipients.length - 8} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => setIsWhatsAppDialogOpen(false)}
+                disabled={isSendingWhatsApp}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={sendWhatsAppToBatch}
+                disabled={isSendingWhatsApp || loadingWhatsAppStudents || !whatsAppMessage.trim() || whatsAppRecipients.length === 0}
+                className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
+              >
+                {isSendingWhatsApp ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                {isSendingWhatsApp ? 'Sending…' : `Send to ${whatsAppRecipients.length} Students`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
@@ -1419,6 +1597,17 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
                     >
                       <FileText className="h-4 w-4" />
                       Add Notes
+                    </Button>
+
+                    <Button
+                      onClick={() => selectedBatch && openWhatsAppDialog(selectedBatch)}
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center bg-green-500 gap-2 border-green-500 text-white hover:bg-green-50"
+                      disabled={!selectedBatch}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      WhatsApp
                     </Button>
                   </div>
                 </div>

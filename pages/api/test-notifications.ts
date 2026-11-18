@@ -80,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       firebaseConfig: {
         projectId: 'techpratham-lms',
         configured: process.env.FIREBASE_CLIENT_EMAIL ? !process.env.FIREBASE_CLIENT_EMAIL.includes('placeholder') : false,
-        vapidKey: 'BK8oVkCJYpR2E-Kg7G3X2QvHd6TvYNNlfgauVZZ1yddRorTGvNNOQa4qEk0gZFu8ikPBhLcixAJi4zjENmGOyFk'
+        vapidKeyConfigured: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
       },
       batches: notificationStats,
       testInstructions: {

@@ -18,7 +18,8 @@ import {
   X,
   FolderOpen,
   Settings,
-  CheckCircle
+  CheckCircle,
+  MessageSquare
 } from 'lucide-react';
 
 interface TrainerSidebarProps {
@@ -40,6 +41,7 @@ const TrainerSidebar: React.FC<TrainerSidebarProps> = ({ onClose }) => {
     { icon: ClipboardList, label: 'Assignments', href: '/trainer/assignments' },
     { icon: FileQuestion, label: 'Quiz Assign', href: '/trainer/quiz-assign' },
     { icon: Mail, label: 'Send Email', href: '/trainer/send-email' },
+    { icon: MessageSquare, label: 'Send WhatsApp', href: '/trainer/send-whatsapp' },
     { icon: Clock, label: 'Change Class Timing', href: '/trainer/class-timing' },
     { icon: DollarSign, label: 'Salary Details', href: '/trainer/salary' },
   ];

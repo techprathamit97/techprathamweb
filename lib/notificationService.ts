@@ -1,8 +1,47 @@
 import { connectMongo } from '@/utils/mongodb';
 import { sendPushNotification } from '@/lib/pushNotifications';
+import { sendPushToTokens } from '@/lib/firebaseAdmin';
 const Notification = require('@/models/Notification');
 const Student = require('@/models/Student');
 const Batch = require('@/models/Batch');
+
+// Deliver an FCM push to a set of student documents (must include fcmTokens).
+// This is the path that actually reaches students' browsers/devices; the older
+// web-push path (sendPushNotification) is kept for backward-compat but is a
+// no-op without a PushSubscription + VAPID_PRIVATE_KEY. Failures here never
+// throw — a push problem must not break notification creation.
+async function sendFcmToStudentDocs(
+  students: any[],
+  payload: { title: string; message: string; url?: string; type?: string }
+) {
+  try {
+    const tokens: string[] = [];
+    for (const s of students || []) {
+      const toks = (s?.fcmTokens || [])
+        .filter((t: any) => t?.isActive && t?.token)
+        .map((t: any) => t.token);
+      if (toks.length) tokens.push(...toks);
+    }
+    if (tokens.length === 0) return;
+
+    const res = await sendPushToTokens(tokens, {
+      title: payload.title,
+      body: payload.message,
+      url: payload.url || '/student/notifications',
+      type: payload.type,
+    });
+
+    // Prune tokens FCM reports as permanently invalid.
+    if (res.invalidTokens.length) {
+      await Student.updateMany(
+        { 'fcmTokens.token': { $in: res.invalidTokens } },
+        { $pull: { fcmTokens: { token: { $in: res.invalidTokens } } } }
+      );
+    }
+  } catch (err) {
+    console.error('FCM push (notificationService) failed:', err);
+  }
+}
 
 // Notification types
 export type NotificationType =
@@ -50,11 +89,21 @@ export async function createNotification(params: CreateNotificationParams) {
   await notification.save();
 
   if (params.studentId) {
+    // Legacy web-push (no-op without a subscription) + real FCM push.
     await sendPushNotification(params.studentId, 'student', {
       title: params.title,
       message: params.message,
       url: params.actionUrl || '/student/notifications'
     });
+    const studentDoc = await Student.findOne({ studentId: params.studentId }).lean();
+    if (studentDoc) {
+      await sendFcmToStudentDocs([studentDoc], {
+        title: params.title,
+        message: params.message,
+        url: params.actionUrl,
+        type: params.type,
+      });
+    }
   }
 
   return notification;
@@ -108,16 +157,22 @@ export async function notifyBatchStudents(
   await Notification.insertMany(notifications);
   console.log(`Created ${notifications.length} notifications for batch ${batchId}`);
 
-  // Send push notifications
+  // Legacy web-push (no-op without a subscription).
   for (const notification of notifications) {
     await sendPushNotification(notification.studentId, 'student', {
       title: notification.title,
       message: notification.message,
       url: notification.actionUrl || '/student/notifications'
     });
-
-    console.log(`📱 Notification queued for student ${notification.studentId}: ${notification.title}`);
   }
+
+  // Real FCM push — one multicast to all enrolled students' devices.
+  await sendFcmToStudentDocs(students, {
+    title,
+    message,
+    url: params?.actionUrl,
+    type,
+  });
 
   return notifications;
 }
@@ -145,6 +200,7 @@ export async function notifyStudents(
   const result = await Notification.insertMany(notifications);
   console.log(`Created ${result.length} notifications`);
 
+  // Legacy web-push (no-op without a subscription).
   for (const notification of result) {
     await sendPushNotification(notification.studentId, 'student', {
       title: notification.title,
@@ -152,6 +208,15 @@ export async function notifyStudents(
       url: notification.actionUrl || '/student/notifications'
     });
   }
+
+  // Real FCM push to the targeted students' devices.
+  const studentDocs = await Student.find({ studentId: { $in: studentIds } }).lean();
+  await sendFcmToStudentDocs(studentDocs, {
+    title,
+    message,
+    url: params?.actionUrl,
+    type,
+  });
 
   return result;
 }

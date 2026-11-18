@@ -482,7 +482,6 @@ const StudentDashboard = () => {
                       <div className="flex justify-between items-start mb-4">
                         <div className="flex-1">
                           <h3 className="text-gray-900 font-semibold text-xl">{course.course_title}</h3>
-                          <p className="text-gray-600 text-sm mt-1">Category: {course.category}</p>
                         </div>
                         <Badge className={course.courseCompletion ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'}>
                           {course.courseCompletion ? 'Completed' : 'In Progress'}
@@ -490,18 +489,7 @@ const StudentDashboard = () => {
                       </div>
 
                       {/* Progress Bar */}
-                      <div className="mb-4">
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-600">Course Progress</span>
-                          <span className="text-gray-900 font-medium">{course.progressPercentage}%</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-3">
-                          <div 
-                            className="bg-blue-600 h-3 rounded-full transition-all"
-                            style={{ width: `${course.progressPercentage}%` }}
-                          />
-                        </div>
-                      </div>
+                     
 
                       {/* Batch Information */}
                       {batchInfo && (
@@ -560,10 +548,7 @@ const StudentDashboard = () => {
                                   <p className="text-gray-900 font-medium">{batchInfo.trainer.name}</p>
                                 </div>
                               
-                                <div>
-                                  <p className="text-gray-600">Experience</p>
-                                  <p className="text-gray-900 font-medium">{batchInfo.trainer.experience}</p>
-                                </div>
+                               
                                
                                
                                

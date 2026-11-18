@@ -257,6 +257,11 @@ const BatchesManagement = () => {
   const [emailMessage, setEmailMessage] = useState('');
   const [isSendingEmail, setIsSendingEmail] = useState(false);
 
+  // WhatsApp class-cancellation dialog state
+  const [isWhatsAppDialogOpen, setIsWhatsAppDialogOpen] = useState(false);
+  const [whatsAppMessage, setWhatsAppMessage] = useState('');
+  const [isSendingWhatsApp, setIsSendingWhatsApp] = useState(false);
+
   // Certificate assignment state
   const [isCertificateDialogOpen, setIsCertificateDialogOpen] = useState(false);
   const [isCertificateEditDialogOpen, setIsCertificateEditDialogOpen] = useState(false);
@@ -610,6 +615,84 @@ const BatchesManagement = () => {
       toast.error(error.message || 'Failed to send email');
     } finally {
       setIsSendingEmail(false);
+    }
+  };
+
+  // WhatsApp class-cancellation functions
+  const openWhatsAppDialog = async (batch: Batch) => {
+    try {
+      // Fetch students by their IDs (same approach as the email dialog)
+      const res = await fetch('/api/lms/students');
+      const data = await res.json();
+
+      if (res.ok) {
+        const batchStudents = Array.isArray(data)
+          ? data.filter((student: Student) => batch.studentIds.includes(student._id))
+          : [];
+
+        setBatchStudentsDetails(batchStudents);
+        setSelectedBatch(batch);
+        // The tp_custom_message template adds the greeting ("Hii,") and signature
+        // automatically, so start empty and let the admin type just the body.
+        setWhatsAppMessage('');
+        setIsWhatsAppDialogOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch batch students:', error);
+      toast.error('Failed to fetch student details');
+    }
+  };
+
+  const sendWhatsAppToAllStudents = async () => {
+    if (!whatsAppMessage.trim()) {
+      toast.error('Please enter a message');
+      return;
+    }
+
+    if (batchStudentsDetails.length === 0) {
+      toast.error('No students enrolled in this batch');
+      return;
+    }
+
+    // Only students who actually have a phone number can receive WhatsApp.
+    const recipients = batchStudentsDetails
+      .filter((s) => s.phone && s.phone.trim())
+      .map((s) => ({ name: s.name, phone: s.phone }));
+
+    if (recipients.length === 0) {
+      toast.error('None of the students in this batch have a phone number');
+      return;
+    }
+
+    setIsSendingWhatsApp(true);
+
+    try {
+      const res = await fetch('/api/whatsapp/batch-cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recipients,
+          message: whatsAppMessage,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        toast.success(`WhatsApp message sent to ${data.sentCount} student(s)`);
+        if (data.skippedCount > 0) {
+          toast.warning(`${data.skippedCount} student(s) skipped (invalid/missing phone)`);
+        }
+        setIsWhatsAppDialogOpen(false);
+        setWhatsAppMessage('');
+      } else {
+        throw new Error(data.error || 'Failed to send WhatsApp message');
+      }
+    } catch (error: any) {
+      console.error('Failed to send WhatsApp:', error);
+      toast.error(error.message || 'Failed to send WhatsApp message');
+    } finally {
+      setIsSendingWhatsApp(false);
     }
   };
 
@@ -2011,9 +2094,19 @@ const BatchesManagement = () => {
                         <Mail className="h-3 w-3" />
                         Send Email to All
                       </Button>
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex items-center gap-1 border-green-500 text-green-600 hover:bg-green-50"
+                        onClick={() => openWhatsAppDialog(batch)}
+                        disabled={batch.studentIds.length === 0}
+                      >
+                        <MessageSquare className="h-3 w-3" />
+                        WhatsApp
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         className="flex items-center gap-1"
                         onClick={() => openEditBatchDialog(batch)}
                       >
@@ -2124,6 +2217,94 @@ const BatchesManagement = () => {
               disabled={isSendingEmail || !emailSubject.trim() || !emailMessage.trim()}
             >
               {isSendingEmail ? 'Sending...' : `Send Email to ${batchStudentsDetails.length} Students`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send WhatsApp (Class Cancellation) Dialog */}
+      <Dialog open={isWhatsAppDialogOpen} onOpenChange={setIsWhatsAppDialogOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-green-500" />
+              Send WhatsApp to Students in {selectedBatch?.batchId}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-700 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-green-400" />
+                <span className="text-white font-medium">
+                  {batchStudentsDetails.filter((s) => s.phone && s.phone.trim()).length} of {batchStudentsDetails.length} students have a phone number
+                </span>
+              </div>
+              <Badge className="bg-green-600">
+                {selectedBatch?.course_title}
+              </Badge>
+            </div>
+
+            <div>
+              <Label className="text-white">Message</Label>
+              <textarea
+                placeholder="Type your message here..."
+                value={whatsAppMessage}
+                onChange={(e) => setWhatsAppMessage(e.target.value)}
+                rows={5}
+                className="w-full mt-2 p-3 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <p className="text-gray-400 text-xs mt-2">
+                Sent via the approved <span className="text-gray-200 font-medium">tp_custom_message</span> WhatsApp template. Your text fills the message body; the greeting and signature are added automatically. Students without a saved phone number are skipped.
+              </p>
+
+              {/* Preview of how the approved template wraps the typed text. */}
+              <div className="mt-2 p-3 bg-gray-900 border border-gray-700 rounded-md">
+                <p className="text-gray-500 text-xs mb-1">Preview</p>
+                <div className="text-sm text-gray-200 whitespace-pre-line leading-relaxed">
+                  {`Hii,\n\n${whatsAppMessage.trim() || '…'}\n\nRegards,\nTechPratham Training Team`}
+                </div>
+              </div>
+            </div>
+
+            {batchStudentsDetails.length > 0 && (
+              <div className="p-3 bg-gray-700 rounded-lg">
+                <p className="text-gray-400 text-sm mb-2">Recipients:</p>
+                <div className="flex flex-wrap gap-2">
+                  {batchStudentsDetails
+                    .filter((s) => s.phone && s.phone.trim())
+                    .slice(0, 5)
+                    .map((student) => (
+                      <Badge key={student._id} className="bg-gray-600">
+                        {student.name}
+                      </Badge>
+                    ))}
+                  {batchStudentsDetails.filter((s) => s.phone && s.phone.trim()).length > 5 && (
+                    <Badge className="bg-gray-600">
+                      +{batchStudentsDetails.filter((s) => s.phone && s.phone.trim()).length - 5} more
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsWhatsAppDialogOpen(false)}
+              disabled={isSendingWhatsApp}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="bg-green-600 hover:bg-green-700 text-white"
+              onClick={sendWhatsAppToAllStudents}
+              disabled={isSendingWhatsApp || !whatsAppMessage.trim()}
+            >
+              {isSendingWhatsApp
+                ? 'Sending...'
+                : `Send WhatsApp to ${batchStudentsDetails.filter((s) => s.phone && s.phone.trim()).length} Students`}
             </Button>
           </div>
         </DialogContent>

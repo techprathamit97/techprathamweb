@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { connectMongo } from "@/utils/mongodb";
+import { notifyBatches } from '@/lib/notificationService';
 const TrainerNote = require("@/models/TrainerNote");
 const Trainer = require("@/models/Trainer");
 const Batch = require("@/models/Batch");
@@ -120,6 +121,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await newNote.save();
 
       console.log('✅ Created note:', newNote._id);
+
+      // Notify students in the targeted batches (in-app + FCM push) when the
+      // note is published. Never let a notification failure break note creation.
+      if (shouldPublish && Array.isArray(batchIds) && batchIds.length > 0) {
+        try {
+          await notifyBatches(
+            batchIds.map((b: any) => String(b)),
+            'New Study Notes',
+            `New notes "${title}" have been shared${moduleTitle ? ` for ${moduleTitle}` : ''}`,
+            'announcement',
+            { actionUrl: '/student/notes', priority: 'medium' }
+          );
+        } catch (notifError) {
+          console.error('Error sending notes notification:', notifError);
+        }
+      }
 
       return res.status(201).json({
         success: true,
