@@ -1480,21 +1480,21 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
 
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-6 text-white">
+        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg p-4 sm:p-6 text-white">
           <div className="flex items-center gap-3">
             {selectedBatch && (
               <Button
                 onClick={handleBackToBatches}
                 variant="ghost"
                 size="sm"
-                className="text-white hover:bg-white/20 mr-2"
+                className="text-white hover:bg-white/20 mr-1 sm:mr-2 shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
             <div className="flex-1 min-w-0">
-              <h1 className="text-3xl font-bold flex items-center gap-2 break-words">
-                <Users className="h-8 w-8 shrink-0" />
+              <h1 className="text-xl sm:text-3xl font-bold flex items-center gap-2 break-words">
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 shrink-0" />
                 {selectedBatch
                   ? `${selectedBatch.batchName} Management`
                   : viewMode === 'completed'
@@ -1528,13 +1528,13 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
           <div className="space-y-6">
             {/* Batch Info Card */}
             <Card className="border-purple-200 bg-purple-50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between gap-4">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <h2 className="text-2xl font-bold text-gray-900 break-words">{selectedBatch.batchName}</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 break-words">{selectedBatch.batchName}</h2>
                     <p className="text-gray-600 break-words">{selectedBatch.courseTitle}</p>
                   </div>
-                  <div className="flex gap-4 text-sm shrink-0">
+                  <div className="flex flex-wrap gap-4 sm:gap-6 text-sm sm:shrink-0">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-purple-600">{selectedBatch.studentCount}</div>
                       <div className="text-gray-600">Students</div>
@@ -1560,7 +1560,7 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
             {/* Tab Navigation */}
             <Card className="border-blue-200">
               <CardContent className="p-4">
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
                   <Button
                     onClick={() => setActiveTab('classes')}
                     variant={activeTab === 'classes' ? 'default' : 'outline'}
@@ -1577,7 +1577,7 @@ const TrainerBatchManagement = ({ viewMode = 'ongoing' }: { viewMode?: 'ongoing'
                     <Video className="h-4 w-4" />
                     Recordings ({batchRecordings.length})
                   </Button>
-                  <div className="ml-auto flex gap-2">
+                  <div className="w-full sm:w-auto sm:ml-auto flex flex-wrap gap-2">
                     <Button
                       onClick={handleRefreshClasses}
                       variant="outline"
@@ -1946,7 +1946,7 @@ const ClassesTab: React.FC<{
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-gray-900">
           Classes for {batchName}
         </h3>
@@ -1978,19 +1978,19 @@ const ClassesTab: React.FC<{
                 ? 'bg-green-50 border-l-4 border-green-500'
                 : ''
             }`}>
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
                       {isUrgent && (
                         <div className={`w-2 h-2 rounded-full animate-pulse ${
                           statusInfo.status === 'live' ? 'bg-red-500' : 'bg-green-500'
                         }`} />
                       )}
-                      <h3 className="text-xl font-semibold text-gray-900">
+                      <h3 className="text-lg sm:text-xl font-semibold text-gray-900 break-words">
                         {displayTitle(classItem)}
                       </h3>
-                      <Badge className={statusInfo.color}>
+                      <Badge className={`${statusInfo.color} shrink-0`}>
                         {statusInfo.label}
                       </Badge>
                     </div>
@@ -2027,11 +2027,11 @@ const ClassesTab: React.FC<{
                     </div>
                   </div>
 
-                  <div className="ml-6">
+                  <div className="w-full sm:w-auto sm:ml-6 shrink-0">
                     <Button
                       onClick={() => statusInfo.canJoin ? onJoinClass(classItem) : null}
                       disabled={joiningClass === classItem._id || !statusInfo.canJoin}
-                      className={`${
+                      className={`w-full sm:w-auto ${
                         statusInfo.canJoin 
                           ? statusInfo.status === 'live' 
                             ? 'bg-red-600 hover:bg-red-700 text-white' 

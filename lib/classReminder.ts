@@ -51,6 +51,20 @@ function istStartOfDay(nowIst: Date): Date {
   return d;
 }
 
+// A batch is "completed" (and must not fire reminders) when an admin has
+// approved its completion, its status is completed, or its end date has passed.
+function isBatchCompleted(batch: any, nowIst: Date): boolean {
+  if (batch?.completionRequest?.status === 'approved') return true;
+  if (String(batch?.status || '').trim().toLowerCase() === 'completed') return true;
+  if (batch?.endDate) {
+    const end = new Date(batch.endDate);
+    // Completed only once the end day is fully past, so the last class day
+    // still gets its reminder.
+    if (!isNaN(end.getTime()) && end.getTime() < istStartOfDay(nowIst).getTime()) return true;
+  }
+  return false;
+}
+
 export interface ReminderSummary {
   leadMinutes: number;
   nowIst: string;
@@ -95,6 +109,14 @@ export async function runReminders(dryRun = false): Promise<ReminderSummary> {
       const classTime = parseClassStart(batch.timing, nowIst);
       if (!classTime) continue;
 
+      // Skip batches that are finished (completed / approved / past end date).
+      if (isBatchCompleted(batch, nowIst)) {
+        if (dryRun) {
+          summary.details.push({ batch: batch.batchName, skipped: 'batch completed' });
+        }
+        continue;
+      }
+
       // Only on scheduled weekdays.
       if (!allowedDayIndices(batch.daysOfWeek).includes(todayIndex)) continue;
 
@@ -102,8 +124,12 @@ export async function runReminders(dryRun = false): Promise<ReminderSummary> {
       const diff = nowIst.getTime() - reminderTime.getTime();
       const inWindow = Math.abs(diff) <= WINDOW_MS;
 
+      // classTime already carries IST wall-clock values in its local fields
+      // (built from istNow() + setHours), so format WITHOUT a timeZone option.
+      // Passing timeZone: 'Asia/Kolkata' here re-applies the +5:30 offset and
+      // shows e.g. 12:30 as 6:00 PM. The firing math above is unaffected.
       const classTimeStr = classTime.toLocaleTimeString('en-IN', {
-        timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true,
+        hour: 'numeric', minute: '2-digit', hour12: true,
       });
 
       if (!inWindow) {
